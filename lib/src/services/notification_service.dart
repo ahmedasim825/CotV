@@ -182,11 +182,73 @@ class NotificationService {
   /// Cancels every pending prayer notification. Use this before
   /// rescheduling after a location or settings change so stale times don't
   /// linger alongside the new ones.
+  ///
+  /// Task reminders are left alone: they live in a disjoint ID range (see
+  /// [_reminderId]), so a prayer resync can't silently destroy them.
   Future<void> cancelAllScheduled() async {
     final pending = await _plugin.pendingNotificationRequests();
     for (final request in pending) {
-      await _plugin.cancel(id: request.id);
+      if (request.id < _reminderIdBase) {
+        await _plugin.cancel(id: request.id);
+      }
     }
+  }
+
+  /// Schedules a one-off reminder identified by an arbitrary string [key]
+  /// (a task's UUID, in practice).
+  ///
+  /// Deliberately key-based rather than typed against the task model, so
+  /// this service stays independent of the task layer. Rescheduling the
+  /// same key overwrites its slot, and a [when] already in the past cancels
+  /// the reminder rather than scheduling one that can never fire.
+  ///
+  /// Returns whether a notification is now scheduled for [key].
+  Future<bool> scheduleReminder({
+    required String key,
+    required DateTime when,
+    required String title,
+    required String body,
+  }) async {
+    await initialize();
+    await cancelReminder(key);
+
+    if (!when.isAfter(DateTime.now())) return false;
+
+    await _scheduleOne(
+      id: _reminderId(key),
+      when: when,
+      title: title,
+      body: body,
+      channelId: _reminderChannelId,
+      channelName: _reminderChannelName,
+      channelDescription: _reminderChannelDescription,
+    );
+    return true;
+  }
+
+  /// Cancels the reminder previously scheduled for [key]. A no-op if none
+  /// was scheduled.
+  Future<void> cancelReminder(String key) =>
+      _plugin.cancel(id: _reminderId(key));
+
+  /// Start of the ID range reserved for keyed reminders. Prayer IDs are
+  /// built from a date and so always fall below this.
+  static const int _reminderIdBase = 100000000;
+  static const int _reminderIdSpan = 1000000000;
+
+  /// Maps an arbitrary [key] to a stable notification ID inside the
+  /// reminder range.
+  ///
+  /// Uses FNV-1a rather than [String.hashCode], which Dart does not
+  /// guarantee to be stable across runs — a per-launch hash would strand
+  /// notifications that could never be cancelled.
+  int _reminderId(String key) {
+    var hash = 0x811c9dc5;
+    for (final unit in key.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return _reminderIdBase + (hash % _reminderIdSpan);
   }
 
   /// Convenience for "settings changed" flows: clears every pending prayer

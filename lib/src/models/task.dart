@@ -25,6 +25,7 @@ class Task {
     this.category = 'General',
     this.priority = TaskPriority.medium,
     DateTime? createdAt,
+    this.hasReminder = false,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// Stable unique identifier — the box key this task is stored under.
@@ -53,6 +54,17 @@ class Task {
   @HiveField(7)
   final DateTime createdAt;
 
+  /// Whether a local notification should fire at [dueDate].
+  ///
+  /// Only meaningful alongside a non-null [dueDate] — there is nothing to
+  /// schedule against otherwise, so [copyWith] forces this false whenever
+  /// the due date is cleared.
+  @HiveField(8)
+  final bool hasReminder;
+
+  /// True when this task should currently hold a scheduled notification.
+  bool get wantsReminder => hasReminder && dueDate != null && !isCompleted;
+
   Task copyWith({
     String? title,
     String? description,
@@ -61,16 +73,20 @@ class Task {
     bool? isCompleted,
     String? category,
     TaskPriority? priority,
+    bool? hasReminder,
   }) {
+    final nextDueDate = clearDueDate ? null : (dueDate ?? this.dueDate);
     return Task(
       id: id,
       title: title ?? this.title,
       description: description ?? this.description,
-      dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
+      dueDate: nextDueDate,
       isCompleted: isCompleted ?? this.isCompleted,
       category: category ?? this.category,
       priority: priority ?? this.priority,
       createdAt: createdAt,
+      hasReminder:
+          nextDueDate == null ? false : (hasReminder ?? this.hasReminder),
     );
   }
 }

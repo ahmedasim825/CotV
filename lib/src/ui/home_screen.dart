@@ -217,11 +217,15 @@ class _PrayerBento extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: rest.length,
+          // A fixed main-axis extent rather than childAspectRatio: the
+          // tile's contents are a fixed stack of icon + labels, so deriving
+          // its height from its width overflowed on narrow screens (an
+          // iPhone 14 Pro was 0.4px short).
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             mainAxisSpacing: 14,
             crossAxisSpacing: 14,
-            childAspectRatio: 1.25,
+            mainAxisExtent: 146,
           ),
           itemBuilder: (context, index) {
             final entry = rest[index];

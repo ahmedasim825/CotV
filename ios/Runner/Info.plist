@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Prayer Lockout uses Face ID to unlock the app so your tasks, habits, and journal stay private.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Prayer Lockout needs calendar access to create a dedicated "Prayer Lockout" calendar and daily prayer-window events that iOS Shortcuts and Jomo can use to trigger focus mode automations.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

@@ -26,6 +26,12 @@ class PhLight {
       IconData(0xe184, fontFamily: _family, fontPackage: _package);
   static const IconData cloudSun =
       IconData(0xe540, fontFamily: _family, fontPackage: _package);
+  static const IconData fingerprint =
+      IconData(0xe23e, fontFamily: _family, fontPackage: _package);
+  static const IconData lock =
+      IconData(0xe2fa, fontFamily: _family, fontPackage: _package);
+  static const IconData lockKeyOpen =
+      IconData(0xe300, fontFamily: _family, fontPackage: _package);
   static const IconData moon =
       IconData(0xe330, fontFamily: _family, fontPackage: _package);
   static const IconData moonStars =

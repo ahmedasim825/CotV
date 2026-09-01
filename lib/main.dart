@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'src/storage/local_storage.dart';
 import 'src/ui/home_screen.dart';
+import 'src/ui/security_gate.dart';
 import 'src/ui/theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeLocalStorage();
   runApp(const ProviderScope(child: PrayerLockoutApp()));
 }
 
@@ -17,7 +21,7 @@ class PrayerLockoutApp extends StatelessWidget {
       title: 'Prayer Lockout',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const HomeScreen(),
+      home: const SecurityGate(child: HomeScreen()),
     );
   }
 }

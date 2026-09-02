@@ -10,18 +10,27 @@ import 'sse_stream.dart';
 /// Carries the high-complexity half of Milo's routing: planning, summaries
 /// and anything that has to hold several parts of the day in mind at once.
 class GeminiClient {
-  GeminiClient({required http.Client httpClient, this.model = geminiModelId})
-      : _http = httpClient;
+  GeminiClient({
+    required http.Client httpClient,
+    this.model = geminiModelId,
+    this.stallTimeout = miloStallTimeout,
+  }) : _http = httpClient;
 
   static const String _apiRoot =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
-  /// Gemini's ceiling for one reply. Higher than Groq's: this engine is
-  /// chosen for answers that are meant to be longer.
-  static const int maxOutputTokens = 1600;
+  /// Gemini's ceiling for one reply.
+  ///
+  /// Higher than it looks like it needs to be. On Gemini 3 the model's
+  /// internal reasoning is billed against this same budget — a trivial
+  /// prompt measured 66 thinking tokens against 1 token of answer — so a
+  /// ceiling sized for the visible reply alone returns an empty response
+  /// with `finishReason: MAX_TOKENS` and no text at all.
+  static const int maxOutputTokens = 4096;
 
   final http.Client _http;
   final String model;
+  final Duration stallTimeout;
 
   /// Streams the reply to [prompt] as it is generated.
   ///
@@ -45,6 +54,7 @@ class GeminiClient {
         'x-goog-api-key': apiKey,
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
+        'User-Agent': miloUserAgent,
       })
       ..body = jsonEncode({
         'systemInstruction': {
@@ -79,11 +89,29 @@ class GeminiClient {
       );
     }
 
-    await for (final event in decodeSseJson(response.stream)) {
+    await for (final event in decodeSseJson(_bounded(response.stream))) {
       final text = _textOf(event);
       if (text.isNotEmpty) yield text;
     }
   }
+
+  /// Fails the body stream if it goes quiet. This engine is the reason the
+  /// timeout exists: it was measured at six minutes to first token while
+  /// its capacity was short.
+  Stream<List<int>> _bounded(Stream<List<int>> body) => body.timeout(
+        stallTimeout,
+        onTimeout: (sink) {
+          sink.addError(
+            MiloException(
+              '${MiloEngine.gemini.badge} stopped responding after '
+              '${stallTimeout.inSeconds}s. The provider is probably '
+              'overloaded — try again, or rephrase so the instant engine '
+              'can take it.',
+            ),
+          );
+          sink.close();
+        },
+      );
 
   /// Pulls the text out of one streamed candidate. A chunk can carry
   /// several parts, and a safety-blocked chunk carries none.

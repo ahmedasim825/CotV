@@ -1,10 +1,39 @@
 import 'pc_command.dart';
 
-/// Groq's fastest small model, and the id sent on the wire.
-const String groqModelId = 'llama-3.1-8b-instant';
+/// The fastest chat model this Groq account can reach, and the id sent on
+/// the wire. Measured at ~0.4s to a complete short answer, and the only
+/// candidate that replies in plain prose: the gpt-oss models return their
+/// text in a separate `reasoning` field, and the smaller qwen emits
+/// `<think>` blocks inline.
+const String groqModelId = 'qwen/qwen3.8-27b';
 
 /// Gemini's fast reasoning model, and the id sent on the wire.
-const String geminiModelId = 'gemini-2.0-flash';
+const String geminiModelId = 'gemini-3.6-flash';
+
+/// Sent on every engine request.
+///
+/// Not cosmetic: Groq sits behind Cloudflare, which answers a request
+/// carrying a default library User-Agent with `error code: 1010` and a 403
+/// before it ever reaches the API. Naming the product gets through, and is
+/// the honest thing to send anyway.
+const String miloUserAgent = 'PrayerLockout-Milo/1.0 (Flutter)';
+
+/// How long a reply may go without producing a byte before the turn is
+/// abandoned.
+///
+/// Sized against a real overloaded provider rather than a guess: a Gemini
+/// call measured six minutes to its first token and then answered
+/// correctly. Correct is no use at that latency, because the panel has been
+/// frozen for the whole of it.
+///
+/// Applied to the response body rather than to the decoded text, for two
+/// reasons. It is where a network stall actually is; and an error raised
+/// downstream of [decodeSseJson] cannot get back out, because cancelling an
+/// `async*` generator suspended in an `await for` never completes.
+///
+/// It restarts on every chunk, so a long answer streams for as long as it
+/// needs provided bytes keep arriving.
+const Duration miloStallTimeout = Duration(seconds: 75);
 
 /// Which model answered a turn.
 ///
@@ -12,12 +41,12 @@ const String geminiModelId = 'gemini-2.0-flash';
 /// Gemini for reasoning depth, and the badge on every assistant turn names
 /// which one ran. Nothing in the UI may claim an engine that did not.
 enum MiloEngine {
-  /// Groq's `llama-3.1-8b-instant` — first token in a few hundred
-  /// milliseconds, which is what makes a spoken-style command feel instant.
+  /// Groq — first token in a few hundred milliseconds, which is what makes
+  /// a spoken-style command feel instant.
   groq(model: groqModelId, badge: 'Groq Instant'),
 
-  /// Google's `gemini-2.0-flash` — slower to start, but holds a longer
-  /// chain of reasoning across the day's prayers, tasks and notes.
+  /// Gemini — slower to start, but holds a longer chain of reasoning
+  /// across the day's prayers, tasks and notes.
   gemini(model: geminiModelId, badge: 'Gemini Deep');
 
   const MiloEngine({required this.model, required this.badge});

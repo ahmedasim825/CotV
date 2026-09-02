@@ -13,8 +13,11 @@ import 'sse_stream.dart';
 class GroqClient {
   /// [model] stays overridable so a build can point at a larger Groq model
   /// without touching the routing code.
-  GroqClient({required http.Client httpClient, this.model = groqModelId})
-      : _http = httpClient;
+  GroqClient({
+    required http.Client httpClient,
+    this.model = groqModelId,
+    this.stallTimeout = miloStallTimeout,
+  }) : _http = httpClient;
 
   static final Uri endpoint =
       Uri.parse('https://api.groq.com/openai/v1/chat/completions');
@@ -25,6 +28,7 @@ class GroqClient {
 
   final http.Client _http;
   final String model;
+  final Duration stallTimeout;
 
   /// Streams the reply to [prompt] as it is generated.
   ///
@@ -41,6 +45,7 @@ class GroqClient {
         'Authorization': 'Bearer $apiKey',
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
+        'User-Agent': miloUserAgent,
       })
       ..body = jsonEncode({
         'model': model,
@@ -64,7 +69,7 @@ class GroqClient {
       );
     }
 
-    await for (final event in decodeSseJson(response.stream)) {
+    await for (final event in decodeSseJson(_bounded(response.stream))) {
       final choices = event['choices'];
       if (choices is! List || choices.isEmpty) continue;
       final delta = (choices.first as Map<String, dynamic>)['delta'];
@@ -73,6 +78,22 @@ class GroqClient {
       if (content is String && content.isNotEmpty) yield content;
     }
   }
+
+  /// Fails the body stream if it goes quiet, so an overloaded provider
+  /// surfaces as a message instead of a panel that never finishes.
+  Stream<List<int>> _bounded(Stream<List<int>> body) => body.timeout(
+        stallTimeout,
+        onTimeout: (sink) {
+          sink.addError(
+            MiloException(
+              '${MiloEngine.groq.badge} stopped responding after '
+              '${stallTimeout.inSeconds}s. The provider is probably '
+              'overloaded — try again in a moment.',
+            ),
+          );
+          sink.close();
+        },
+      );
 
   /// Groq reports errors as `{"error": {"message": ...}}`. Falls back to
   /// the raw body, which is what a proxy or gateway in front of the API

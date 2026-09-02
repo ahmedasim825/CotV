@@ -3,17 +3,18 @@ import '../../models/pc_command.dart';
 /// Turns a phrase into an instruction for the Windows agent, or returns
 /// null when the phrase is not addressed to the PC at all.
 ///
-/// The parser recognises the shape of a command and normalises its target
-/// to a slug. It deliberately holds no list of applications or folders: the
-/// agent's config owns that allowlist, so there is one place to add an app
-/// and one place that decides what is allowed to run. An unrecognised
-/// target comes back from the agent as a refusal the user can read.
+/// The parser recognises the shape of a command and passes the target on as
+/// the user said it. It deliberately holds no list of applications or
+/// folders and does not normalise names: the agent resolves them the way
+/// Windows itself does — its own `[apps]` pins first, then the path, then
+/// PATH, then the registry's App Paths, then the shell — so anything on the
+/// machine can be opened without both ends agreeing on a table first.
 class PcIntentParser {
   const PcIntentParser();
 
   /// A phrase must name the machine before a media key or an app launch is
   /// sent to it — otherwise "pause" in ordinary conversation would reach
-  /// out and stop the music.
+  /// out and stop the music, and "open settings" would leave the app.
   static final RegExp _machine =
       RegExp(r'\b(?:pc|laptop|computer|desktop|windows|machine)\b');
 
@@ -39,6 +40,13 @@ class PcIntentParser {
   /// A literal Windows path, e.g. `D:\Study\Anatomy`. Matched against the
   /// original casing so the agent receives the path as the user wrote it.
   static final RegExp _literalPath = RegExp(r'[a-zA-Z]:[\\/][^\s"]*');
+
+  /// An explicit URL. Bare domains are left alone on purpose: "open reddit
+  /// on my pc" is far more likely to mean an app than a website.
+  static final RegExp _url = RegExp(
+    r'^(?:please\s+)?(?:open|launch|go\s+to|visit)\s+(https?://\S+)',
+    caseSensitive: false,
+  );
 
   static final RegExp _bareFolderAlias = RegExp(
     r'^(?:please\s+)?(?:open|show)\s+(?:my\s+|the\s+)?'
@@ -96,6 +104,7 @@ class PcIntentParser {
     final namesMachine = _machine.hasMatch(lower);
 
     return _matchControl(lower, namesMachine) ??
+        _matchUrl(text) ??
         _matchPath(text, lower) ??
         _matchApp(text, namesMachine);
   }
@@ -118,6 +127,19 @@ class PcIntentParser {
     return null;
   }
 
+  /// A URL is unambiguous, so it needs no machine word — the phone would
+  /// open it in its own browser only if the user had not said "open".
+  PcCommand? _matchUrl(String text) {
+    final match = _url.firstMatch(text);
+    if (match == null) return null;
+    final url = match.group(1)!;
+    return PcCommand(
+      kind: PcActionKind.openPath,
+      target: url,
+      summary: 'Open $url',
+    );
+  }
+
   /// Paths do not need the machine named: the phone has no "study folder"
   /// and no `D:` drive, so the request can only have meant the PC.
   PcCommand? _matchPath(String text, String lower) {
@@ -136,7 +158,7 @@ class PcIntentParser {
       final name = folder.group(1)!.trim();
       return PcCommand(
         kind: PcActionKind.openPath,
-        target: _slug(name),
+        target: name,
         summary: 'Open the $name folder',
       );
     }
@@ -146,7 +168,7 @@ class PcIntentParser {
       final name = alias.group(1)!;
       return PcCommand(
         kind: PcActionKind.openPath,
-        target: _slug(name),
+        target: name,
         summary: 'Open $name',
       );
     }
@@ -168,15 +190,8 @@ class PcIntentParser {
 
     return PcCommand(
       kind: PcActionKind.openApp,
-      target: _slug(name),
+      target: name,
       summary: 'Open $name',
     );
   }
-
-  /// The allowlist key form: lowercase, non-alphanumerics collapsed to
-  /// underscores, so "VS Code" and "vs-code" reach the agent as `vs_code`.
-  String _slug(String name) => name
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-      .replaceAll(RegExp(r'^_+|_+$'), '');
 }

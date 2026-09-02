@@ -59,6 +59,26 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   hive_ce_generator: ^1.11.2
   build_runner: ^2.15.1
+  msix: ^3.18.0
+
+# Windows installer packaging (`dart run msix:create`).
+#
+# identity_name and publisher are what Windows uses to tell one installed
+# app from another, so they stay fixed across releases — changing either
+# makes Windows treat the next build as a different app rather than an
+# upgrade, and orphans the previous install.
+msix_config:
+  display_name: Prayer Lockout
+  publisher_display_name: Ahmed Asim
+  identity_name: AhmedAsim.PrayerLockout
+  publisher: CN=Ahmed Asim
+  msix_version: 1.0.0.0
+  logo_path: assets/icons/app_icon.png
+  # internetClient reaches Groq and Gemini; privateNetworkClientServer is
+  # what lets the app talk to the Milo agent on the LAN.
+  capabilities: internetClient, privateNetworkClientServer
+  output_name: PrayerLockout
+  store: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

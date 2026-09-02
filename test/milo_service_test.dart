@@ -4,6 +4,7 @@
 // and PcRemoteService all run for real, so these tests cover the request
 // bodies, the auth headers and the SSE parsing as well as the routing.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -105,9 +106,15 @@ class _Transport {
       });
 }
 
-MiloService _serviceOn(http.Client client) => MiloService(
-      groq: GroqClient(httpClient: client),
-      gemini: GeminiClient(httpClient: client),
+MiloService _serviceOn(http.Client client, {Duration? stall}) => MiloService(
+      groq: GroqClient(
+        httpClient: client,
+        stallTimeout: stall ?? miloStallTimeout,
+      ),
+      gemini: GeminiClient(
+        httpClient: client,
+        stallTimeout: stall ?? miloStallTimeout,
+      ),
       pcRemote: PcRemoteService(httpClient: client),
     );
 
@@ -247,7 +254,7 @@ void main() {
     expect(agentRequest.method, 'POST');
     expect(agentRequest.url.path, '/open-app');
     expect(agentRequest.headers['Authorization'], 'Bearer agent_test');
-    expect(transport.bodyTo('192.168.1.20'), {'app': 'spotify'});
+    expect(transport.bodyTo('192.168.1.20'), {'app': 'Spotify'});
 
     // The model is told what actually happened, so it cannot confirm an
     // action that did not run.
@@ -355,6 +362,53 @@ void main() {
           (error) => error.message,
           'message',
           contains('Groq rejected the API key'),
+        ),
+      ),
+    );
+  });
+
+  test('a reply that produces no text is reported, not left blank', () async {
+    final transport = _Transport(
+      // Well-formed SSE, 200, and not one token of text: what Gemini 3
+      // returns when the whole output budget went on internal reasoning.
+      onGemini: () async => _sse([
+        'data: {"candidates":[{"finishReason":"MAX_TOKENS"}]}\n\n',
+      ]),
+    );
+
+    await expectLater(
+      _run(_serviceOn(transport.client), 'summarize my week'),
+      throwsA(
+        isA<MiloException>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('Gemini Deep'), contains('returned no text')),
+        ),
+      ),
+    );
+  });
+
+  test('a provider that stalls is abandoned rather than left hanging',
+      () async {
+    // A 200 whose body never produces a chunk: what an overloaded provider
+    // looks like from the client side.
+    final stalled = StreamController<List<int>>();
+    addTearDown(stalled.close);
+    final transport = _Transport(
+      onGroq: () async => http.StreamedResponse(stalled.stream, 200,
+          headers: const {'content-type': 'text/event-stream'}),
+    );
+
+    await expectLater(
+      _run(
+        _serviceOn(transport.client, stall: const Duration(milliseconds: 80)),
+        'when is Isha',
+      ),
+      throwsA(
+        isA<MiloException>().having(
+          (error) => error.message,
+          'message',
+          contains('stopped responding'),
         ),
       ),
     );

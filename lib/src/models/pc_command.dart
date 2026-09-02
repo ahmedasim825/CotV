@@ -39,13 +39,15 @@ extension PcActionKindX on PcActionKind {
 
 /// One instruction bound for the Windows agent.
 ///
-/// [target] is symbolic for [PcActionKind.openApp] and
-/// [PcActionKind.system] — an allowlist key such as `spotify` or
-/// `play_pause`, never an executable path. The phone therefore cannot ask
-/// the PC to run an arbitrary binary; the agent's own config decides what
-/// each key resolves to. [PcActionKind.openPath] may carry a literal
-/// Windows path, which the agent still has to match against its configured
-/// roots before opening.
+/// [target] travels as the user said it: an application name for
+/// [PcActionKind.openApp], a folder name, literal path or URL for
+/// [PcActionKind.openPath], and one of a fixed set of control names for
+/// [PcActionKind.system].
+///
+/// Turning a name into something on disk is the agent's job, not the
+/// phone's, so the two ends never have to agree on a table. How much the
+/// agent is willing to resolve depends on the mode it runs in — see
+/// `tools/milo_pc_agent/README.md`.
 class PcCommand {
   const PcCommand({
     required this.kind,

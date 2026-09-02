@@ -173,8 +173,21 @@ class MiloService {
         );
     }
 
+    var produced = false;
     await for (final delta in reply) {
+      produced = true;
       yield MiloTextDelta(delta);
+    }
+
+    // A stream that closes without a single token is a real failure, and
+    // the common cause is a reply whose budget went entirely on internal
+    // reasoning. Silence would otherwise render as an empty bubble that
+    // looks like Milo had nothing to say.
+    if (!produced) {
+      throw MiloException(
+        '${decision.engine.badge} returned no text. It may have used its '
+        'whole output budget reasoning — try asking something shorter.',
+      );
     }
   }
 

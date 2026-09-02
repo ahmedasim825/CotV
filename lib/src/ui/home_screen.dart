@@ -7,6 +7,7 @@ import '../models/notification_models.dart';
 import '../providers/calendar_providers.dart';
 import '../providers/notification_providers.dart';
 import '../providers/prayer_providers.dart';
+import '../services/calendar_sync_service.dart';
 import 'components/components.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
@@ -67,30 +68,36 @@ class HomeScreen extends ConsumerWidget {
                   error: (error, stackTrace) =>
                       StatusCard(message: '$error', tone: StatusTone.error),
                 ),
-                const SizedBox(height: 48),
-                RevealOnEntrance(
-                  delay: const Duration(milliseconds: 140),
-                  child: const SectionHeader(
-                    eyebrow: 'AUTOMATION',
-                    title: 'Prayer Lockout calendar',
-                    subtitle:
-                        'Creates a dedicated calendar iOS Shortcuts and Jomo can key '
-                        'off of to trigger focus mode during each prayer window.',
+                // device_calendar has no Windows implementation, and the
+                // calendar only exists for iOS Shortcuts to key off, so on
+                // desktop the whole section is dropped rather than shown as
+                // a button that can only fail.
+                if (CalendarSyncService.isSupported) ...[
+                  const SizedBox(height: 48),
+                  RevealOnEntrance(
+                    delay: const Duration(milliseconds: 140),
+                    child: const SectionHeader(
+                      eyebrow: 'AUTOMATION',
+                      title: 'Prayer Lockout calendar',
+                      subtitle:
+                          'Creates a dedicated calendar iOS Shortcuts and Jomo can key '
+                          'off of to trigger focus mode during each prayer window.',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                RevealOnEntrance(
-                  delay: const Duration(milliseconds: 180),
-                  child: PrimaryButton(
-                    label: 'Sync next 7 days',
-                    icon: PhLight.calendarCheck,
-                    loading: calendarSyncAsync.isLoading,
-                    onPressed: calendarSyncAsync.isLoading
-                        ? null
-                        : () => ref.read(calendarSyncControllerProvider.notifier).syncDays(7),
+                  const SizedBox(height: 18),
+                  RevealOnEntrance(
+                    delay: const Duration(milliseconds: 180),
+                    child: PrimaryButton(
+                      label: 'Sync next 7 days',
+                      icon: PhLight.calendarCheck,
+                      loading: calendarSyncAsync.isLoading,
+                      onPressed: calendarSyncAsync.isLoading
+                          ? null
+                          : () => ref.read(calendarSyncControllerProvider.notifier).syncDays(7),
+                    ),
                   ),
-                ),
-                _CalendarStatus(calendarSyncAsync: calendarSyncAsync),
+                  _CalendarStatus(calendarSyncAsync: calendarSyncAsync),
+                ],
                 const SizedBox(height: 48),
                 RevealOnEntrance(
                   delay: const Duration(milliseconds: 220),

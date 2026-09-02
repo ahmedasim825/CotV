@@ -49,3 +49,6 @@ app.*.map.json
 
 # Milo PC agent config — holds the shared secret for the Windows bridge.
 tools/milo_pc_agent/milo_agent.toml
+
+# Milo API keys for local --dart-define-from-file builds. Never commit.
+milo_keys.json

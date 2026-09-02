@@ -35,6 +35,18 @@ class NotificationService {
   /// Default lead time for the pre-Adhan reminder when none is specified.
   static const Duration defaultPreAdhanOffset = Duration(minutes: 15);
 
+  /// Windows addresses a toast to an app identity rather than to a running
+  /// process, so the plugin needs the same AUMID the MSIX package declares
+  /// plus a stable GUID for the activation callback. Both are fixed on
+  /// purpose: changing either orphans notifications already sitting in the
+  /// Action Center, and breaks the ones scheduled for later today.
+  static const WindowsInitializationSettings windowsSettings =
+      WindowsInitializationSettings(
+    appName: 'Prayer Lockout',
+    appUserModelId: 'AhmedAsim.PrayerLockout',
+    guid: '5D2F3BD4-F0A6-4342-9639-C9D2A9F00B30',
+  );
+
   /// Sets up the timezone database and the plugin. Safe to call more than
   /// once — subsequent calls are a no-op. Does not request permissions;
   /// call [requestPermissions] explicitly so the OS prompt appears at a
@@ -58,6 +70,7 @@ class NotificationService {
       settings: const InitializationSettings(
         android: androidSettings,
         iOS: iosSettings,
+        windows: windowsSettings,
       ),
     );
 

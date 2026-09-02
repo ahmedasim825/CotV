@@ -1,0 +1,93 @@
+name: Build
+
+# One workflow for both targets so a change cannot land green on iOS while
+# breaking Windows. Both platform jobs wait on `test`, so a failing analyze
+# or test run costs one ubuntu minute instead of a macOS and a Windows build.
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  ios:
+    name: iOS IPA
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - run: flutter pub get
+
+      # No API keys are injected here on purpose. A build artifact from a
+      # public repository is downloadable by anyone, and a --dart-define is
+      # recoverable from the binary. Milo asks for its keys once on device
+      # and keeps them in the Keychain.
+      - name: Build unsigned iOS app
+        run: flutter build ios --no-codesign --release
+
+      - name: Package payload for SideStore
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r PrayerProductivity.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: PrayerProductivity.ipa
+
+  windows:
+    name: Windows MSIX
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      # --build-windows false packages the build above rather than running a
+      # second one. --install-certificate false because a runner has no
+      # certificate store worth writing to; msix still signs with a
+      # generated test certificate, which is what the .cer beside the
+      # package is for.
+      - name: Package MSIX
+        run: dart run msix:create --build-windows false --install-certificate false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-msix
+          path: |
+            build/windows/x64/runner/Release/*.msix
+            build/windows/x64/runner/Release/*.cer

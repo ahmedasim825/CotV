@@ -1,4 +1,6 @@
 import 'package:device_calendar/device_calendar.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart' show Color;
 
 import '../models/calendar_sync_models.dart';
@@ -24,12 +26,31 @@ class CalendarSyncService {
   static const String automationTag = 'prayer_lockout';
   static const Duration defaultLockoutDuration = Duration(minutes: 30);
 
+  /// `device_calendar` ships iOS and Android implementations only. Without
+  /// this check every call on the Windows build would surface as a raw
+  /// MissingPluginException, which tells the user nothing they can act on.
+  ///
+  /// Only the plugin-backed methods are gated. [buildWindows] is pure
+  /// computation and stays available everywhere, which is what lets the
+  /// timeline draw lockout blocks on a platform that cannot sync them.
+  static bool get isSupported =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
+
   /// Requests calendar read/write permissions if not already granted.
   ///
   /// Throws [CalendarPermissionDeniedException] if the user denies access
   /// or the OS restricts it (e.g. Screen Time). Callers should catch this
   /// specifically to show a "how to enable in Settings" prompt.
   Future<void> requestPermissions() async {
+    if (!isSupported) {
+      throw CalendarSyncException(
+        'Calendar sync runs on iOS and Android only. The Prayer Lockout '
+        'calendar exists for iOS Shortcuts to key off, so there is nothing '
+        'for it to do on this platform.',
+      );
+    }
+
     final existing = await _plugin.hasPermissions();
     if (existing.isSuccess && existing.data == true) return;
 

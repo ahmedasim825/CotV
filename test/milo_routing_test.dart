@@ -115,20 +115,33 @@ void main() {
   group('PC intent parser', () {
     const parser = PcIntentParser();
 
-    test('an app launch needs the machine named, and sends a slug', () {
+    test('an app launch needs the machine named', () {
       final command = parser.parse('Open Spotify on my PC');
 
       expect(command, isNotNull);
       expect(command!.kind, PcActionKind.openApp);
-      expect(command.target, 'spotify');
+      expect(command.target, 'Spotify');
       expect(command.summary, 'Open Spotify');
-      // The allowlist key, never a path: the agent decides what runs.
-      expect(command.toJson(), {'app': 'spotify'});
+      expect(command.toJson(), {'app': 'Spotify'});
       expect(command.kind.path, '/open-app');
     });
 
-    test('multi-word app names become one slug', () {
-      expect(parser.parse('launch VS Code on the laptop')?.target, 'vs_code');
+    test('app names travel as spoken, for the agent to resolve', () {
+      // Not normalised here: the agent matches its own pins, then PATH,
+      // then the registry, which needs the real name rather than a slug.
+      expect(parser.parse('launch VS Code on the laptop')?.target, 'VS Code');
+    });
+
+    test('an explicit URL needs no machine word', () {
+      final command = parser.parse('open https://groq.com/docs');
+
+      expect(command!.kind, PcActionKind.openPath);
+      expect(command.target, 'https://groq.com/docs');
+    });
+
+    test('a bare domain is treated as an app name, not a site', () {
+      // "open reddit on my pc" almost always means the app.
+      expect(parser.parse('open reddit on my pc')?.kind, PcActionKind.openApp);
     });
 
     test('the same phrase without a machine word is not a PC command', () {

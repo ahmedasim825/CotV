@@ -12,40 +12,43 @@ host = "0.0.0.0"
 port = 8765
 
 # Shared secret. The phone sends it as `Authorization: Bearer <token>`.
-# Generate one with:  python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Generate one with:  py -c "import secrets; print(secrets.token_urlsafe(32))"
 # Paste the same value into Milo settings on the phone.
 token = "replace-me-with-a-generated-token"
 
-# Applications /open-app is allowed to start, keyed by the slug the phone
-# sends. "open Spotify on PC" arrives as `spotify`.
+[security]
+# Open mode. With these off (the default here), the agent can only open what
+# the [apps] and [paths] tables name, and literal paths must sit inside
+# allowed_roots — so a request cannot make this process run something you
+# did not list.
 #
-# This allowlist is the security boundary: the phone sends a key, never a
-# path, so nothing outside this table can be launched. A value is either an
-# absolute executable path or a name on PATH.
-[apps]
-spotify = "spotify"
-chrome = "chrome"
-edge = "msedge"
-firefox = "firefox"
-vs_code = "code"
-code = "code"
-notepad = "notepad"
-calculator = "calc"
-explorer = "explorer"
-terminal = "wt"
-obsidian = "obsidian"
-discord = "discord"
+# Turn them on for a personal machine you want Milo to drive completely:
+# any executable by name or path, any file or folder on any drive, any URL.
+# Understand what that means first. In open mode the token is the only thing
+# between this port and arbitrary process launch, so it is only appropriate
+# on a network you control, with a token you generated.
+allow_any_app = false
+allow_any_path = false
 
-# Directories and files /open-file is allowed to reveal, keyed by the slug
-# the phone sends. "open the study folder" arrives as `study`.
+# In restricted mode this is the allowlist. In open mode it is a set of
+# pins: an entry here wins over automatic resolution, which is useful for
+# names that would not resolve ("VS Code") or when a specific build must be
+# used. A value is either an absolute executable path or a name on PATH.
+#
+# Do not pin an app you have not installed — the pin wins over the
+# resolution that would otherwise start working once you do.
+[apps]
+vs_code = "C:/Users/you/AppData/Local/Programs/Microsoft VS Code/Code.exe"
+terminal = "wt"
+notepad = "notepad"
+
+# Folder and file shorthands, so "open the study folder" needs no path.
 [paths]
 study = "D:/Study"
 downloads = "~/Downloads"
 documents = "~/Documents"
-pictures = "~/Pictures"
-videos = "~/Videos"
 
-# Literal paths are also accepted ("open D:/Study/Anatomy on my PC"), but
-# only when they resolve inside one of these roots. Leave the list empty to
-# refuse literal paths entirely and allow only the aliases above.
+# Only consulted in restricted mode. Literal paths are accepted when they
+# resolve inside one of these roots. Leave the list empty to refuse literal
+# paths entirely and allow only the aliases above.
 allowed_roots = ["D:/Study", "~/Documents", "~/Downloads"]

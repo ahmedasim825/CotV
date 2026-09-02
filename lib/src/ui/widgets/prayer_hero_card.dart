@@ -29,7 +29,7 @@ class PrayerHeroCard extends StatelessWidget {
     return GlassShell(
       outerRadius: 36,
       padding: const EdgeInsets.fromLTRB(28, 26, 28, 28),
-      tint: const Color(0xFF171119),
+      tint: context.palette.heroTint,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -43,22 +43,22 @@ class PrayerHeroCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: Color(0x1FD8A657),
+                decoration: BoxDecoration(
+                  color: context.palette.accentSoft,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(iconForPrayer(prayer), size: 20, color: AppPalette.amberBright),
+                child: Icon(iconForPrayer(prayer), size: 20, color: context.palette.accentBright),
               ),
             ],
           ),
           const SizedBox(height: 22),
-          Text(prayer.displayName, style: AppTypography.ui(size: 16, color: AppPalette.textSecondary)),
+          Text(prayer.displayName, style: context.typography.ui(size: 16, color: context.palette.textSecondary)),
           const SizedBox(height: 4),
-          Text(_formatTime(time), style: AppTypography.display(size: 60)),
+          Text(_formatTime(time), style: context.typography.display(size: 60)),
           const SizedBox(height: 14),
           Text(
             _formatCountdown(remaining),
-            style: AppTypography.ui(size: 13.5, color: AppPalette.amber, weight: FontWeight.w600),
+            style: context.typography.ui(size: 13.5, color: context.palette.accent, weight: FontWeight.w600),
           ),
         ],
       ),

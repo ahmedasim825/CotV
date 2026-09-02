@@ -25,10 +25,10 @@ class FloatingHeader extends StatelessWidget {
           Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(color: AppPalette.amberBright, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: context.palette.accentBright, shape: BoxShape.circle),
           ),
           const SizedBox(width: 10),
-          Text('Prayer Lockout', style: AppTypography.ui(size: 14, weight: FontWeight.w600)),
+          Text('Prayer Lockout', style: context.typography.ui(size: 14, weight: FontWeight.w600)),
           const SizedBox(width: 24),
           _IconChip(icon: PhLight.arrowClockwise, onTap: onRefresh),
         ],
@@ -51,8 +51,8 @@ class _IconChip extends StatelessWidget {
         width: 34,
         height: 34,
         alignment: Alignment.center,
-        decoration: const BoxDecoration(color: AppPalette.glassBorder, shape: BoxShape.circle),
-        child: Icon(icon, size: 16, color: AppPalette.textPrimary),
+        decoration: BoxDecoration(color: context.palette.glassBorder, shape: BoxShape.circle),
+        child: Icon(icon, size: 16, color: context.palette.textPrimary),
       ),
     );
   }

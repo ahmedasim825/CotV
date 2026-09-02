@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/task.dart';
-import '../../../models/task_view.dart';
+import '../../components/components.dart';
 import '../../format/time_format.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/prayer_palette.dart';
@@ -53,7 +53,7 @@ class _TaskTileState extends State<TaskTile> {
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
-    final accent = accentForPriority(task.priority);
+    final accent = context.palette.priorityColor(task.priority);
     final isOverdue = !_isCompleted &&
         task.dueDate != null &&
         task.dueDate!.isBefore(widget.now);
@@ -75,9 +75,9 @@ class _TaskTileState extends State<TaskTile> {
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
             decoration: BoxDecoration(
-              color: AppPalette.surface,
+              color: context.palette.surface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppPalette.hairline),
+              border: Border.all(color: context.palette.hairline),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,18 +96,18 @@ class _TaskTileState extends State<TaskTile> {
                       AnimatedDefaultTextStyle(
                         duration: AppMotion.fast,
                         curve: AppMotion.spring,
-                        style: AppTypography.ui(
+                        style: context.typography.ui(
                           size: 14.5,
                           weight: FontWeight.w600,
                           height: 1.3,
                           color: _isCompleted
-                              ? AppPalette.textMuted
-                              : AppPalette.textPrimary,
+                              ? context.palette.textMuted
+                              : context.palette.textPrimary,
                         ).copyWith(
                           decoration: _isCompleted
                               ? TextDecoration.lineThrough
                               : TextDecoration.none,
-                          decorationColor: AppPalette.textMuted,
+                          decorationColor: context.palette.textMuted,
                         ),
                         child: Text(
                           task.title,
@@ -121,9 +121,9 @@ class _TaskTileState extends State<TaskTile> {
                           task.description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.ui(
+                          style: context.typography.ui(
                             size: 12.5,
-                            color: AppPalette.textMuted,
+                            color: context.palette.textMuted,
                             height: 1.4,
                           ),
                         ),
@@ -183,7 +183,7 @@ class _CompletionControl extends StatelessWidget {
                 color: isCompleted ? accent : Colors.transparent,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isCompleted ? accent : AppPalette.glassBorder,
+                  color: isCompleted ? accent : context.palette.glassBorder,
                   width: 1.5,
                 ),
               ),
@@ -194,10 +194,10 @@ class _CompletionControl extends StatelessWidget {
                 child: AnimatedOpacity(
                   opacity: isCompleted ? 1 : 0,
                   duration: AppMotion.fast,
-                  child: const Icon(
+                  child: Icon(
                     PhLight.check,
                     size: 14,
-                    color: AppPalette.onAmber,
+                    color: context.palette.onAccent,
                   ),
                 ),
               ),
@@ -232,17 +232,12 @@ class _TaskMetaRow extends StatelessWidget {
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _MetaChip(
-          icon: PhLight.flagPennant,
-          label: task.priority.label,
-          color: accent,
-          filled: task.priority == TaskPriority.high,
-        ),
+        PriorityBadge(priority: task.priority),
         if (task.category.isNotEmpty)
           _MetaChip(
             icon: PhLight.tag,
             label: task.category,
-            color: AppPalette.textMuted,
+            color: context.palette.textMuted,
           ),
         if (dueDate != null)
           _MetaChip(
@@ -250,7 +245,7 @@ class _TaskMetaRow extends StatelessWidget {
             label: isOverdue
                 ? 'Overdue · ${formatDueLabel(dueDate, now)}'
                 : formatDueLabel(dueDate, now),
-            color: isOverdue ? AppPalette.danger : AppPalette.textMuted,
+            color: isOverdue ? context.palette.danger : context.palette.textMuted,
             filled: isOverdue,
           ),
       ],
@@ -276,7 +271,7 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: filled ? color.withValues(alpha: 0.14) : AppPalette.glassFill,
+        color: filled ? color.withValues(alpha: 0.14) : context.palette.glassFill,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -286,7 +281,7 @@ class _MetaChip extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: AppTypography.ui(size: 11, color: color, weight: FontWeight.w600),
+            style: context.typography.ui(size: 11, color: color, weight: FontWeight.w600),
           ),
         ],
       ),

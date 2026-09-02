@@ -35,6 +35,14 @@ class UserSettingsController extends StreamNotifier<UserSettings> {
     );
   }
 
+  /// Persists the chosen theme. The id is an opaque `AppThemeVariant.id`;
+  /// resolving it back to a variant (and falling back if it is unknown) is
+  /// `themeVariantProvider`'s job.
+  Future<void> setThemeId(String themeId) async {
+    final current = _repository.get();
+    await _repository.update(current.copyWith(themeId: themeId));
+  }
+
   Future<void> setLocation({required double latitude, required double longitude}) async {
     final current = _repository.get();
     await _repository.update(

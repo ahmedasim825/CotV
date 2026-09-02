@@ -7,9 +7,9 @@ import '../models/notification_models.dart';
 import '../providers/calendar_providers.dart';
 import '../providers/notification_providers.dart';
 import '../providers/prayer_providers.dart';
+import 'components/components.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
-import 'widgets/eyebrow_pill.dart';
 import 'widgets/floating_header.dart';
 import 'widgets/glow_pill_button.dart';
 import 'widgets/ph_light_icons.dart';
@@ -35,8 +35,8 @@ class HomeScreen extends ConsumerWidget {
       body: AmbientBackground(
         child: SafeArea(
           child: RefreshIndicator(
-            color: AppPalette.amber,
-            backgroundColor: AppPalette.surface,
+            color: context.palette.accent,
+            backgroundColor: context.palette.surface,
             onRefresh: () async => ref.invalidate(todayPrayerTimesProvider),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 56),
@@ -51,7 +51,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 40),
                 RevealOnEntrance(
                   delay: const Duration(milliseconds: 60),
-                  child: const _SectionHeader(
+                  child: const SectionHeader(
                     eyebrow: "TODAY'S SCHEDULE",
                     title: 'Prayer times',
                   ),
@@ -59,10 +59,10 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 20),
                 prayerTimesAsync.when(
                   data: (timings) => _PrayerBento(timings: timings),
-                  loading: () => const Padding(
+                  loading: () => Padding(
                     padding: EdgeInsets.symmetric(vertical: 64),
                     child: Center(
-                      child: CircularProgressIndicator(color: AppPalette.amber, strokeWidth: 2.5),
+                      child: CircularProgressIndicator(color: context.palette.accent, strokeWidth: 2.5),
                     ),
                   ),
                   error: (error, stackTrace) =>
@@ -71,7 +71,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 48),
                 RevealOnEntrance(
                   delay: const Duration(milliseconds: 140),
-                  child: const _SectionHeader(
+                  child: const SectionHeader(
                     eyebrow: 'AUTOMATION',
                     title: 'Prayer Lockout calendar',
                     subtitle:
@@ -95,7 +95,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 48),
                 RevealOnEntrance(
                   delay: const Duration(milliseconds: 220),
-                  child: const _SectionHeader(
+                  child: const SectionHeader(
                     eyebrow: 'ALERTS',
                     title: 'Adhan notifications',
                     subtitle: 'Exact Adhan alerts plus a pre-Adhan reminder for each prayer.',
@@ -140,33 +140,6 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.eyebrow, required this.title, this.subtitle});
-
-  final String eyebrow;
-  final String title;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        EyebrowPill(label: eyebrow),
-        const SizedBox(height: 12),
-        Text(title, style: AppTypography.display(size: 30, weight: FontWeight.w500)),
-        if (subtitle != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            subtitle!,
-            style: AppTypography.ui(size: 13.5, color: AppPalette.textMuted, height: 1.5),
-          ),
-        ],
-      ],
     );
   }
 }

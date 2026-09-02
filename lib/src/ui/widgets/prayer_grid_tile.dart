@@ -28,27 +28,27 @@ class PrayerGridTile extends StatelessWidget {
             height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppPalette.glassBorder,
+              color: context.palette.glassBorder,
               shape: BoxShape.circle,
             ),
             child: Icon(
               iconForPrayer(prayer),
               size: 16,
-              color: isPast ? AppPalette.textMuted : AppPalette.textSecondary,
+              color: isPast ? context.palette.textMuted : context.palette.textSecondary,
             ),
           ),
           const SizedBox(height: 16),
           Text(
             prayer.displayName,
-            style: AppTypography.ui(size: 12.5, color: AppPalette.textMuted, weight: FontWeight.w600),
+            style: context.typography.ui(size: 12.5, color: context.palette.textMuted, weight: FontWeight.w600),
           ),
           const SizedBox(height: 2),
           Text(
             _formatTime(time),
-            style: AppTypography.display(
+            style: context.typography.display(
               size: 24,
               weight: FontWeight.w500,
-              color: isPast ? AppPalette.textMuted : AppPalette.textPrimary,
+              color: isPast ? context.palette.textMuted : context.palette.textPrimary,
             ),
           ),
         ],

@@ -5,10 +5,10 @@ import 'package:uuid/uuid.dart';
 import '../../models/task.dart';
 import '../../models/task_view.dart';
 import '../../providers/task_providers.dart';
+import '../components/components.dart';
 import '../format/time_format.dart';
 import '../theme/app_theme.dart';
 import '../theme/prayer_palette.dart';
-import '../widgets/glow_pill_button.dart';
 import '../widgets/ph_light_icons.dart';
 
 const _uuid = Uuid();
@@ -22,13 +22,8 @@ Future<Task?> showTaskFormSheet(
   Task? existing,
   DateTime? initialDueDate,
 }) {
-  return showModalBottomSheet<Task>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    // The sheet is a form: dragging it away mid-edit loses work, so it
-    // closes only via Cancel, Save, or the scrim.
-    enableDrag: false,
+  return showStandardBottomSheet<Task>(
+    context,
     builder: (_) => TaskFormSheet(
       existing: existing,
       initialDueDate: initialDueDate,
@@ -167,54 +162,53 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
-
-    return Padding(
-      // Lifts the sheet above the keyboard as it opens.
-      padding: EdgeInsets.only(bottom: viewInsets),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+    return Form(
+      key: _formKey,
+      child: StandardBottomSheet(
+        title: _isEditing ? 'Edit task' : 'New task',
+        actions: Row(
+          children: [
+            Expanded(
+              child: PrimaryButton(
+                label: 'Cancel',
+                icon: PhLight.x,
+                variant: ButtonVariant.outline,
+                expand: true,
+                onPressed:
+                    _isSaving ? null : () => Navigator.of(context).pop(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: PrimaryButton(
+                label: _isEditing ? 'Save' : 'Add task',
+                icon: PhLight.check,
+                expand: true,
+                loading: _isSaving,
+                onPressed: _isSaving ? null : _save,
+              ),
+            ),
+          ],
         ),
-        decoration: const BoxDecoration(
-          color: AppPalette.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border(top: BorderSide(color: AppPalette.innerHighlight)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const _SheetGrabber(),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                    children: [
-                      Text(
-                        _isEditing ? 'Edit task' : 'New task',
-                        style: AppTypography.display(size: 26, weight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 22),
-                      _FieldLabel(icon: PhLight.listChecks, label: 'Title'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+                      FieldLabel(icon: PhLight.listChecks, label: 'Title'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _titleController,
                         autofocus: !_isEditing,
                         textInputAction: TextInputAction.next,
                         textCapitalization: TextCapitalization.sentences,
-                        style: AppTypography.ui(size: 15),
-                        decoration: _inputDecoration('What needs doing?'),
+                        style: context.typography.ui(size: 15),
+                        decoration: appInputDecoration(context, hint: 'What needs doing?'),
                         validator: (value) =>
                             (value == null || value.trim().isEmpty)
                                 ? 'Give the task a title.'
                                 : null,
                       ),
                       const SizedBox(height: 20),
-                      _FieldLabel(
+                      FieldLabel(
                         icon: PhLight.textAlignLeft,
                         label: 'Description',
                         optional: true,
@@ -225,27 +219,27 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
                         maxLines: 3,
                         minLines: 2,
                         textCapitalization: TextCapitalization.sentences,
-                        style: AppTypography.ui(size: 14),
-                        decoration: _inputDecoration('Any detail worth keeping'),
+                        style: context.typography.ui(size: 14),
+                        decoration: appInputDecoration(context, hint: 'Any detail worth keeping'),
                       ),
                       const SizedBox(height: 20),
-                      _FieldLabel(icon: PhLight.tag, label: 'Category'),
+                      FieldLabel(icon: PhLight.tag, label: 'Category'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _categoryController,
                         textCapitalization: TextCapitalization.words,
-                        style: AppTypography.ui(size: 14),
-                        decoration: _inputDecoration('General'),
+                        style: context.typography.ui(size: 14),
+                        decoration: appInputDecoration(context, hint: 'General'),
                       ),
                       const SizedBox(height: 22),
-                      _FieldLabel(icon: PhLight.flagPennant, label: 'Priority'),
+                      FieldLabel(icon: PhLight.flagPennant, label: 'Priority'),
                       const SizedBox(height: 10),
                       _PrioritySelector(
                         selected: _priority,
                         onChanged: (value) => setState(() => _priority = value),
                       ),
                       const SizedBox(height: 22),
-                      _FieldLabel(
+                      FieldLabel(
                         icon: PhLight.clock,
                         label: 'Due date & time',
                         optional: true,
@@ -264,113 +258,12 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
                         onChanged: (value) =>
                             setState(() => _reminderEnabled = value),
                       ),
-                      const SizedBox(height: 28),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: GlowPillButton(
-                              label: 'Cancel',
-                              icon: PhLight.x,
-                              filled: false,
-                              expand: true,
-                              onPressed: _isSaving
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: GlowPillButton(
-                              label: _isEditing ? 'Save' : 'Add task',
-                              icon: PhLight.check,
-                              expand: true,
-                              loading: _isSaving,
-                              onPressed: _isSaving ? null : _save,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    OutlineInputBorder border(Color color) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: color),
-        );
-
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: AppTypography.ui(size: 14, color: AppPalette.textMuted),
-      filled: true,
-      fillColor: AppPalette.glassFill,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: border(AppPalette.glassBorder),
-      enabledBorder: border(AppPalette.glassBorder),
-      focusedBorder: border(AppPalette.amber),
-      errorBorder: border(AppPalette.danger),
-      focusedErrorBorder: border(AppPalette.danger),
-      errorStyle: AppTypography.ui(size: 11.5, color: AppPalette.danger),
-    );
-  }
-}
-
-class _SheetGrabber extends StatelessWidget {
-  const _SheetGrabber();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 4,
-      margin: const EdgeInsets.only(top: 12, bottom: 8),
-      decoration: BoxDecoration(
-        color: AppPalette.glassBorder,
-        borderRadius: BorderRadius.circular(999),
-      ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({
-    required this.icon,
-    required this.label,
-    this.optional = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool optional;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 13, color: AppPalette.amber),
-        const SizedBox(width: 8),
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.eyebrow(color: AppPalette.textSecondary),
-        ),
-        if (optional) ...[
-          const SizedBox(width: 8),
-          Text(
-            'OPTIONAL',
-            style: AppTypography.eyebrow(color: AppPalette.textMuted),
-          ),
-        ],
-      ],
-    );
-  }
 }
 
 class _PrioritySelector extends StatelessWidget {
@@ -414,7 +307,7 @@ class _PriorityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentForPriority(priority);
+    final accent = context.palette.priorityColor(priority);
 
     return Semantics(
       button: true,
@@ -431,10 +324,10 @@ class _PriorityChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: isSelected
                 ? accent.withValues(alpha: 0.16)
-                : AppPalette.glassFill,
+                : context.palette.glassFill,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? accent : AppPalette.glassBorder,
+              color: isSelected ? accent : context.palette.glassBorder,
             ),
           ),
           child: Row(
@@ -443,15 +336,15 @@ class _PriorityChip extends StatelessWidget {
               Icon(
                 PhLight.flagPennant,
                 size: 13,
-                color: isSelected ? accent : AppPalette.textMuted,
+                color: isSelected ? accent : context.palette.textMuted,
               ),
               const SizedBox(width: 7),
               Text(
                 priority.label,
-                style: AppTypography.ui(
+                style: context.typography.ui(
                   size: 13,
                   weight: FontWeight.w600,
-                  color: isSelected ? accent : AppPalette.textSecondary,
+                  color: isSelected ? accent : context.palette.textSecondary,
                 ),
               ),
             ],
@@ -487,10 +380,10 @@ class _DueDateField extends StatelessWidget {
               height: 50,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: AppPalette.glassFill,
+                color: context.palette.glassFill,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: due == null ? AppPalette.glassBorder : AppPalette.amber,
+                  color: due == null ? context.palette.glassBorder : context.palette.accent,
                 ),
               ),
               child: Row(
@@ -498,7 +391,7 @@ class _DueDateField extends StatelessWidget {
                   Icon(
                     PhLight.calendarBlank,
                     size: 15,
-                    color: due == null ? AppPalette.textMuted : AppPalette.amber,
+                    color: due == null ? context.palette.textMuted : context.palette.accent,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -508,11 +401,11 @@ class _DueDateField extends StatelessWidget {
                           : '${formatFullDate(due)} · ${formatClock(due)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.ui(
+                      style: context.typography.ui(
                         size: 13.5,
                         color: due == null
-                            ? AppPalette.textMuted
-                            : AppPalette.textPrimary,
+                            ? context.palette.textMuted
+                            : context.palette.textPrimary,
                       ),
                     ),
                   ),
@@ -534,11 +427,11 @@ class _DueDateField extends StatelessWidget {
                 height: 50,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppPalette.glassFill,
+                  color: context.palette.glassFill,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppPalette.glassBorder),
+                  border: Border.all(color: context.palette.glassBorder),
                 ),
-                child: const Icon(PhLight.x, size: 15, color: AppPalette.textMuted),
+                child: Icon(PhLight.x, size: 15, color: context.palette.textMuted),
               ),
             ),
           ),
@@ -568,16 +461,16 @@ class _ReminderToggle extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
         decoration: BoxDecoration(
-          color: AppPalette.glassFill,
+          color: context.palette.glassFill,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppPalette.glassBorder),
+          border: Border.all(color: context.palette.glassBorder),
         ),
         child: Row(
           children: [
             Icon(
               isOn ? PhLight.bellSimple : PhLight.bellSimpleSlash,
               size: 16,
-              color: isOn ? AppPalette.amber : AppPalette.textMuted,
+              color: isOn ? context.palette.accent : context.palette.textMuted,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -586,14 +479,14 @@ class _ReminderToggle extends StatelessWidget {
                 children: [
                   Text(
                     'Reminder',
-                    style: AppTypography.ui(size: 13.5, weight: FontWeight.w600),
+                    style: context.typography.ui(size: 13.5, weight: FontWeight.w600),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     enabled
                         ? 'Notify me when this task is due'
                         : 'Set a due date to enable reminders',
-                    style: AppTypography.ui(size: 11.5, color: AppPalette.textMuted),
+                    style: context.typography.ui(size: 11.5, color: context.palette.textMuted),
                   ),
                 ],
               ),
@@ -601,10 +494,10 @@ class _ReminderToggle extends StatelessWidget {
             Switch(
               value: isOn,
               onChanged: enabled ? onChanged : null,
-              activeThumbColor: AppPalette.onAmber,
-              activeTrackColor: AppPalette.amber,
-              inactiveThumbColor: AppPalette.textMuted,
-              inactiveTrackColor: AppPalette.glassFill,
+              activeThumbColor: context.palette.onAccent,
+              activeTrackColor: context.palette.accent,
+              inactiveThumbColor: context.palette.textMuted,
+              inactiveTrackColor: context.palette.glassFill,
             ),
           ],
         ),

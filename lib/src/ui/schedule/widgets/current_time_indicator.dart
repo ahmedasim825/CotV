@@ -50,15 +50,15 @@ class _CurrentTimeIndicatorState extends State<CurrentTimeIndicator>
                 margin: const EdgeInsets.only(right: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppPalette.amber,
+                  color: context.palette.accent,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   formatClock(widget.now),
-                  style: AppTypography.ui(
+                  style: context.typography.ui(
                     size: 10.5,
                     weight: FontWeight.w700,
-                    color: AppPalette.onAmber,
+                    color: context.palette.onAccent,
                   ),
                 ),
               ),
@@ -70,11 +70,11 @@ class _CurrentTimeIndicatorState extends State<CurrentTimeIndicator>
               width: 9,
               height: 9,
               decoration: BoxDecoration(
-                color: AppPalette.amberBright,
+                color: context.palette.accentBright,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppPalette.amber.withValues(alpha: 0.6),
+                    color: context.palette.accent.withValues(alpha: 0.6),
                     blurRadius: 8,
                     spreadRadius: 1,
                   ),
@@ -88,8 +88,8 @@ class _CurrentTimeIndicatorState extends State<CurrentTimeIndicator>
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    AppPalette.amber.withValues(alpha: 0.9),
-                    AppPalette.amber.withValues(alpha: 0.05),
+                    context.palette.accent.withValues(alpha: 0.9),
+                    context.palette.accent.withValues(alpha: 0.05),
                   ],
                 ),
               ),

@@ -64,8 +64,8 @@ class _SecurityLoading extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AmbientBackground(
-        child: const Center(
-          child: CircularProgressIndicator(color: AppPalette.amber, strokeWidth: 2.5),
+        child: Center(
+          child: CircularProgressIndicator(color: context.palette.accent, strokeWidth: 2.5),
         ),
       ),
     );
@@ -89,7 +89,7 @@ class _SecurityError extends StatelessWidget {
               child: Text(
                 'Security check failed:\n$message',
                 textAlign: TextAlign.center,
-                style: AppTypography.ui(color: AppPalette.danger),
+                style: context.typography.ui(color: context.palette.danger),
               ),
             ),
           ),

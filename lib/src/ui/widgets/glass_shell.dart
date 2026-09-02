@@ -33,23 +33,26 @@ class GlassShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final innerRadius = outerRadius - shellPadding;
 
     final core = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: tint ?? AppPalette.surface,
+        color: tint ?? palette.surface,
         borderRadius: BorderRadius.circular(innerRadius),
-        border: Border.all(color: AppPalette.hairline),
-        boxShadow: const [
-          BoxShadow(color: Color(0x40000000), blurRadius: 30, offset: Offset(0, 16)),
+        border: Border.all(color: palette.hairline),
+        boxShadow: [
+          BoxShadow(
+            color: palette.shadow,
+            blurRadius: 30,
+            offset: const Offset(0, 16),
+          ),
         ],
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: BorderRadius.circular(innerRadius),
-        border: const Border(
-          top: BorderSide(color: AppPalette.innerHighlight),
-        ),
+        border: Border(top: BorderSide(color: palette.innerHighlight)),
       ),
       child: child,
     );
@@ -57,9 +60,9 @@ class GlassShell extends StatelessWidget {
     final shell = Container(
       padding: EdgeInsets.all(shellPadding),
       decoration: BoxDecoration(
-        color: AppPalette.glassFill,
+        color: palette.glassFill,
         borderRadius: BorderRadius.circular(outerRadius),
-        border: Border.all(color: AppPalette.glassBorder),
+        border: Border.all(color: palette.glassBorder),
       ),
       child: core,
     );

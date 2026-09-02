@@ -15,16 +15,16 @@ class AmbientBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: AppPalette.background),
+        ColoredBox(color: context.palette.background),
         Positioned(
           top: -140,
           right: -100,
-          child: _Glow(diameter: 360, color: AppPalette.amberDeep.withValues(alpha: 0.35)),
+          child: _Glow(diameter: 360, color: context.palette.accentDeep.withValues(alpha: 0.35)),
         ),
         Positioned(
           bottom: -160,
           left: -120,
-          child: _Glow(diameter: 320, color: AppPalette.amber.withValues(alpha: 0.16)),
+          child: _Glow(diameter: 320, color: context.palette.accent.withValues(alpha: 0.16)),
         ),
         child,
       ],

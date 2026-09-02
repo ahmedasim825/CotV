@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../security/security_service.dart';
 import 'user_settings_providers.dart';
@@ -39,6 +40,70 @@ class AppLockState {
 }
 
 final securityServiceProvider = Provider<SecurityService>((ref) => SecurityService());
+
+/// What this device can actually authenticate with, so the settings screen
+/// can name the real mechanism ("Face ID", "Touch ID") and explain itself
+/// when app lock is unavailable, instead of offering a switch that would
+/// only fail at the prompt.
+class BiometricCapability {
+  const BiometricCapability({
+    required this.deviceSupported,
+    required this.biometricsAvailable,
+    required this.types,
+  });
+
+  /// The device can authenticate at all — biometrics, or a passcode / PIN /
+  /// pattern fallback.
+  final bool deviceSupported;
+
+  /// Biometric hardware with at least one enrolled credential is ready now.
+  final bool biometricsAvailable;
+
+  final List<BiometricType> types;
+
+  /// What to call the primary mechanism in the UI.
+  String get label {
+    if (!deviceSupported) return 'Unavailable';
+    if (types.contains(BiometricType.face)) return 'Face ID';
+    if (types.contains(BiometricType.fingerprint)) return 'Touch ID';
+    if (types.contains(BiometricType.iris)) return 'Iris';
+    if (biometricsAvailable) return 'Biometrics';
+    return 'Device passcode';
+  }
+
+  /// The one-line explanation under the app-lock switch.
+  String get description {
+    if (!deviceSupported) {
+      return 'This device has no passcode or biometrics set up, so app '
+          'lock cannot be turned on.';
+    }
+    if (!biometricsAvailable) {
+      return 'No biometrics are enrolled. App lock will fall back to your '
+          'device passcode.';
+    }
+    return 'Require $label whenever the app is opened or resumed.';
+  }
+}
+
+/// Queried once per app run and refreshed by invalidating this provider —
+/// enrolment can change while the app is backgrounded (the user adds a
+/// fingerprint in Settings), so the security screen invalidates it on
+/// resume rather than trusting a value from launch.
+final biometricCapabilityProvider =
+    FutureProvider<BiometricCapability>((ref) async {
+  final service = ref.watch(securityServiceProvider);
+  final deviceSupported = await service.isDeviceSupported();
+  final biometricsAvailable = await service.canCheckBiometrics();
+  final types = deviceSupported
+      ? await service.availableBiometrics()
+      : const <BiometricType>[];
+
+  return BiometricCapability(
+    deviceSupported: deviceSupported,
+    biometricsAvailable: biometricsAvailable,
+    types: types,
+  );
+});
 
 /// Owns whether the app is locked. [SecurityGate] is the only widget that
 /// should call [lockIfEnabled]/[unlock] directly — everything else just

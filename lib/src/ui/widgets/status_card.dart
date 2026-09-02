@@ -17,7 +17,7 @@ class StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = tone == StatusTone.success ? AppPalette.success : AppPalette.danger;
+    final color = tone == StatusTone.success ? context.palette.success : context.palette.danger;
     final icon = tone == StatusTone.success ? PhLight.checkCircle : PhLight.warningCircle;
 
     return GlassShell(
@@ -32,7 +32,7 @@ class StatusCard extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: AppTypography.ui(size: 13, color: AppPalette.textSecondary, height: 1.4),
+              style: context.typography.ui(size: 13, color: context.palette.textSecondary, height: 1.4),
             ),
           ),
         ],

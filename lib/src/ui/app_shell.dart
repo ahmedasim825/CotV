@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/focus_session_providers.dart';
 import 'focus/focus_session_overlay.dart';
+import 'habits/habit_screen.dart';
 import 'home_screen.dart';
+import 'journal/journal_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'schedule/daily_schedule_view.dart';
+import 'settings/settings_screen.dart';
 import 'tasks/task_list_view.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
@@ -13,17 +16,23 @@ import 'widgets/ph_light_icons.dart';
 import 'widgets/prayer_lockout_banner.dart';
 
 /// Top-level destinations.
-enum AppDestination { schedule, tasks, prayers }
+enum AppDestination { schedule, tasks, habits, journal, prayers, settings }
 
-extension on AppDestination {
+extension AppDestinationX on AppDestination {
   String get label {
     switch (this) {
       case AppDestination.schedule:
         return 'Schedule';
       case AppDestination.tasks:
         return 'Tasks';
+      case AppDestination.habits:
+        return 'Habits';
+      case AppDestination.journal:
+        return 'Journal';
       case AppDestination.prayers:
         return 'Prayers';
+      case AppDestination.settings:
+        return 'Settings';
     }
   }
 
@@ -33,9 +42,41 @@ extension on AppDestination {
         return PhLight.calendarBlank;
       case AppDestination.tasks:
         return PhLight.listChecks;
+      case AppDestination.habits:
+        return PhLight.target;
+      case AppDestination.journal:
+        return PhLight.notePencil;
       case AppDestination.prayers:
         return PhLight.mosque;
+      case AppDestination.settings:
+        return PhLight.gear;
     }
+  }
+
+  /// Whether this destination can share the screen with another one.
+  ///
+  /// Only the timeline and the task list read well at half width; the
+  /// prayer bento, the habit grid, the journal and settings are already
+  /// multi-column or long-form layouts and take the full pane instead.
+  bool get sharesSplitView =>
+      this == AppDestination.schedule || this == AppDestination.tasks;
+}
+
+/// The pane a destination renders.
+Widget paneFor(AppDestination destination) {
+  switch (destination) {
+    case AppDestination.schedule:
+      return const DailyScheduleView();
+    case AppDestination.tasks:
+      return const TaskListView();
+    case AppDestination.habits:
+      return const HabitScreen();
+    case AppDestination.journal:
+      return const JournalScreen();
+    case AppDestination.prayers:
+      return const HomeScreen();
+    case AppDestination.settings:
+      return const SettingsScreen();
   }
 }
 
@@ -90,7 +131,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                       destination: _destination,
                       onSelect: _select,
                     )
-                  : _paneFor(_destination),
+                  : paneFor(_destination),
             ),
           ),
           bottomNavigationBar: windowSize.usesNavigationRail
@@ -102,17 +143,6 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       },
     );
-  }
-
-  Widget _paneFor(AppDestination destination) {
-    switch (destination) {
-      case AppDestination.schedule:
-        return const DailyScheduleView();
-      case AppDestination.tasks:
-        return const TaskListView();
-      case AppDestination.prayers:
-        return const HomeScreen();
-    }
   }
 }
 
@@ -133,34 +163,23 @@ class _RailLayout extends StatelessWidget {
     return Row(
       children: [
         _NavigationSidebar(destination: destination, onSelect: onSelect),
-        const VerticalDivider(width: 1, thickness: 1, color: AppPalette.hairline),
+        VerticalDivider(
+          width: 1,
+          thickness: 1,
+          color: context.palette.hairline,
+        ),
         Expanded(
-          child: windowSize.usesSplitView
+          child: windowSize.usesSplitView && destination.sharesSplitView
               ? _SplitPanes(destination: destination)
-              : _singlePane(destination),
+              : paneFor(destination),
         ),
       ],
     );
-  }
-
-  Widget _singlePane(AppDestination destination) {
-    switch (destination) {
-      case AppDestination.schedule:
-        return const DailyScheduleView();
-      case AppDestination.tasks:
-        return const TaskListView();
-      case AppDestination.prayers:
-        return const HomeScreen();
-    }
   }
 }
 
 /// Master-detail: the timeline beside the task list, with the prayer status
 /// banner shared above both.
-///
-/// The Prayers destination takes the full width instead — its bento grid is
-/// already a multi-column layout and doesn't want to be squeezed into half a
-/// pane.
 class _SplitPanes extends StatelessWidget {
   const _SplitPanes({required this.destination});
 
@@ -173,10 +192,6 @@ class _SplitPanes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (destination == AppDestination.prayers) {
-      return const HomeScreen();
-    }
-
     return Column(
       children: [
         const Padding(
@@ -186,13 +201,17 @@ class _SplitPanes extends StatelessWidget {
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: const [
-              Expanded(
+            children: [
+              const Expanded(
                 flex: _scheduleFlex,
                 child: DailyScheduleView(showBanner: false),
               ),
-              VerticalDivider(width: 1, thickness: 1, color: AppPalette.hairline),
-              Expanded(flex: _tasksFlex, child: TaskListView()),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: context.palette.hairline,
+              ),
+              const Expanded(flex: _tasksFlex, child: TaskListView()),
             ],
           ),
         ),
@@ -210,6 +229,8 @@ class _NavigationSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Container(
       width: 92,
       padding: EdgeInsets.only(
@@ -221,20 +242,30 @@ class _NavigationSidebar extends StatelessWidget {
           Container(
             width: 10,
             height: 10,
-            decoration: const BoxDecoration(
-              color: AppPalette.amberBright,
+            decoration: BoxDecoration(
+              color: palette.accentBright,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(height: 32),
-          for (final item in AppDestination.values) ...[
-            _RailItem(
-              destination: item,
-              isSelected: item == destination,
-              onTap: () => onSelect(item),
+          const SizedBox(height: 28),
+          // Six destinations no longer fit a short iPad in landscape, so the
+          // rail scrolls rather than overflowing.
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  for (final item in AppDestination.values) ...[
+                    _RailItem(
+                      destination: item,
+                      isSelected: item == destination,
+                      onTap: () => onSelect(item),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-          ],
+          ),
         ],
       ),
     );
@@ -254,6 +285,8 @@ class _RailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Semantics(
       button: true,
       selected: isSelected,
@@ -272,24 +305,24 @@ class _RailItem extends StatelessWidget {
                 height: 38,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppPalette.amber.withValues(alpha: 0.16)
-                      : Colors.transparent,
+                  color: isSelected ? palette.accentSoft : Colors.transparent,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   destination.icon,
                   size: 20,
-                  color: isSelected ? AppPalette.amberBright : AppPalette.textMuted,
+                  color: isSelected ? palette.accentBright : palette.textMuted,
                 ),
               ),
               const SizedBox(height: 5),
               Text(
                 destination.label,
-                style: AppTypography.ui(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.typography.ui(
                   size: 10.5,
                   weight: FontWeight.w600,
-                  color: isSelected ? AppPalette.textPrimary : AppPalette.textMuted,
+                  color: isSelected ? palette.textPrimary : palette.textMuted,
                 ),
               ),
             ],
@@ -310,14 +343,16 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Container(
       padding: EdgeInsets.only(
         top: 8,
         bottom: 8 + MediaQuery.paddingOf(context).bottom,
       ),
-      decoration: const BoxDecoration(
-        color: AppPalette.surface,
-        border: Border(top: BorderSide(color: AppPalette.hairline)),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.hairline)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -347,6 +382,8 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Expanded(
       child: Semantics(
         button: true,
@@ -364,16 +401,24 @@ class _BottomNavItem extends StatelessWidget {
                 Icon(
                   destination.icon,
                   size: 21,
-                  color: isSelected ? AppPalette.amberBright : AppPalette.textMuted,
+                  color: isSelected ? palette.accentBright : palette.textMuted,
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  destination.label,
-                  style: AppTypography.ui(
-                    size: 10.5,
-                    weight: FontWeight.w600,
-                    color:
-                        isSelected ? AppPalette.textPrimary : AppPalette.textMuted,
+                Padding(
+                  // Six labels across a 393pt phone leaves ~65pt each; the
+                  // clamp keeps "Schedule" from colliding with "Tasks".
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Text(
+                    destination.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: context.typography.ui(
+                      size: 10,
+                      weight: FontWeight.w600,
+                      color:
+                          isSelected ? palette.textPrimary : palette.textMuted,
+                    ),
                   ),
                 ),
               ],

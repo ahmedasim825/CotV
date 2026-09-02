@@ -33,7 +33,7 @@ class PrayerLockoutBanner extends ConsumerWidget {
     final isLockedOut = lockout != null;
 
     final prayer = lockout?.prayer ?? prayerState.nextAdhan.prayer;
-    final accent = PrayerPalette.of(prayer);
+    final accent = context.palette.prayerHue(prayer);
     final target = lockout?.end ?? prayerState.nextAdhan.time;
 
     return AnimatedContainer(
@@ -42,11 +42,11 @@ class PrayerLockoutBanner extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
       decoration: BoxDecoration(
         color: isLockedOut
-            ? Color.alphaBlend(accent.withValues(alpha: 0.18), AppPalette.surface)
-            : AppPalette.surface,
+            ? Color.alphaBlend(accent.withValues(alpha: 0.18), context.palette.surface)
+            : context.palette.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isLockedOut ? accent.withValues(alpha: 0.7) : AppPalette.hairline,
+          color: isLockedOut ? accent.withValues(alpha: 0.7) : context.palette.hairline,
         ),
         boxShadow: isLockedOut
             ? [
@@ -56,9 +56,9 @@ class PrayerLockoutBanner extends ConsumerWidget {
                   offset: const Offset(0, 10),
                 ),
               ]
-            : const [
+            : [
                 BoxShadow(
-                  color: Color(0x33000000),
+                  color: context.palette.shadow,
                   blurRadius: 20,
                   offset: Offset(0, 8),
                 ),
@@ -88,16 +88,16 @@ class PrayerLockoutBanner extends ConsumerWidget {
                       isLockedOut
                           ? '${prayer.displayName} · Prayer Lockout'
                           : 'Next: ${prayer.displayName}',
-                      style: AppTypography.ui(size: 14, weight: FontWeight.w700),
+                      style: context.typography.ui(size: 14, weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       isLockedOut
                           ? 'Until ${formatClock(lockout.end)}'
                           : 'Adhan at ${formatClock(prayerState.nextAdhan.time)}',
-                      style: AppTypography.ui(
+                      style: context.typography.ui(
                         size: 12,
-                        color: AppPalette.textMuted,
+                        color: context.palette.textMuted,
                       ),
                     ),
                   ],
@@ -145,16 +145,16 @@ class _CountdownText extends ConsumerWidget {
       children: [
         Text(
           formatCountdown(remaining),
-          style: AppTypography.display(
+          style: context.typography.display(
             size: emphasised ? 26 : 22,
             weight: FontWeight.w500,
-            color: emphasised ? accent : AppPalette.textPrimary,
+            color: emphasised ? accent : context.palette.textPrimary,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           emphasised ? 'remaining' : 'to adhan',
-          style: AppTypography.eyebrow(color: AppPalette.textMuted),
+          style: context.typography.eyebrow(color: context.palette.textMuted),
         ),
       ],
     );
@@ -173,7 +173,7 @@ class _LockoutProgressBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: Stack(
         children: [
-          Container(height: 5, color: AppPalette.glassFill),
+          Container(height: 5, color: context.palette.glassFill),
           LayoutBuilder(
             builder: (context, constraints) => AnimatedContainer(
               duration: AppMotion.base,
@@ -204,7 +204,7 @@ class _QuickActions extends ConsumerWidget {
       return _ActionButton(
         icon: PhLight.pauseCircle,
         label: 'End focus session',
-        accent: AppPalette.textSecondary,
+        accent: context.palette.textSecondary,
         filled: false,
         onTap: () => ref.read(focusSessionProvider.notifier).end(),
       );
@@ -239,7 +239,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = filled ? AppPalette.onAmber : accent;
+    final foreground = filled ? context.palette.onAccent : accent;
 
     return Semantics(
       button: true,
@@ -266,7 +266,7 @@ class _ActionButton extends StatelessWidget {
                 const SizedBox(width: 9),
                 Text(
                   label,
-                  style: AppTypography.ui(
+                  style: context.typography.ui(
                     size: 13,
                     weight: FontWeight.w700,
                     color: foreground,

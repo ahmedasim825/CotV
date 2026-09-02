@@ -24,13 +24,14 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
           : (fields[2] as num).toInt(),
       latitude: (fields[3] as num?)?.toDouble(),
       longitude: (fields[4] as num?)?.toDouble(),
+      themeId: fields[5] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserSettings obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -40,7 +41,9 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       ..writeByte(3)
       ..write(obj.latitude)
       ..writeByte(4)
-      ..write(obj.longitude);
+      ..write(obj.longitude)
+      ..writeByte(5)
+      ..write(obj.themeId);
   }
 
   @override

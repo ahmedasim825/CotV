@@ -229,8 +229,8 @@ class _TimelineCanvas extends StatelessWidget {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            ..._prayerBands(contentWidth),
-            ..._hourRules(constraints.maxWidth),
+            ..._prayerBands(context, contentWidth),
+            ..._hourRules(context, constraints.maxWidth),
             ..._blocks(context, contentWidth),
             if (showNowLine)
               AnimatedPositioned(
@@ -251,7 +251,7 @@ class _TimelineCanvas extends StatelessWidget {
   }
 
   /// Tinted bands for each prayer's validity window, behind everything else.
-  List<Widget> _prayerBands(double contentWidth) {
+  List<Widget> _prayerBands(BuildContext context, double contentWidth) {
     return [
       for (final window in schedule.timeWindows)
         Positioned(
@@ -261,9 +261,9 @@ class _TimelineCanvas extends StatelessWidget {
           height: geometry.offsetOf(window.end) - geometry.offsetOf(window.start),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: PrayerPalette.bandFill(window.prayer),
+              color: context.palette.prayerBandFill(window.prayer),
               border: Border(
-                top: BorderSide(color: PrayerPalette.bandEdge(window.prayer)),
+                top: BorderSide(color: context.palette.prayerBandEdge(window.prayer)),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -273,8 +273,8 @@ class _TimelineCanvas extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4, right: 8),
                 child: Text(
                   window.prayer.displayName.toUpperCase(),
-                  style: AppTypography.eyebrow(
-                    color: PrayerPalette.of(window.prayer).withValues(alpha: 0.75),
+                  style: context.typography.eyebrow(
+                    color: context.palette.prayerHue(window.prayer).withValues(alpha: 0.75),
                   ),
                 ),
               ),
@@ -285,7 +285,7 @@ class _TimelineCanvas extends StatelessWidget {
   }
 
   /// Hour labels down the gutter with a hairline rule across the canvas.
-  List<Widget> _hourRules(double fullWidth) {
+  List<Widget> _hourRules(BuildContext context, double fullWidth) {
     return [
       for (var hour = 0; hour < TimelineGeometry.hoursPerDay; hour++)
         Positioned(
@@ -302,19 +302,19 @@ class _TimelineCanvas extends StatelessWidget {
                   child: Text(
                     formatHourLabel(hour),
                     textAlign: TextAlign.right,
-                    style: AppTypography.ui(
+                    style: context.typography.ui(
                       size: 11,
-                      color: AppPalette.textMuted,
+                      color: context.palette.textMuted,
                       weight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
-              const Expanded(
+              Expanded(
                 child: Divider(
                   height: 1,
                   thickness: 1,
-                  color: AppPalette.hairline,
+                  color: context.palette.hairline,
                 ),
               ),
             ],
@@ -372,12 +372,12 @@ class _JumpToNowButton extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
             decoration: BoxDecoration(
-              color: AppPalette.surface,
+              color: context.palette.surface,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppPalette.glassBorder),
-              boxShadow: const [
+              border: Border.all(color: context.palette.glassBorder),
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x55000000),
+                  color: context.palette.shadow,
                   blurRadius: 20,
                   offset: Offset(0, 8),
                 ),
@@ -386,15 +386,15 @@ class _JumpToNowButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   PhLight.crosshairSimple,
                   size: 15,
-                  color: AppPalette.amberBright,
+                  color: context.palette.accentBright,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Now',
-                  style: AppTypography.ui(size: 13, weight: FontWeight.w600),
+                  style: context.typography.ui(size: 13, weight: FontWeight.w600),
                 ),
               ],
             ),

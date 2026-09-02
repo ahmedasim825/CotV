@@ -53,17 +53,17 @@ class DateNavigationHeader extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.display(
+                        style: context.typography.display(
                           size: dense ? 20 : 24,
                           weight: FontWeight.w500,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Icon(
+                    Icon(
                       PhLight.calendarDots,
                       size: 16,
-                      color: AppPalette.textMuted,
+                      color: context.palette.textMuted,
                     ),
                   ],
                 ),
@@ -96,9 +96,9 @@ class DateNavigationHeader extends ConsumerWidget {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: AppPalette.amber,
-                onPrimary: AppPalette.onAmber,
-                surface: AppPalette.surface,
+                primary: context.palette.accent,
+                onPrimary: context.palette.onAccent,
+                surface: context.palette.surface,
               ),
         ),
         child: child!,
@@ -139,11 +139,11 @@ class _NavArrow extends StatelessWidget {
               width: 34,
               height: 34,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppPalette.glassBorder,
+              decoration: BoxDecoration(
+                color: context.palette.glassBorder,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 15, color: AppPalette.textPrimary),
+              child: Icon(icon, size: 15, color: context.palette.textPrimary),
             ),
           ),
         ),

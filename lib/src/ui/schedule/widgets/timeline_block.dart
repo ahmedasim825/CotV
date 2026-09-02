@@ -35,8 +35,8 @@ class TimelineBlock extends StatelessWidget {
     final block = switch (entry) {
       PrayerLockoutEntry(:final window) => _BlockSurface(
           height: height,
-          accent: PrayerPalette.of(window.prayer),
-          fill: PrayerPalette.lockoutFill(window.prayer),
+          accent: context.palette.prayerHue(window.prayer),
+          fill: context.palette.prayerLockoutFill(window.prayer),
           icon: iconForPrayer(window.prayer),
           title: '${window.prayer.displayName} · Prayer Lockout',
           subtitle: formatTimeRange(window.start, window.end),
@@ -45,8 +45,8 @@ class TimelineBlock extends StatelessWidget {
         ),
       ScheduleItemEntry(:final item) => _BlockSurface(
           height: height,
-          accent: item.isPrayerBlocked ? AppPalette.amber : AppPalette.textSecondary,
-          fill: AppPalette.surface,
+          accent: item.isPrayerBlocked ? context.palette.accent : context.palette.textSecondary,
+          fill: context.palette.surface,
           icon: item.isPrayerBlocked ? PhLight.mosque : PhLight.calendarBlank,
           title: item.title,
           subtitle: formatTimeRange(item.startTime, item.endTime),
@@ -54,8 +54,8 @@ class TimelineBlock extends StatelessWidget {
         ),
       TaskEntry(:final task, :final dueDate) => _BlockSurface(
           height: height,
-          accent: accentForPriority(task.priority),
-          fill: AppPalette.surface,
+          accent: context.palette.priorityColor(task.priority),
+          fill: context.palette.surface,
           icon: PhLight.listChecks,
           title: task.title,
           subtitle: 'Due ${formatClock(dueDate)} · ${task.priority.label}',
@@ -116,10 +116,10 @@ class _BlockSurface extends StatelessWidget {
         color: fill,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isCurrent ? accent.withValues(alpha: 0.85) : AppPalette.hairline,
+          color: isCurrent ? accent.withValues(alpha: 0.85) : context.palette.hairline,
         ),
-        boxShadow: const [
-          BoxShadow(color: Color(0x33000000), blurRadius: 14, offset: Offset(0, 6)),
+        boxShadow: [
+          BoxShadow(color: context.palette.shadow, blurRadius: 14, offset: Offset(0, 6)),
         ],
       ),
       child: Row(
@@ -149,7 +149,7 @@ class _BlockSurface extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.ui(size: 13, weight: FontWeight.w600),
+                        style: context.typography.ui(size: 13, weight: FontWeight.w600),
                       ),
                     ),
                     if (trailing != null) ...[
@@ -164,7 +164,7 @@ class _BlockSurface extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.ui(size: 11.5, color: AppPalette.textMuted),
+                    style: context.typography.ui(size: 11.5, color: context.palette.textMuted),
                   ),
                 ],
               ],
@@ -182,6 +182,6 @@ class _ReadOnlyLockBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Icon(PhLight.lock, size: 12, color: AppPalette.textMuted);
+    return Icon(PhLight.lock, size: 12, color: context.palette.textMuted);
   }
 }

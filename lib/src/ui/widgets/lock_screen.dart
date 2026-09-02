@@ -51,30 +51,30 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                       width: 64,
                       height: 64,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        color: Color(0x1FD8A657),
+                      decoration: BoxDecoration(
+                        color: context.palette.accentSoft,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         PhLight.lock,
                         size: 28,
-                        color: AppPalette.amberBright,
+                        color: context.palette.accentBright,
                       ),
                     ),
                     const SizedBox(height: 24),
                     Text(
                       'Prayer Lockout is locked',
                       textAlign: TextAlign.center,
-                      style: AppTypography.display(size: 24, weight: FontWeight.w500),
+                      style: context.typography.display(size: 24, weight: FontWeight.w500),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Use Face ID, Touch ID, or your device passcode to '
                       'continue.',
                       textAlign: TextAlign.center,
-                      style: AppTypography.ui(
+                      style: context.typography.ui(
                         size: 13.5,
-                        color: AppPalette.textMuted,
+                        color: context.palette.textMuted,
                         height: 1.5,
                       ),
                     ),
@@ -95,18 +95,18 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
+                          Icon(
                             PhLight.warningCircle,
                             size: 16,
-                            color: AppPalette.danger,
+                            color: context.palette.danger,
                           ),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
                               errorMessage,
-                              style: AppTypography.ui(
+                              style: context.typography.ui(
                                 size: 12.5,
-                                color: AppPalette.danger,
+                                color: context.palette.danger,
                                 height: 1.4,
                               ),
                             ),

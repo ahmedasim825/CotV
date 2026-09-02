@@ -55,9 +55,9 @@ class TaskListView extends ConsumerWidget {
                             now: now,
                             padding: padding,
                           ),
-                    loading: () => const Center(
+                    loading: () => Center(
                       child: CircularProgressIndicator(
-                        color: AppPalette.amber,
+                        color: context.palette.accent,
                         strokeWidth: 2.5,
                       ),
                     ),
@@ -97,7 +97,7 @@ class _TaskListHeader extends ConsumerWidget {
         Expanded(
           child: Text(
             'Tasks',
-            style: AppTypography.display(size: 30, weight: FontWeight.w500),
+            style: context.typography.display(size: 30, weight: FontWeight.w500),
           ),
         ),
         Semantics(
@@ -109,22 +109,22 @@ class _TaskListHeader extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
               decoration: BoxDecoration(
-                color: AppPalette.glassFill,
+                color: context.palette.glassFill,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppPalette.glassBorder),
+                border: Border.all(color: context.palette.glassBorder),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     PhLight.sortAscending,
                     size: 14,
-                    color: AppPalette.amber,
+                    color: context.palette.accent,
                   ),
                   const SizedBox(width: 7),
                   Text(
                     sort.label,
-                    style: AppTypography.ui(size: 12.5, weight: FontWeight.w600),
+                    style: context.typography.ui(size: 12.5, weight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -195,10 +195,10 @@ class _FilterChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 15),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? AppPalette.amber : AppPalette.glassFill,
+            color: isSelected ? context.palette.accent : context.palette.glassFill,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: isSelected ? AppPalette.amber : AppPalette.glassBorder,
+              color: isSelected ? context.palette.accent : context.palette.glassBorder,
             ),
           ),
           child: Row(
@@ -206,22 +206,22 @@ class _FilterChip extends StatelessWidget {
             children: [
               Text(
                 filter.label,
-                style: AppTypography.ui(
+                style: context.typography.ui(
                   size: 13,
                   weight: FontWeight.w600,
-                  color: isSelected ? AppPalette.onAmber : AppPalette.textSecondary,
+                  color: isSelected ? context.palette.onAccent : context.palette.textSecondary,
                 ),
               ),
               if (count > 0) ...[
                 const SizedBox(width: 7),
                 Text(
                   '$count',
-                  style: AppTypography.ui(
+                  style: context.typography.ui(
                     size: 11.5,
                     weight: FontWeight.w700,
                     color: isSelected
-                        ? AppPalette.onAmber.withValues(alpha: 0.7)
-                        : AppPalette.textMuted,
+                        ? context.palette.onAccent.withValues(alpha: 0.7)
+                        : context.palette.textMuted,
                   ),
                 ),
               ],
@@ -282,6 +282,10 @@ class _DismissibleTask extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final messenger = ScaffoldMessenger.of(context);
+    // Resolved before the delete so the snack bar is styled from tokens
+    // captured while this context was still mounted.
+    final palette = context.palette;
+    final typography = context.typography;
 
     return Dismissible(
       key: ValueKey('dismiss:${task.id}'),
@@ -298,19 +302,19 @@ class _DismissibleTask extends ConsumerWidget {
           ..hideCurrentSnackBar()
           ..showSnackBar(
             SnackBar(
-              backgroundColor: AppPalette.surface,
+              backgroundColor: palette.surface,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: AppPalette.glassBorder),
+                side: BorderSide(color: palette.glassBorder),
               ),
               content: Text(
                 'Deleted "${removed.title}"',
-                style: AppTypography.ui(size: 13),
+                style: typography.ui(size: 13),
               ),
               action: SnackBarAction(
                 label: 'Undo',
-                textColor: AppPalette.amber,
+                textColor: palette.accent,
                 onPressed: () =>
                     ref.read(taskListProvider.notifier).addTask(removed),
               ),
@@ -337,13 +341,13 @@ class _DeleteBackground extends StatelessWidget {
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.only(right: 24),
       decoration: BoxDecoration(
-        color: AppPalette.danger.withValues(alpha: 0.16),
+        color: context.palette.danger.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(PhLight.trash, size: 18, color: AppPalette.danger),
+          Icon(PhLight.trash, size: 18, color: context.palette.danger),
         ],
       ),
     );
@@ -368,23 +372,23 @@ class _EmptyState extends StatelessWidget {
               width: 56,
               height: 56,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppPalette.glassFill,
+              decoration: BoxDecoration(
+                color: context.palette.glassFill,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 PhLight.sparkle,
                 size: 24,
-                color: AppPalette.amber,
+                color: context.palette.accent,
               ),
             ),
             const SizedBox(height: 18),
             Text(
               filter.emptyMessage,
               textAlign: TextAlign.center,
-              style: AppTypography.ui(
+              style: context.typography.ui(
                 size: 14,
-                color: AppPalette.textMuted,
+                color: context.palette.textMuted,
                 height: 1.5,
               ),
             ),
@@ -413,11 +417,11 @@ class QuickAddTaskButton extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             decoration: BoxDecoration(
-              color: AppPalette.amber,
+              color: context.palette.accent,
               borderRadius: BorderRadius.circular(999),
               boxShadow: [
                 BoxShadow(
-                  color: AppPalette.amber.withValues(alpha: 0.28),
+                  color: context.palette.accent.withValues(alpha: 0.28),
                   blurRadius: 24,
                   offset: const Offset(0, 8),
                 ),
@@ -426,14 +430,14 @@ class QuickAddTaskButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(PhLight.plus, size: 17, color: AppPalette.onAmber),
+                Icon(PhLight.plus, size: 17, color: context.palette.onAccent),
                 const SizedBox(width: 9),
                 Text(
                   'Task',
-                  style: AppTypography.ui(
+                  style: context.typography.ui(
                     size: 14,
                     weight: FontWeight.w700,
-                    color: AppPalette.onAmber,
+                    color: context.palette.onAccent,
                   ),
                 ),
               ],

@@ -26,7 +26,7 @@ class FocusSessionOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = ref.watch(nowTickerProvider).value ?? DateTime.now();
-    final accent = PrayerPalette.of(session.prayer);
+    final accent = context.palette.prayerHue(session.prayer);
     final remaining = session.remainingAt(now);
     final isFinished = session.isFinishedAt(now);
 
@@ -64,15 +64,15 @@ class FocusSessionOverlay extends ConsumerWidget {
                         isFinished
                             ? '${session.prayer.displayName} complete'
                             : '${session.prayer.displayName} focus',
-                        style: AppTypography.ui(
+                        style: context.typography.ui(
                           size: 15,
-                          color: AppPalette.textSecondary,
+                          color: context.palette.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
                         isFinished ? 'Done' : formatCountdown(remaining),
-                        style: AppTypography.display(size: 56, color: accent),
+                        style: context.typography.display(size: 56, color: accent),
                       ),
                       const SizedBox(height: 14),
                       Text(
@@ -80,9 +80,9 @@ class FocusSessionOverlay extends ConsumerWidget {
                             ? 'The window has closed.'
                             : 'Until ${formatClock(session.endsAt)}',
                         textAlign: TextAlign.center,
-                        style: AppTypography.ui(
+                        style: context.typography.ui(
                           size: 13,
-                          color: AppPalette.textMuted,
+                          color: context.palette.textMuted,
                           height: 1.5,
                         ),
                       ),
@@ -124,7 +124,7 @@ class _SessionProgress extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: Stack(
         children: [
-          Container(height: 6, color: AppPalette.glassFill),
+          Container(height: 6, color: context.palette.glassFill),
           LayoutBuilder(
             builder: (context, constraints) => AnimatedContainer(
               duration: AppMotion.base,

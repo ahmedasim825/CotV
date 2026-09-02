@@ -12,6 +12,7 @@ class UserSettings {
     this.preAdhanNotificationMinutes = 15,
     this.latitude,
     this.longitude,
+    this.themeId,
   });
 
   /// The single key this settings record is always stored under.
@@ -34,6 +35,14 @@ class UserSettings {
   @HiveField(4)
   final double? longitude;
 
+  /// The chosen theme's stable id (see `AppThemeVariant.id`). Null until
+  /// the user picks one, in which case the UI falls back to the default
+  /// variant. Stored as an opaque string rather than an enum index so
+  /// reordering the variants can never repoint a saved preference at a
+  /// different theme — and so this model stays free of any UI import.
+  @HiveField(5)
+  final String? themeId;
+
   bool get hasLocation => latitude != null && longitude != null;
 
   UserSettings copyWith({
@@ -41,6 +50,7 @@ class UserSettings {
     int? preAdhanNotificationMinutes,
     double? latitude,
     double? longitude,
+    String? themeId,
   }) {
     return UserSettings(
       id: id,
@@ -49,6 +59,7 @@ class UserSettings {
           preAdhanNotificationMinutes ?? this.preAdhanNotificationMinutes,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      themeId: themeId ?? this.themeId,
     );
   }
 }

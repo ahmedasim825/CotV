@@ -6,6 +6,7 @@ import 'focus/focus_session_overlay.dart';
 import 'habits/habit_screen.dart';
 import 'home_screen.dart';
 import 'journal/journal_screen.dart';
+import 'milo/milo_assistant_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'schedule/daily_schedule_view.dart';
 import 'settings/settings_screen.dart';
@@ -120,18 +121,38 @@ class _AppShellState extends ConsumerState<AppShell> {
       builder: (context, windowSize) {
         return Scaffold(
           backgroundColor: Colors.transparent,
+          endDrawer: const MiloAssistantScreen(),
+          // The launcher is the only way in. The right-edge drag that
+          // would otherwise open the drawer starts inside the same 20pt
+          // strip the timeline uses to change days and the task and
+          // journal rows use to swipe away, so it would take those
+          // gestures rather than share them.
+          endDrawerEnableOpenDragGesture: false,
           body: AmbientBackground(
             child: SafeArea(
               // The bottom bar draws its own home-indicator padding, so the
               // body must not also reserve it.
               bottom: false,
-              child: windowSize.usesNavigationRail
-                  ? _RailLayout(
-                      windowSize: windowSize,
-                      destination: _destination,
-                      onSelect: _select,
-                    )
-                  : paneFor(_destination),
+              child: Stack(
+                children: [
+                  windowSize.usesNavigationRail
+                      ? _RailLayout(
+                          windowSize: windowSize,
+                          destination: _destination,
+                          onSelect: _select,
+                        )
+                      : paneFor(_destination),
+                  Positioned(
+                    // Clears the rail when there is one, and sits opposite
+                    // each screen's own quick-add pill on the right.
+                    left: windowSize.usesNavigationRail
+                        ? _NavigationSidebar.width + windowSize.pagePadding
+                        : windowSize.pagePadding,
+                    bottom: 20 + MediaQuery.paddingOf(context).bottom,
+                    child: const MiloLauncher(),
+                  ),
+                ],
+              ),
             ),
           ),
           bottomNavigationBar: windowSize.usesNavigationRail
@@ -224,6 +245,9 @@ class _SplitPanes extends StatelessWidget {
 class _NavigationSidebar extends StatelessWidget {
   const _NavigationSidebar({required this.destination, required this.onSelect});
 
+  /// Also the offset the Milo launcher clears in rail layouts.
+  static const double width = 92;
+
   final AppDestination destination;
   final ValueChanged<AppDestination> onSelect;
 
@@ -232,7 +256,7 @@ class _NavigationSidebar extends StatelessWidget {
     final palette = context.palette;
 
     return Container(
-      width: 92,
+      width: width,
       padding: EdgeInsets.only(
         top: 20,
         bottom: 20 + MediaQuery.paddingOf(context).bottom,

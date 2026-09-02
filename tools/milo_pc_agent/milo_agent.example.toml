@@ -1,0 +1,51 @@
+# Milo PC agent configuration.
+#
+# Copy to `milo_agent.toml` beside milo_pc_agent.py and edit. The real file
+# holds a shared secret, so it is gitignored — keep it out of the repo.
+
+[server]
+# 0.0.0.0 listens on every interface, which is what makes the agent
+# reachable from the phone. Keep this machine on a trusted home network:
+# anyone on the same Wi-Fi can reach the port, and only the token stops
+# them using it.
+host = "0.0.0.0"
+port = 8765
+
+# Shared secret. The phone sends it as `Authorization: Bearer <token>`.
+# Generate one with:  python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Paste the same value into Milo settings on the phone.
+token = "replace-me-with-a-generated-token"
+
+# Applications /open-app is allowed to start, keyed by the slug the phone
+# sends. "open Spotify on PC" arrives as `spotify`.
+#
+# This allowlist is the security boundary: the phone sends a key, never a
+# path, so nothing outside this table can be launched. A value is either an
+# absolute executable path or a name on PATH.
+[apps]
+spotify = "spotify"
+chrome = "chrome"
+edge = "msedge"
+firefox = "firefox"
+vs_code = "code"
+code = "code"
+notepad = "notepad"
+calculator = "calc"
+explorer = "explorer"
+terminal = "wt"
+obsidian = "obsidian"
+discord = "discord"
+
+# Directories and files /open-file is allowed to reveal, keyed by the slug
+# the phone sends. "open the study folder" arrives as `study`.
+[paths]
+study = "D:/Study"
+downloads = "~/Downloads"
+documents = "~/Documents"
+pictures = "~/Pictures"
+videos = "~/Videos"
+
+# Literal paths are also accepted ("open D:/Study/Anatomy on my PC"), but
+# only when they resolve inside one of these roots. Leave the list empty to
+# refuse literal paths entirely and allow only the aliases above.
+allowed_roots = ["D:/Study", "~/Documents", "~/Downloads"]

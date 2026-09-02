@@ -31,6 +31,8 @@ class PhLight {
       IconData(0xe0d2, fontFamily: _family, fontPackage: _package);
   static const IconData bookOpen =
       IconData(0xe0e6, fontFamily: _family, fontPackage: _package);
+  static const IconData brain =
+      IconData(0xe74e, fontFamily: _family, fontPackage: _package);
   static const IconData calendarBlank =
       IconData(0xe10a, fontFamily: _family, fontPackage: _package);
   static const IconData calendarCheck =
@@ -63,6 +65,8 @@ class PhLight {
       IconData(0xe1c8, fontFamily: _family, fontPackage: _package);
   static const IconData crosshairSimple =
       IconData(0xe1d8, fontFamily: _family, fontPackage: _package);
+  static const IconData desktopTower =
+      IconData(0xe562, fontFamily: _family, fontPackage: _package);
   static const IconData eye =
       IconData(0xe220, fontFamily: _family, fontPackage: _package);
   static const IconData eyeSlash =
@@ -81,6 +85,10 @@ class PhLight {
       IconData(0xe28a, fontFamily: _family, fontPackage: _package);
   static const IconData info =
       IconData(0xe2ce, fontFamily: _family, fontPackage: _package);
+  static const IconData key =
+      IconData(0xe2d6, fontFamily: _family, fontPackage: _package);
+  static const IconData lightning =
+      IconData(0xe2de, fontFamily: _family, fontPackage: _package);
   static const IconData link =
       IconData(0xe2e2, fontFamily: _family, fontPackage: _package);
   static const IconData listBullets =
@@ -107,12 +115,16 @@ class PhLight {
       IconData(0xe34c, fontFamily: _family, fontPackage: _package);
   static const IconData palette =
       IconData(0xe6c8, fontFamily: _family, fontPackage: _package);
+  static const IconData paperPlaneRight =
+      IconData(0xe396, fontFamily: _family, fontPackage: _package);
   static const IconData pauseCircle =
       IconData(0xe3a0, fontFamily: _family, fontPackage: _package);
   static const IconData pencilSimple =
       IconData(0xe3b4, fontFamily: _family, fontPackage: _package);
   static const IconData playCircle =
       IconData(0xe3d2, fontFamily: _family, fontPackage: _package);
+  static const IconData plugsConnected =
+      IconData(0xeb5a, fontFamily: _family, fontPackage: _package);
   static const IconData plus =
       IconData(0xe3d4, fontFamily: _family, fontPackage: _package);
   static const IconData plusCircle =
@@ -137,6 +149,8 @@ class PhLight {
       IconData(0xe444, fontFamily: _family, fontPackage: _package);
   static const IconData sparkle =
       IconData(0xe6a2, fontFamily: _family, fontPackage: _package);
+  static const IconData stopCircle =
+      IconData(0xe46e, fontFamily: _family, fontPackage: _package);
   static const IconData sun =
       IconData(0xe472, fontFamily: _family, fontPackage: _package);
   static const IconData sunDim =
@@ -165,6 +179,8 @@ class PhLight {
       IconData(0xe4ae, fontFamily: _family, fontPackage: _package);
   static const IconData warningCircle =
       IconData(0xe4e2, fontFamily: _family, fontPackage: _package);
+  static const IconData wifiSlash =
+      IconData(0xe4f2, fontFamily: _family, fontPackage: _package);
   static const IconData x =
       IconData(0xe4f6, fontFamily: _family, fontPackage: _package);
   static const IconData xCircle =

@@ -165,10 +165,10 @@ class _JournalWriterScreenState extends ConsumerState<JournalWriterScreen> {
       lineStart--;
     }
 
-    final needsBreak = lineStart > 0 &&
+    // The loop above already guarantees text[lineStart - 1] is a newline
+    // whenever lineStart > 0, so only the line before it needs checking.
+    final needsBreak = lineStart >= 2 &&
         lineStart == selection.start &&
-        text[lineStart - 1] == '\n' &&
-        lineStart >= 2 &&
         text[lineStart - 2] != '\n';
     final insertion = needsBreak ? '\n$marker' : marker;
 
@@ -509,8 +509,8 @@ class _BarButton extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 40,
-          height: 40,
+          width: minTouchTarget,
+          height: minTouchTarget,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? palette.accentSoft : palette.glassFill,
@@ -689,7 +689,8 @@ class _MarkdownToolbar extends StatelessWidget {
     final palette = context.palette;
 
     return Container(
-      height: 54,
+      // The touch floor plus the row's own vertical padding.
+      height: minTouchTarget + 16,
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.hairline)),
@@ -766,7 +767,7 @@ class _ToolButton extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 44,
+          width: minTouchTarget,
           margin: const EdgeInsets.only(right: 6),
           alignment: Alignment.center,
           decoration: BoxDecoration(

@@ -148,11 +148,6 @@ class AppPalette {
   /// A tinted plate for an accent-colored icon chip.
   Color get accentSoft => accent.withValues(alpha: 0.16);
 
-  /// The same, one step fainter — for large fills that sit behind text.
-  Color get accentWash => accent.withValues(alpha: 0.10);
-
-  Color get secondarySoft => secondary.withValues(alpha: 0.16);
-
   /// Tint for the hero card, which sits a shade off the default surface.
   Color get heroTint =>
       Color.alphaBlend(accent.withValues(alpha: isDark ? 0.07 : 0.05), surface);

@@ -190,7 +190,7 @@ class _FilterChip extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: context.motion.fast,
           curve: AppMotion.spring,
           padding: const EdgeInsets.symmetric(horizontal: 15),
           alignment: Alignment.center,

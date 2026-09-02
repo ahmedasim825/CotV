@@ -218,7 +218,7 @@ class _FrequencySelector extends StatelessWidget {
                 onTap: () => onChanged(frequency),
                 behavior: HitTestBehavior.opaque,
                 child: AnimatedContainer(
-                  duration: AppMotion.fast,
+                  duration: context.motion.fast,
                   curve: AppMotion.spring,
                   height: 48,
                   alignment: Alignment.center,
@@ -290,10 +290,10 @@ class _ColorSelector extends StatelessWidget {
               onTap: () => onChanged(hex),
               behavior: HitTestBehavior.opaque,
               child: AnimatedContainer(
-                duration: AppMotion.fast,
+                duration: context.motion.fast,
                 curve: AppMotion.spring,
-                width: 40,
-                height: 40,
+                width: minTouchTarget,
+                height: minTouchTarget,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: habitColorFromHex(hex, palette.accent)

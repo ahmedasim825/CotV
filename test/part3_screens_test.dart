@@ -40,7 +40,9 @@ import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
 import 'package:cotv/src/ui/habits/habit_form_sheet.dart';
+import 'package:cotv/src/ui/habits/widgets/habit_tile.dart';
 import 'package:cotv/src/ui/journal/journal_writer_screen.dart';
+import 'package:cotv/src/ui/widgets/ph_light_icons.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 
 /// Stands in for every `local_auth` / `flutter_secure_storage` call the
@@ -222,8 +224,15 @@ void main() {
       await pumpUntil(tester, () => find.text('1/1').evaluate().isNotEmpty);
 
       expect(find.text('1/1'), findsOneWidget);
-      // The streak the repository computed, on the tile's badge.
-      expect(find.text('1'), findsWidgets);
+      // Scoped to the tile: the summary strip renders a bare '1' twice on
+      // its own, so an unscoped finder would pass with no badge at all.
+      expect(
+        find.descendant(
+          of: find.byType(HabitTile),
+          matching: find.text('1'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 
@@ -268,14 +277,26 @@ void main() {
         () => find.byType(JournalWriterScreen).evaluate().isNotEmpty,
       );
 
-      // The writer opens on the stored entry, with the raw markdown back in
-      // the editor and the saved mood available in the picker.
+      // The writer opens on the stored entry with the raw markdown back in
+      // the editor.
       expect(
         find.text('# Today\n\nA quiet day. **Alhamdulillah.**'),
         findsOneWidget,
       );
-      expect(find.text('Good'), findsWidgets);
       expect(find.text('Save'), findsOneWidget);
+
+      // The mood is read from the preview, not the picker: the picker
+      // renders all five labels whatever is selected, so asserting there
+      // would pass for any stored mood.
+      await tester.tap(find.byIcon(PhLight.eye));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        find.descendant(
+          of: find.byType(JournalWriterScreen),
+          matching: find.text('Good'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 

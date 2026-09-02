@@ -10,7 +10,7 @@ import '../theme/app_theme.dart';
 import '../theme/prayer_palette.dart';
 import '../widgets/ambient_background.dart';
 import '../widgets/glass_shell.dart';
-import '../widgets/glow_pill_button.dart';
+import '../components/components.dart';
 import '../widgets/ph_light_icons.dart';
 import '../widgets/prayer_icon.dart';
 
@@ -92,11 +92,13 @@ class FocusSessionOverlay extends ConsumerWidget {
                         accent: accent,
                       ),
                       const SizedBox(height: 28),
-                      GlowPillButton(
+                      PrimaryButton(
                         label: isFinished ? 'Close' : 'End session',
                         icon: isFinished ? PhLight.check : PhLight.pauseCircle,
                         expand: true,
-                        filled: isFinished,
+                        variant: isFinished
+                            ? ButtonVariant.filled
+                            : ButtonVariant.outline,
                         onPressed: () =>
                             ref.read(focusSessionProvider.notifier).end(),
                       ),
@@ -127,7 +129,7 @@ class _SessionProgress extends StatelessWidget {
           Container(height: 6, color: context.palette.glassFill),
           LayoutBuilder(
             builder: (context, constraints) => AnimatedContainer(
-              duration: AppMotion.base,
+              duration: context.motion.base,
               curve: AppMotion.spring,
               height: 6,
               width: constraints.maxWidth * progress.clamp(0.0, 1.0),

@@ -37,7 +37,7 @@ class PrayerLockoutBanner extends ConsumerWidget {
     final target = lockout?.end ?? prayerState.nextAdhan.time;
 
     return AnimatedContainer(
-      duration: AppMotion.base,
+      duration: context.motion.base,
       curve: AppMotion.spring,
       padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
       decoration: BoxDecoration(
@@ -176,7 +176,7 @@ class _LockoutProgressBar extends StatelessWidget {
           Container(height: 5, color: context.palette.glassFill),
           LayoutBuilder(
             builder: (context, constraints) => AnimatedContainer(
-              duration: AppMotion.base,
+              duration: context.motion.base,
               curve: AppMotion.spring,
               height: 5,
               width: constraints.maxWidth * progress.clamp(0.0, 1.0),

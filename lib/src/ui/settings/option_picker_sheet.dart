@@ -75,7 +75,7 @@ class _OptionRow<T> extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: context.motion.fast,
           curve: AppMotion.spring,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(

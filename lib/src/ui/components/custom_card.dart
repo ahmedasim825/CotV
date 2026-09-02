@@ -18,9 +18,7 @@ class CustomCard extends StatefulWidget {
     this.accent,
     this.tint,
     this.onTap,
-    this.onLongPress,
     this.selected = false,
-    this.dimmed = false,
     this.elevated = true,
     this.semanticLabel,
   });
@@ -38,14 +36,10 @@ class CustomCard extends StatefulWidget {
   final Color? tint;
 
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 
   /// Draws the card in its active state: accent border at full strength
   /// over an accent-washed fill.
   final bool selected;
-
-  /// Recedes the card without removing it — a completed habit, a past day.
-  final bool dimmed;
 
   final bool elevated;
 
@@ -60,7 +54,7 @@ class CustomCard extends StatefulWidget {
 class _CustomCardState extends State<CustomCard> {
   bool _pressed = false;
 
-  bool get _interactive => widget.onTap != null || widget.onLongPress != null;
+  bool get _interactive => widget.onTap != null;
 
   void _setPressed(bool value) {
     if (_pressed != value) setState(() => _pressed = value);
@@ -89,36 +83,32 @@ class _CustomCardState extends State<CustomCard> {
       borderColor = palette.hairline;
     }
 
-    final card = AnimatedOpacity(
-      opacity: widget.dimmed ? 0.55 : 1,
-      duration: AppMotion.fast,
-      child: AnimatedContainer(
-        duration: AppMotion.fast,
-        curve: AppMotion.spring,
-        padding: widget.padding,
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: BorderRadius.circular(widget.radius),
-          border: Border.all(
-            color: borderColor,
-            width: widget.selected ? 1.5 : 1,
-          ),
-          boxShadow: widget.elevated
-              ? [
-                  BoxShadow(
-                    color: palette.shadow,
-                    blurRadius: 22,
-                    offset: const Offset(0, 10),
-                  ),
-                ]
-              : null,
+    final card = AnimatedContainer(
+      duration: context.motion.fast,
+      curve: AppMotion.spring,
+      padding: widget.padding,
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(widget.radius),
+        border: Border.all(
+          color: borderColor,
+          width: widget.selected ? 1.5 : 1,
         ),
-        foregroundDecoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(widget.radius),
-          border: Border(top: BorderSide(color: palette.innerHighlight)),
-        ),
-        child: widget.child,
+        boxShadow: widget.elevated
+            ? [
+                BoxShadow(
+                  color: palette.shadow,
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
+                ),
+              ]
+            : null,
       ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(widget.radius),
+        border: Border(top: BorderSide(color: palette.innerHighlight)),
+      ),
+      child: widget.child,
     );
 
     if (!_interactive) return card;
@@ -129,14 +119,13 @@ class _CustomCardState extends State<CustomCard> {
       label: widget.semanticLabel,
       child: GestureDetector(
         onTap: widget.onTap,
-        onLongPress: widget.onLongPress,
         onTapDown: (_) => _setPressed(true),
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         behavior: HitTestBehavior.opaque,
         child: AnimatedScale(
           scale: _pressed ? 0.98 : 1,
-          duration: AppMotion.fast,
+          duration: context.motion.fast,
           curve: AppMotion.spring,
           child: card,
         ),

@@ -16,8 +16,8 @@ extension JournalMoodX on JournalMood {
     }
   }
 
-  /// 2 = best, -2 = hardest. Used for ordering the picker and for any
-  /// future trend view.
+  /// 2 = best, -2 = hardest. The single source of truth for mood order —
+  /// [orderedMoods] is derived from it.
   int get valence {
     switch (this) {
       case JournalMood.great:
@@ -34,14 +34,11 @@ extension JournalMoodX on JournalMood {
   }
 }
 
-/// Best-to-hardest, the order the mood picker renders in.
-const List<JournalMood> orderedMoods = [
-  JournalMood.great,
-  JournalMood.good,
-  JournalMood.neutral,
-  JournalMood.low,
-  JournalMood.difficult,
-];
+/// Best-to-hardest, the order the mood picker and filter row render in.
+final List<JournalMood> orderedMoods = List.unmodifiable(
+  JournalMood.values.toList()
+    ..sort((a, b) => b.valence.compareTo(a.valence)),
+);
 
 /// A plain-text preview of a markdown body, for entry cards.
 ///

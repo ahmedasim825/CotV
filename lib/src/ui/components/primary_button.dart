@@ -10,9 +10,6 @@ enum ButtonVariant {
   /// Glass fill with a hairline border. The default for secondary actions.
   outline,
 
-  /// No fill or border. For tertiary actions inside dense rows.
-  ghost,
-
   /// Solid danger. Deleting, clearing, revoking.
   danger,
 }
@@ -82,9 +79,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
       background = palette.glassFill;
       foreground = palette.textMuted;
       chipColor = palette.glassBorder;
-      border = widget.variant == ButtonVariant.ghost
-          ? null
-          : Border.all(color: palette.glassBorder);
+      border = Border.all(color: palette.glassBorder);
     } else {
       switch (widget.variant) {
         case ButtonVariant.filled:
@@ -100,10 +95,6 @@ class _PrimaryButtonState extends State<PrimaryButton> {
           foreground = palette.textPrimary;
           chipColor = palette.glassBorder;
           border = Border.all(color: palette.glassBorder);
-        case ButtonVariant.ghost:
-          background = Colors.transparent;
-          foreground = palette.textSecondary;
-          chipColor = palette.glassFill;
       }
     }
 
@@ -112,10 +103,10 @@ class _PrimaryButtonState extends State<PrimaryButton> {
 
     final pill = AnimatedScale(
       scale: _pressed ? 0.98 : 1.0,
-      duration: AppMotion.fast,
+      duration: context.motion.fast,
       curve: AppMotion.spring,
       child: AnimatedContainer(
-        duration: AppMotion.fast,
+        duration: context.motion.fast,
         curve: AppMotion.spring,
         padding: widget.icon == null
             ? EdgeInsets.symmetric(
@@ -163,7 +154,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
             if (widget.icon != null || widget.loading) ...[
               const SizedBox(width: 14),
               AnimatedContainer(
-                duration: AppMotion.fast,
+                duration: context.motion.fast,
                 curve: AppMotion.spring,
                 width: chipExtent,
                 height: chipExtent,
@@ -197,11 +188,20 @@ class _PrimaryButtonState extends State<PrimaryButton> {
       enabled: !disabled,
       label: widget.label,
       child: GestureDetector(
+        // Opaque, so the transparent slack the touch floor adds around a
+        // compact pill still takes the tap.
+        behavior: HitTestBehavior.opaque,
         onTapDown: disabled ? null : (_) => _setPressed(true),
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         onTap: disabled ? null : widget.onPressed,
-        child: widget.expand ? pill : IntrinsicWidth(child: pill),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: minTouchTarget),
+          child: Center(
+            widthFactor: widget.expand ? null : 1.0,
+            child: widget.expand ? pill : IntrinsicWidth(child: pill),
+          ),
+        ),
       ),
     );
   }

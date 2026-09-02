@@ -18,6 +18,10 @@ class AppTypography {
   final AppTypeface face;
 
   /// Big editorial numerals — prayer times, hero countdowns, screen titles.
+  ///
+  /// Figures are tabular: this face carries every number that sits in a
+  /// column or ticks down, and proportional digits make those jump sideways
+  /// as the value changes.
   TextStyle display({
     double size = 56,
     Color? color,
@@ -31,6 +35,7 @@ class AppTypography {
       fontWeight: weight,
       height: height,
       letterSpacing: letterSpacing,
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
     switch (face) {
       case AppTypeface.frauncesJakarta:

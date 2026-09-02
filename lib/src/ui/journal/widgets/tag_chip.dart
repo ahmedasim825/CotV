@@ -30,7 +30,7 @@ class TagChip extends StatelessWidget {
     final foreground = selected ? palette.onAccent : palette.textSecondary;
 
     final chip = AnimatedContainer(
-      duration: AppMotion.fast,
+      duration: context.motion.fast,
       curve: AppMotion.spring,
       padding: EdgeInsets.only(
         left: 10,
@@ -58,15 +58,16 @@ class TagChip extends StatelessWidget {
           ),
           if (onRemove != null) ...[
             const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onRemove,
-              behavior: HitTestBehavior.opaque,
-              child: Semantics(
-                button: true,
-                label: 'Remove tag $label',
-                child: Padding(
-                  padding: const EdgeInsets.all(3),
-                  child: Icon(PhLight.x, size: 11, color: foreground),
+            Semantics(
+              button: true,
+              label: 'Remove tag $label',
+              child: GestureDetector(
+                onTap: onRemove,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: minTouchTarget,
+                  height: minTouchTarget,
+                  child: Icon(PhLight.x, size: 12, color: foreground),
                 ),
               ),
             ),
@@ -75,7 +76,17 @@ class TagChip extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return chip;
+    // A chip that does something clears the touch floor; one that only
+    // labels an entry stays compact, so a card's tag row does not dominate
+    // the entry it belongs to.
+    if (onTap == null && onRemove == null) return chip;
+
+    final target = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: minTouchTarget),
+      child: Center(widthFactor: 1, child: chip),
+    );
+
+    if (onTap == null) return target;
 
     return Semantics(
       button: true,
@@ -84,7 +95,7 @@ class TagChip extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: chip,
+        child: target,
       ),
     );
   }

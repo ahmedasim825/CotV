@@ -65,13 +65,13 @@ class _TaskTileState extends State<TaskTile> {
       onTapUp: (_) => setState(() => _isPressed = false),
       child: AnimatedScale(
         scale: _isPressed ? 0.985 : 1,
-        duration: AppMotion.fast,
+        duration: context.motion.fast,
         curve: AppMotion.spring,
         child: AnimatedOpacity(
           // Completed tasks recede rather than disappearing, so undoing a
           // mis-tap doesn't require hunting for the row.
           opacity: _isCompleted ? 0.55 : 1,
-          duration: AppMotion.fast,
+          duration: context.motion.fast,
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
             decoration: BoxDecoration(
@@ -94,7 +94,7 @@ class _TaskTileState extends State<TaskTile> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AnimatedDefaultTextStyle(
-                        duration: AppMotion.fast,
+                        duration: context.motion.fast,
                         curve: AppMotion.spring,
                         style: context.typography.ui(
                           size: 14.5,
@@ -175,7 +175,7 @@ class _CompletionControl extends StatelessWidget {
           height: 30,
           child: Center(
             child: AnimatedContainer(
-              duration: AppMotion.fast,
+              duration: context.motion.fast,
               curve: AppMotion.spring,
               width: 24,
               height: 24,
@@ -189,11 +189,11 @@ class _CompletionControl extends StatelessWidget {
               ),
               child: AnimatedScale(
                 scale: isCompleted ? 1 : 0.4,
-                duration: AppMotion.fast,
+                duration: context.motion.fast,
                 curve: AppMotion.spring,
                 child: AnimatedOpacity(
                   opacity: isCompleted ? 1 : 0,
-                  duration: AppMotion.fast,
+                  duration: context.motion.fast,
                   child: Icon(
                     PhLight.check,
                     size: 14,

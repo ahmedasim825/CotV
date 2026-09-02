@@ -12,9 +12,10 @@ import '../widgets/ph_light_icons.dart';
 
 /// Manual coordinate entry.
 ///
-/// Part 4 adds device location; until then this is the only way to move the
-/// calculation off the Cairo fallback, and it stays useful afterwards for
-/// anyone who would rather not grant location permission at all.
+/// The coordinates saved here are what every prayer time, lockout window and
+/// notification is calculated from; without them the app falls back to Cairo.
+/// This is also the path for anyone who would rather not grant a location
+/// permission at all.
 Future<void> showLocationSheet(BuildContext context) {
   return showStandardBottomSheet<void>(
     context,
@@ -178,9 +179,9 @@ class _LocationSheetState extends ConsumerState<LocationSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Automatic device location arrives in Part 4. Until '
-                      'then, coordinates entered here are what every prayer '
-                      'time, lockout window and notification is built from.',
+                      'These coordinates drive every prayer time, lockout '
+                      'window and notification. Entering them by hand is '
+                      'currently the only way off the Cairo default.',
                       style: context.typography.ui(
                         size: 11.5,
                         color: palette.textMuted,

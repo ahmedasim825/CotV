@@ -6,6 +6,11 @@ import 'app_typography.dart';
 export 'app_palette.dart';
 export 'app_typography.dart';
 
+/// The minimum comfortable touch target, in logical pixels. Controls whose
+/// painted size is smaller than this pad their hit area out to it rather than
+/// growing visually.
+const double minTouchTarget = 44;
+
 /// A single custom easing curve (equivalent to CSS
 /// `cubic-bezier(0.32, 0.72, 0, 1)`) used for every transition in the app —
 /// a quick, weighted departure that settles softly, never linear/easeInOut.
@@ -20,6 +25,26 @@ class AppMotion {
   /// How long a theme switch cross-fades for. Slower than [fast] so the
   /// whole surface reads as one considered change rather than a flicker.
   static const Duration themeSwitch = Duration(milliseconds: 450);
+}
+
+/// [AppMotion]'s durations, collapsed to zero when the platform asks for
+/// reduced motion.
+///
+/// Reach it as `context.motion` and use it for every implicit animation, so
+/// the accessibility setting is honoured in one place instead of each widget
+/// remembering to check. Colour and opacity still change; they just change
+/// instantly, which is what the setting asks for.
+@immutable
+class AppMotionScale {
+  const AppMotionScale({required this.isReduced});
+
+  final bool isReduced;
+
+  Duration get fast => isReduced ? Duration.zero : AppMotion.fast;
+
+  Duration get base => isReduced ? Duration.zero : AppMotion.base;
+
+  Duration get slow => isReduced ? Duration.zero : AppMotion.slow;
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +384,10 @@ extension AppSkinContext on BuildContext {
   AppPalette get palette => skin.palette;
 
   AppTypography get typography => skin.typography;
+
+  AppMotionScale get motion => AppMotionScale(
+        isReduced: MediaQuery.maybeDisableAnimationsOf(this) ?? false,
+      );
 }
 
 /// Builds the [ThemeData] for [variant], with the palette attached as an

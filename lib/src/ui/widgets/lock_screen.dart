@@ -5,7 +5,7 @@ import '../../providers/security_providers.dart';
 import '../theme/app_theme.dart';
 import 'ambient_background.dart';
 import 'glass_shell.dart';
-import 'glow_pill_button.dart';
+import '../components/components.dart';
 import 'ph_light_icons.dart';
 
 /// Full-screen biometric challenge shown whenever [AppLockState.isLocked]
@@ -79,7 +79,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    GlowPillButton(
+                    PrimaryButton(
                       label: isAuthenticating ? 'Authenticating…' : 'Unlock',
                       icon: PhLight.fingerprint,
                       loading: isAuthenticating,

@@ -144,7 +144,7 @@ class _CompletionControl extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerLeft,
             child: AnimatedContainer(
-              duration: AppMotion.fast,
+              duration: context.motion.fast,
               curve: AppMotion.spring,
               width: 26,
               height: 26,
@@ -158,11 +158,11 @@ class _CompletionControl extends StatelessWidget {
               ),
               child: AnimatedScale(
                 scale: isComplete ? 1 : 0.4,
-                duration: AppMotion.fast,
+                duration: context.motion.fast,
                 curve: AppMotion.spring,
                 child: AnimatedOpacity(
                   opacity: isComplete ? 1 : 0,
-                  duration: AppMotion.fast,
+                  duration: context.motion.fast,
                   child: Icon(
                     PhLight.check,
                     size: 15,

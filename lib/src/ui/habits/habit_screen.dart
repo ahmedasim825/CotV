@@ -203,7 +203,7 @@ class _SummaryStrip extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: summary.completionRate),
-              duration: AppMotion.base,
+              duration: context.motion.base,
               curve: AppMotion.spring,
               builder: (context, value, _) => LinearProgressIndicator(
                 value: value,

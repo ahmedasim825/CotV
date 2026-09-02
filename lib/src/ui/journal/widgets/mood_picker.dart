@@ -61,7 +61,7 @@ class MoodPicker extends StatelessWidget {
                 onTap: () => onChanged(mood),
                 behavior: HitTestBehavior.opaque,
                 child: AnimatedContainer(
-                  duration: AppMotion.fast,
+                  duration: context.motion.fast,
                   curve: AppMotion.spring,
                   height: 68,
                   decoration: BoxDecoration(

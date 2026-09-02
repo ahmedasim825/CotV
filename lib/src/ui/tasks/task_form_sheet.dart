@@ -317,7 +317,7 @@ class _PriorityChip extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: context.motion.fast,
           curve: AppMotion.spring,
           height: 46,
           alignment: Alignment.center,

@@ -68,7 +68,7 @@ class _DailyScheduleViewState extends ConsumerState<DailyScheduleView> {
     }
     _scrollController.animateTo(
       target,
-      duration: AppMotion.base,
+      duration: context.motion.base,
       curve: AppMotion.spring,
     );
   }
@@ -234,7 +234,7 @@ class _TimelineCanvas extends StatelessWidget {
             ..._blocks(context, contentWidth),
             if (showNowLine)
               AnimatedPositioned(
-                duration: AppMotion.base,
+                duration: context.motion.base,
                 curve: AppMotion.spring,
                 top: geometry.offsetOf(now) - 4.5,
                 left: 0,

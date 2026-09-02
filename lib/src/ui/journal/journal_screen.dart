@@ -156,7 +156,7 @@ class _MoodFilterRow extends ConsumerWidget {
     final selected = ref.watch(journalMoodFilterProvider);
 
     return SizedBox(
-      height: 36,
+      height: minTouchTarget,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -176,7 +176,7 @@ class _MoodFilterRow extends ConsumerWidget {
                   ref.read(journalMoodFilterProvider.notifier).toggle(mood),
               behavior: HitTestBehavior.opaque,
               child: AnimatedContainer(
-                duration: AppMotion.fast,
+                duration: context.motion.fast,
                 curve: AppMotion.spring,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
@@ -231,7 +231,7 @@ class _TagFilterRow extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: SizedBox(
-        height: 30,
+        height: minTouchTarget,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: padding),

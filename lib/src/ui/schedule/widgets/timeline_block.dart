@@ -108,7 +108,7 @@ class _BlockSurface extends StatelessWidget {
     final isCompact = height < _twoLineThreshold;
 
     return AnimatedContainer(
-      duration: AppMotion.fast,
+      duration: context.motion.fast,
       curve: AppMotion.spring,
       height: height,
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: isCompact ? 6 : 10),

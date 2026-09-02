@@ -299,7 +299,7 @@ class _RailItem extends StatelessWidget {
           child: Column(
             children: [
               AnimatedContainer(
-                duration: AppMotion.fast,
+                duration: context.motion.fast,
                 curve: AppMotion.spring,
                 width: 48,
                 height: 38,

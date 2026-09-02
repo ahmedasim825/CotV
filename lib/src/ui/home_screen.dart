@@ -11,7 +11,6 @@ import 'components/components.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
 import 'widgets/floating_header.dart';
-import 'widgets/glow_pill_button.dart';
 import 'widgets/ph_light_icons.dart';
 import 'widgets/prayer_grid_tile.dart';
 import 'widgets/prayer_hero_card.dart';
@@ -82,7 +81,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 18),
                 RevealOnEntrance(
                   delay: const Duration(milliseconds: 180),
-                  child: GlowPillButton(
+                  child: PrimaryButton(
                     label: 'Sync next 7 days',
                     icon: PhLight.calendarCheck,
                     loading: calendarSyncAsync.isLoading,
@@ -107,7 +106,7 @@ class HomeScreen extends ConsumerWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: GlowPillButton(
+                        child: PrimaryButton(
                           label: 'Schedule 7 days',
                           icon: PhLight.bellSimpleRinging,
                           expand: true,
@@ -120,11 +119,10 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      GlowPillButton(
+                      PrimaryButton(
                         label: 'Cancel',
                         icon: PhLight.xCircle,
-                        filled: false,
-                        loading: false,
+                        variant: ButtonVariant.outline,
                         onPressed: notificationScheduleAsync.isLoading
                             ? null
                             : () => ref

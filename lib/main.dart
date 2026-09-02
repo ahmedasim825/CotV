@@ -27,7 +27,10 @@ class PrayerLockoutApp extends ConsumerWidget {
       theme: buildAppTheme(variant),
       // Switching themes cross-fades every color in the tree rather than
       // cutting, since the palette travels as a lerp-able ThemeExtension.
-      themeAnimationDuration: AppMotion.themeSwitch,
+      themeAnimationDuration: WidgetsBinding
+              .instance.platformDispatcher.accessibilityFeatures.disableAnimations
+          ? Duration.zero
+          : AppMotion.themeSwitch,
       themeAnimationCurve: AppMotion.spring,
       builder: (context, child) {
         return AnnotatedRegion<SystemUiOverlayStyle>(

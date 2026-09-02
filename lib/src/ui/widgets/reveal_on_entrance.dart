@@ -51,6 +51,12 @@ class _RevealOnEntranceState extends State<RevealOnEntrance>
 
   @override
   Widget build(BuildContext context) {
+    // Nothing to reveal when the platform asks for reduced motion: the
+    // child is already in its final position, so show it there.
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      return widget.child;
+    }
+
     return AnimatedBuilder(
       animation: _progress,
       builder: (context, child) {

@@ -41,8 +41,6 @@ class StandardBottomSheet extends StatelessWidget {
     this.actions,
     this.trailing,
     this.heightFactor = 0.9,
-    this.showGrabber = true,
-    this.bodyPadding = const EdgeInsets.fromLTRB(24, 0, 24, 8),
   });
 
   final String title;
@@ -60,8 +58,9 @@ class StandardBottomSheet extends StatelessWidget {
   /// Share of the screen height the sheet may grow to.
   final double heightFactor;
 
-  final bool showGrabber;
-  final EdgeInsets bodyPadding;
+  /// Horizontal gutter shared by the title, body and action rows.
+  static const EdgeInsets _gutter = EdgeInsets.fromLTRB(24, 0, 24, 8);
+
 
   @override
   Widget build(BuildContext context) {
@@ -85,14 +84,9 @@ class StandardBottomSheet extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (showGrabber) const SheetGrabber(),
+              const SheetGrabber(),
               Padding(
-                padding: EdgeInsets.fromLTRB(
-                  bodyPadding.left,
-                  showGrabber ? 8 : 24,
-                  bodyPadding.right,
-                  0,
-                ),
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -131,18 +125,13 @@ class StandardBottomSheet extends StatelessWidget {
               const SizedBox(height: 22),
               Flexible(
                 child: SingleChildScrollView(
-                  padding: bodyPadding,
+                  padding: _gutter,
                   child: child,
                 ),
               ),
               if (actions != null)
                 Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    bodyPadding.left,
-                    16,
-                    bodyPadding.right,
-                    16,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                   child: actions,
                 ),
             ],

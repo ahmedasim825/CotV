@@ -2,24 +2,45 @@ name: Build iOS IPA
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-      - run: flutter pub get
-      - run: flutter build ios --no-codesign --release
-      - run: |
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Unsigned iOS App
+        run: flutter build ios --no-codesign --release
+
+      - name: Package Payload for SideStore
+        run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r PrayerProductivity.ipa Payload
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: app-ipa
           path: PrayerProductivity.ipa

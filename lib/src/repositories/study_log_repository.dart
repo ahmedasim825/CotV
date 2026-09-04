@@ -3,11 +3,15 @@ import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import '../models/study_log.dart';
 import 'hive_repository_utils.dart';
 
-/// Append-only access to [StudyLog]s, plus the two aggregations the app
-/// asks for by name.
+/// Append-only access to [StudyLog]s.
 ///
 /// A log is a record of something that happened, so there is no `update`:
 /// the only correction available is deleting the entry.
+///
+/// No aggregation lives here. Everything that needs today's or this week's
+/// totals goes through `summarizeStudy` in `study_view.dart`, which is
+/// pure, unit-tested directly, and computed once per shape of the data by
+/// `studySummaryProvider` rather than once per caller.
 abstract class StudyLogRepository {
   Stream<List<StudyLog>> watchAll();
 
@@ -16,16 +20,6 @@ abstract class StudyLogRepository {
   Future<void> append(StudyLog log);
 
   Future<void> delete(String id);
-
-  /// Every session logged on the calendar day containing [day].
-  List<StudyLog> logsOn(DateTime day);
-
-  /// Minutes studied per subject id on the calendar day containing [day].
-  ///
-  /// Aggregated here rather than in the prompt builder because the builder
-  /// runs on every conversational turn, and this has to be computed once
-  /// per shape of the data rather than once per question asked.
-  Map<String, int> minutesBySubject(DateTime day);
 }
 
 class HiveStudyLogRepository implements StudyLogRepository {
@@ -44,23 +38,4 @@ class HiveStudyLogRepository implements StudyLogRepository {
 
   @override
   Future<void> delete(String id) => _box.delete(id);
-
-  @override
-  List<StudyLog> logsOn(DateTime day) {
-    final start = DateTime(day.year, day.month, day.day);
-    final end = start.add(const Duration(days: 1));
-    return [
-      for (final log in _box.values)
-        if (!log.timestamp.isBefore(start) && log.timestamp.isBefore(end)) log,
-    ];
-  }
-
-  @override
-  Map<String, int> minutesBySubject(DateTime day) {
-    final totals = <String, int>{};
-    for (final log in logsOn(day)) {
-      totals[log.subjectId] = (totals[log.subjectId] ?? 0) + log.durationMinutes;
-    }
-    return totals;
-  }
 }

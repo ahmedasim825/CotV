@@ -57,8 +57,6 @@ class StudyLogListNotifier extends StreamNotifier<List<StudyLog>> {
 
   @override
   Stream<List<StudyLog>> build() => _repository.watchAll();
-
-  Future<void> deleteLog(String id) => _repository.delete(id);
 }
 
 final studyLogListProvider =
@@ -111,9 +109,6 @@ class StudyState {
   /// The log just written, so the finished card can say what was recorded
   /// rather than what was asked for.
   final StudyLog? completed;
-
-  bool get isActive =>
-      phase == StudyPhase.running || phase == StudyPhase.paused;
 }
 
 /// Owns the study timer.

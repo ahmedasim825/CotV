@@ -9,8 +9,6 @@ abstract class SubjectRepository {
 
   List<Subject> getAll();
 
-  Subject? getById(String id);
-
   /// The subject whose name matches [name], ignoring case and surrounding
   /// space, or null if there is none.
   ///
@@ -36,9 +34,6 @@ class HiveSubjectRepository implements SubjectRepository {
 
   @override
   List<Subject> getAll() => _box.values.toList(growable: false);
-
-  @override
-  Subject? getById(String id) => _box.get(id);
 
   @override
   Subject? findByName(String name) {

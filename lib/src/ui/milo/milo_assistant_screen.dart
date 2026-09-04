@@ -104,6 +104,16 @@ class _PanelHeader extends ConsumerWidget {
               tooltip: 'Clear conversation',
               onTap: () => ref.read(miloConversationProvider.notifier).clear(),
             ),
+          // Distinct from clearing, and confirmed, because it is the only
+          // control that reaches what Milo has kept: the durable transcript
+          // and the summary distilled from it. Clearing tidies the screen;
+          // this is the one the user needs when the answer to "what does it
+          // know about me" has to be "nothing".
+          _HeaderChip(
+            icon: PhLight.brain,
+            tooltip: 'Forget what Milo knows',
+            onTap: () => _confirmForget(context, ref),
+          ),
           _HeaderChip(
             icon: PhLight.gear,
             tooltip: 'Milo settings',
@@ -118,6 +128,26 @@ class _PanelHeader extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Confirms, then erases the durable transcript and the memory summary.
+///
+/// Behind a confirmation because it is not undoable and because the icon
+/// beside it clears the screen — two adjacent controls, one recoverable and
+/// one not, need the destructive one to ask.
+Future<void> _confirmForget(BuildContext context, WidgetRef ref) async {
+  final confirmed = await confirmDestructive(
+    context,
+    title: 'Forget what Milo knows?',
+    message: 'Erases the saved conversation and the summary Milo has built '
+        'from it. The next turn starts from nothing. Your prayer times, '
+        'tasks, habits, journal and study logs are not touched.',
+    confirmLabel: 'Forget',
+    confirmIcon: PhLight.brain,
+  );
+  if (!confirmed) return;
+
+  await ref.read(miloConversationProvider.notifier).forget();
 }
 
 class _HeaderChip extends StatelessWidget {

@@ -155,9 +155,11 @@ List<Subject> sortSubjects(List<Subject> subjects, StudySummary summary) {
 
 /// Minutes as they read in a sentence or on a tile: `0m`, `45m`, `1h 20m`.
 ///
-/// Distinct from `formatDuration`, which is built for schedule blocks and
-/// renders a whole hour as `2h`. A study total of exactly two hours still
-/// reads better beside `1h 20m` when both carry minutes.
+/// Overlaps `formatDuration` from an hour up, where both render `1h 35m`
+/// and `2h`. It exists for the two places they differ: under an hour it
+/// gives `45m` rather than `45 min`, which is what fits a half-width
+/// subject tile, and it takes the int the study layer already holds rather
+/// than a [Duration] built only to be unwrapped again.
 String formatStudyMinutes(int minutes) {
   if (minutes < 60) return '${minutes}m';
   final hours = minutes ~/ 60;

@@ -40,10 +40,22 @@ class NotificationService {
   /// plus a stable GUID for the activation callback. Both are fixed on
   /// purpose: changing either orphans notifications already sitting in the
   /// Action Center, and breaks the ones scheduled for later today.
+  ///
+  /// The AUMID is the full three-part identity, not the identity name on
+  /// its own: `<identity_name>_<publisher hash>!<application id>`. The
+  /// application id comes from `name:` in `pubspec.yaml` (`cotv`) rather
+  /// than from the renamed executable, and the publisher hash is derived by
+  /// Windows from `publisher`. `AhmedAsim.Milo` alone addresses nothing, so
+  /// a toast raised under it is silently dropped.
+  ///
+  /// Hard-coded because it is stable for as long as `identity_name` and
+  /// `publisher` are, and both are pinned in `pubspec.yaml` for exactly
+  /// that reason. Read back from the installed package with `Get-StartApps`
+  /// rather than derived by hand.
   static const WindowsInitializationSettings windowsSettings =
       WindowsInitializationSettings(
-    appName: 'Prayer Lockout',
-    appUserModelId: 'AhmedAsim.PrayerLockout',
+    appName: 'Milo',
+    appUserModelId: 'AhmedAsim.Milo_13g40ee8f0jhw!cotv',
     guid: '5D2F3BD4-F0A6-4342-9639-C9D2A9F00B30',
   );
 

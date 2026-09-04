@@ -38,6 +38,20 @@ void main() {
       expect(MiloService.stripWakeWord('remilo the wall'), 'remilo the wall');
     });
 
+    test('survives what speech-to-text hears instead of "Milo"', () {
+      // Measured, not guessed: a spoken "Hey Milo" came back from Whisper
+      // as "Hey Maido". Left in, the model is asked to answer a request
+      // addressed to someone else.
+      expect(
+        MiloService.stripWakeWord('Hey Maido, open Spotify'),
+        'open Spotify',
+      );
+      expect(MiloService.stripWakeWord('Mylo, mute the laptop'),
+          'mute the laptop');
+      expect(MiloService.stripWakeWord('Meelo what time is Asr'),
+          'what time is Asr');
+    });
+
     test('a bare wake word leaves nothing to answer', () {
       expect(MiloService.stripWakeWord('Milo'), isEmpty);
       expect(MiloService.stripWakeWord('Hey Milo!'), isEmpty);
@@ -144,9 +158,24 @@ void main() {
       expect(parser.parse('open reddit on my pc')?.kind, PcActionKind.openApp);
     });
 
-    test('the same phrase without a machine word is not a PC command', () {
-      expect(parser.parse('open Spotify'), isNull);
+    test('an app launch works without naming the machine', () {
+      // Originally this required "on my PC". Real use showed that to be
+      // wrong: said to Milo, "open Spotify" has no second meaning, because
+      // there is no in-app screen the request could be asking for.
+      final command = parser.parse('Open spotify');
+
+      expect(command, isNotNull);
+      expect(command!.kind, PcActionKind.openApp);
+      expect(command.target, 'spotify');
+    });
+
+    test('media control still requires the machine, because "pause" does not',
+        () {
+      // "pause" and "mute" collide with ordinary conversation in a way that
+      // "open Spotify" does not, so these keep the requirement.
       expect(parser.parse('pause'), isNull);
+      expect(parser.parse('mute'), isNull);
+      expect(parser.parse('pause on my pc'), isNotNull);
     });
 
     test('a folder needs no machine word — the phone has no folders', () {
@@ -191,6 +220,39 @@ void main() {
     test('"open my laptop" has no target left once the machine is stripped',
         () {
       expect(parser.parse('open my laptop'), isNull);
+    });
+
+    test('a study request is not an app launch', () {
+      // "start" opens an app and also begins a study block, so without
+      // this the study feature's own headline phrase asked Windows to
+      // launch an application called "a physiology timer".
+      expect(parser.parse('start a physiology timer'), isNull);
+      expect(parser.parse('start a 45 minute physiology timer'), isNull);
+      expect(parser.parse('start studying anatomy'), isNull);
+      expect(parser.parse('start my revision block'), isNull);
+      expect(parser.parse('start a pomodoro'), isNull);
+      expect(parser.parse('run my study session'), isNull);
+    });
+
+    test('a phrase that describes rather than names is not an app', () {
+      expect(parser.parse('start a new document'), isNull);
+      expect(parser.parse('open some music'), isNull);
+    });
+
+    test('a phrase too long to be an app name is not one', () {
+      expect(
+        parser.parse('launch the thing I was working on yesterday evening'),
+        isNull,
+      );
+    });
+
+    test('real app launches still work', () {
+      // The guard rails above must not cost the case the parser exists for.
+      expect(parser.parse('open Spotify')?.target, 'Spotify');
+      expect(parser.parse('launch Visual Studio Code')?.target,
+          'Visual Studio Code');
+      expect(parser.parse('start Obsidian on my PC')?.target, 'Obsidian');
+      expect(parser.parse('fire up Chrome')?.target, 'Chrome');
     });
   });
 

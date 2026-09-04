@@ -63,7 +63,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Prayer Lockout is locked',
+                      'Milo is locked',
                       textAlign: TextAlign.center,
                       style: context.typography.display(size: 24, weight: FontWeight.w500),
                     ),

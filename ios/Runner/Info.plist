@@ -6,8 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Milo listens to a command when you tap the microphone, and transcribes it. Nothing is recorded until you tap.</string>
 	<key>CFBundleDisplayName</key>
-	<string>Cotv</string>
+	<string>Milo</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

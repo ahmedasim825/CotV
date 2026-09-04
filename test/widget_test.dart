@@ -16,9 +16,13 @@ import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/main.dart';
+import 'package:cotv/src/models/active_study_session.dart';
+import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/journal_entry.dart';
 import 'package:cotv/src/models/schedule_item.dart';
+import 'package:cotv/src/models/study_log.dart';
+import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
@@ -80,6 +84,13 @@ void main() {
       Hive.openBox<ScheduleItem>(HiveBoxes.scheduleItems),
       Hive.openBox<JournalEntry>(HiveBoxes.journalEntries),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
+      // The shell reconciles a leftover study session on launch, and
+      // Milo's context reads the durable transcript, so these have to
+      // be open before the tree is pumped too.
+      Hive.openBox<Subject>(HiveBoxes.subjects),
+      Hive.openBox<StudyLog>(HiveBoxes.studyLogs),
+      Hive.openBox<ChatMessage>(HiveBoxes.chatMessages),
+      Hive.openBox<ActiveStudySession>(HiveBoxes.activeStudySession),
     ]);
   });
 
@@ -138,10 +149,14 @@ void main() {
   testWidgets('boots into the daily schedule', (tester) async {
     await pumpApp(tester);
 
-    // The bottom navigation destinations.
-    expect(find.text('Schedule'), findsOneWidget);
-    expect(find.text('Tasks'), findsOneWidget);
-    expect(find.text('Prayers'), findsOneWidget);
+    // The bottom navigation destinations. The phone bar is icon-only —
+    // seven labels do not fit a 393pt phone — so each destination is
+    // addressed by the name it keeps as its tooltip and semantics label
+    // rather than by visible text.
+    expect(find.byTooltip('Schedule'), findsOneWidget);
+    expect(find.byTooltip('Tasks'), findsOneWidget);
+    expect(find.byTooltip('Study'), findsOneWidget);
+    expect(find.byTooltip('Prayers'), findsOneWidget);
 
     // The schedule's own controls.
     expect(find.text('Now'), findsOneWidget);
@@ -162,7 +177,7 @@ void main() {
       (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.text('Tasks'));
+    await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
 
     expect(find.text('Today'), findsWidgets);
@@ -181,7 +196,7 @@ void main() {
       (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.text('Tasks'));
+    await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
 
     // An undated task lands under Upcoming.
@@ -221,7 +236,7 @@ void main() {
   testWidgets('switches to the prayers overview', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.text('Prayers'));
+    await tester.tap(find.byTooltip('Prayers'));
     await tester.pumpAndSettle();
 
     expect(find.text('Prayer times'), findsOneWidget);

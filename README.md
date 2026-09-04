@@ -1,8 +1,10 @@
-# Prayer Lockout
+# Milo
 
-A prayer and productivity app: computed prayer times, a timeline that blocks
-out each prayer window, tasks, habits, a journal, and **Milo** — an assistant
-that routes between two models and can drive a Windows PC.
+A prayer and productivity app with an assistant built into it: computed
+prayer times, a timeline that blocks out each prayer window, tasks, habits,
+a journal, study sessions against a timer, and **Milo** — which answers by
+voice or text, routes between two models, remembers what you have told it,
+and can drive a Windows PC.
 
 Two targets from one codebase:
 
@@ -15,13 +17,29 @@ one platform while breaking the other.
 
 ## Milo
 
-Milo takes a request, strips the wake word ("Milo", "Hey Milo"), and routes it:
+Milo takes a request — typed, or spoken into the microphone — strips the
+wake word ("Milo", "Hey Milo"), and routes it:
 
 | Route | Model | When |
 |---|---|---|
 | Instant | Groq `qwen/qwen3.8-27b` | short commands and lookups |
 | Deep | Gemini `gemini-3.6-flash` | planning, summaries, anything with constraints |
 | PC | the Windows agent | anything aimed at the laptop |
+
+Speech is an input path, not a second assistant. A recording goes to Groq's
+`whisper-large-v3-turbo`, and the transcript enters the same pipeline a typed
+message does — so a spoken "open Spotify on my PC" and a typed one cannot
+drift apart in behaviour, and the wake word is stripped the same way for both.
+
+The composer has one button rather than three. An empty box can only offer
+the microphone, a filled one can only offer send, and while either is in
+flight the only thing left to do is stop it. While recording, a ring around
+it tracks input level — that is the only thing distinguishing "listening and
+hearing you" from a dead microphone, and without it the difference surfaces
+only after the request has already failed.
+
+Nothing spoken is kept: the recording lives in a temp file between the two
+taps and is deleted as soon as its bytes have been uploaded.
 
 The routing rail on each answer shows which engine ran **and the rule that
 chose it**, so a bad route is distinguishable from a bad answer.
@@ -72,6 +90,67 @@ between restricted and open mode, and what open mode means for the token.
 The Windows build talks to it on `127.0.0.1`; the phone talks to it on the
 LAN address. Same agent, same token.
 
+## Study
+
+Subjects, a timer, and a log of what was actually studied.
+
+The timer is derived from the clock, never decremented. A session stores the
+instant it reaches zero, so backgrounding the app for ten minutes costs ten
+minutes — a tick counter would drift, and would stop advancing entirely
+while the app is in the background, which is exactly when a 25-minute timer
+matters.
+
+It is also persisted rather than held in memory, which covers the case that
+is easy to miss: the app is killed mid-session. The OS notification still
+fires, because it was handed to the system when the session started, so the
+user is told their session ended. On the next launch the stored session is
+reconciled — one already past its end is logged and cleared. The log's id is
+derived from the session rather than generated, so reconciling the same
+record twice overwrites one entry instead of appending a second.
+
+A session logs the minutes **actually** studied, not the length the timer
+was set to. Ending a 45-minute block after 30 records 30.
+
+### Milo and study
+
+Milo can start and stop a timer:
+
+> set a study timer for physiology for 45 mins
+
+Study is the only thing Milo gets *tools* for. PC control stays on the
+deterministic parser — it works, it is tested, and it needs no model round
+trip. Study actions need a subject and a duration pulled out of prose, which
+is the one job a parser would have to guess at.
+
+The receipt under an answer says what the app did, in the app's own words.
+The model is asked to describe an action it did not carry out and cannot
+verify; if the two ever disagree, the receipt is the true record.
+
+"start" is both an app-launch verb and the verb for a study block, so the PC
+parser refuses phrases carrying this app's own nouns — timer, session,
+study, revision, pomodoro. "start a physiology timer" is study; "start
+Obsidian" is still the PC. "start anatomy" is genuinely ambiguous with
+launching an app called Anatomy and goes to the PC; say "start studying
+anatomy".
+
+## Memory
+
+Milo's panel still opens clean on every launch — a three-day-old exchange
+scrolled above today's is noise. Underneath, every completed turn is written
+to a durable transcript, and two things read it:
+
+- the **recall window**, the last dozen turns, put into the system prompt so
+  a new session is not starting from nothing. Turns already being sent as
+  live history are excluded, so nothing is said twice.
+- the **summary**, distilled by Gemini in the background once the transcript
+  passes twenty turns, and rewritten only when it has grown since the last
+  run. It never blocks a turn, and a failure leaves the previous summary
+  intact — Gemini returns 503s often enough that a blank memory would
+  otherwise be a routine outcome.
+
+Clearing the panel does not erase either. That is "start a fresh
+conversation", not "forget me".
+
 ## Building
 
 ```bash
@@ -93,18 +172,54 @@ Then:
 
 ```bash
 flutter build windows --release --dart-define-from-file=milo_keys.json
-dart run msix:create --build-windows false
+dart run msix:create --build-windows false --install-certificate false   --certificate-path certs/prayer_lockout.pfx   --certificate-password "$(cat certs/password.txt)"
 ```
 
-That writes `PrayerLockout.msix` to `build/windows/x64/runner/Release/`.
-It is signed with a generated test certificate, so the certificate has to be
-trusted once before Windows will install the package — `msix:create` offers
-to do that, or install the `.cer` beside it into **Local Machine → Trusted
-People** by hand.
+That writes `Milo.msix` to `build/windows/x64/runner/Release/`.
 
-`identity_name` and `publisher` in `pubspec.yaml` are what Windows uses to
-tell one installed app from another. Changing either makes the next build
-install as a separate app instead of upgrading this one.
+### Signing
+
+Windows will not install an MSIX whose signing certificate it does not
+trust, and it takes the package's `Publisher` from the certificate's subject
+rather than from `pubspec.yaml` — so the certificate decides the app's
+identity, not the config.
+
+Do **not** sign with the certificate bundled in the `msix` package. Its
+private key ships publicly inside that package, so trusting it would let any
+package anyone signed with the same key install on this machine.
+
+Generate your own once (no admin needed), into the gitignored `certs/`:
+
+```powershell
+$pw = -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 | % {[char]$_})
+[IO.File]::WriteAllText("certs\password.txt", $pw, (New-Object Text.UTF8Encoding $false))
+$cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Ahmed Asim" `
+  -KeyUsage DigitalSignature -CertStoreLocation "Cert:\CurrentUser\My" `
+  -NotAfter (Get-Date).AddYears(5) `
+  -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}Subject Type:End Entity")
+Export-PfxCertificate -Cert $cert -FilePath "certs\prayer_lockout.pfx" `
+  -Password (ConvertTo-SecureString $pw -Force -AsPlainText)
+Export-Certificate -Cert $cert -FilePath "certs\prayer_lockout.cer" -Type CERT
+```
+
+Write the password with `UTF8Encoding $false`, not `Set-Content -Encoding
+utf8`: PowerShell 5.1 prepends a BOM, and signtool then rejects the password.
+
+Trust it once, elevated:
+
+```powershell
+Import-Certificate -FilePath "certs\prayer_lockout.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+```
+
+After that every rebuild installs with no elevation:
+
+```powershell
+Add-AppxPackage -Path build/windows/x64/runner/Release/Milo.msix
+```
+
+`identity_name` in `pubspec.yaml` and the certificate subject are what Windows
+uses to tell one installed app from another. Change either and the next build
+installs as a separate app instead of upgrading this one.
 
 ### iOS
 
@@ -115,6 +230,22 @@ flutter build ios --no-codesign --release
 CI packages the result as an unsigned `.ipa` for SideStore. Grab it from the
 run's artifacts.
 
+**The App Intents are unverified.** `ios/Runner/AppDelegate.swift` declares
+`StartStudyIntent` and `StopStudyIntent` — iOS discovers intents by scanning
+the compiled binary, so they have to exist as static Swift, and
+`flutter_app_intents` generates none of it. That file was written on
+Windows, where no Apple toolchain exists. CI proves it compiles. Nobody has
+run it on an iPhone, and "it compiles" is not "Siri starts a timer". The
+Shortcuts row in Settings and the `shortcuts://` link are equally untested
+on device.
+
+Three identifiers have to stay in step by hand, because Swift cannot read a
+Dart constant: the strings in `AppDelegate.swift`, `StudyAppIntents` in
+`lib/src/services/study_app_intents.dart`, and the tool names in
+`MiloTools`. They are all `start_study_timer` / `stop_study_timer`. The
+default duration is duplicated too — `MiloTools.defaultMinutes` and the
+`?? 25` in the Swift.
+
 ## Platform differences
 
 | Feature | iOS | Windows |
@@ -122,10 +253,26 @@ run's artifacts.
 | Prayer times, timeline, tasks, habits, journal | yes | yes |
 | Milo, both engines | yes | yes |
 | Milo PC control | over the LAN | over loopback |
+| Voice commands | yes | yes |
 | App lock | Face ID / Touch ID | Windows Hello |
 | Notifications | yes | yes |
 | Calendar sync | yes | no — `device_calendar` is iOS/Android only, so the section is hidden |
+| Study, timer, logs | yes | yes |
+| Study timer notification | yes | yes — needs the full AUMID, see below |
+| Siri / Shortcuts for study | written, unverified on device | no — the settings row is hidden |
 
 The calendar exists for iOS Shortcuts to key off, so it has nothing to do on
 desktop. The timeline still draws lockout blocks there: those come from
 `CalendarSyncService.buildWindows`, which is pure computation.
+
+Windows addresses a toast to an app *identity*, not to a running process, so
+`NotificationService.windowsSettings` has to declare the full AUMID —
+`<identity_name>_<publisher hash>!<application id>`. The application id comes
+from `name:` in `pubspec.yaml` (`cotv`), not from the renamed executable, so
+the value is `AhmedAsim.Milo_13g40ee8f0jhw!cotv`. `AhmedAsim.Milo` alone
+addresses nothing and the toast is dropped silently. Read it back from the
+installed package rather than deriving it:
+
+```powershell
+Get-StartApps | Where-Object { $_.Name -eq "Milo" }
+```

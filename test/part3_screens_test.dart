@@ -24,9 +24,13 @@ import 'package:local_auth/local_auth.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/main.dart';
+import 'package:cotv/src/models/active_study_session.dart';
+import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/journal_entry.dart';
 import 'package:cotv/src/models/schedule_item.dart';
+import 'package:cotv/src/models/study_log.dart';
+import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/habit_providers.dart';
@@ -101,6 +105,13 @@ void main() {
       Hive.openBox<ScheduleItem>(HiveBoxes.scheduleItems),
       Hive.openBox<JournalEntry>(HiveBoxes.journalEntries),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
+      // The shell reconciles a leftover study session on launch, and
+      // Milo's context reads the durable transcript, so these have to
+      // be open before the tree is pumped too.
+      Hive.openBox<Subject>(HiveBoxes.subjects),
+      Hive.openBox<StudyLog>(HiveBoxes.studyLogs),
+      Hive.openBox<ChatMessage>(HiveBoxes.chatMessages),
+      Hive.openBox<ActiveStudySession>(HiveBoxes.activeStudySession),
     ]);
   });
 
@@ -177,7 +188,7 @@ void main() {
     testWidgets('opens the habit form sheet from the grid', (tester) async {
       await pumpApp(tester);
 
-      await tester.tap(find.text('Habits'));
+      await tester.tap(find.byTooltip('Habits'));
       await tester.pumpAndSettle();
 
       expect(
@@ -185,7 +196,8 @@ void main() {
         findsOneWidget,
       );
 
-      // The quick-add button, not the "Habits" navigation label.
+      // The quick-add button. The bar is icon-only, so this no longer
+      // has to be told apart from a "Habits" navigation label.
       await tester.tap(find.text('Habit'));
       await pumpUntilPresented(
         tester,
@@ -203,7 +215,7 @@ void main() {
         (tester) async {
       await pumpApp(tester);
 
-      await tester.tap(find.text('Habits'));
+      await tester.tap(find.byTooltip('Habits'));
       await tester.pumpAndSettle();
 
       final habits = containerOf(tester).read(habitListProvider.notifier);
@@ -241,7 +253,7 @@ void main() {
         (tester) async {
       await pumpApp(tester);
 
-      await tester.tap(find.text('Journal'));
+      await tester.tap(find.byTooltip('Journal'));
       await tester.pumpAndSettle();
 
       expect(find.text('Search entries and tags'), findsOneWidget);
@@ -305,7 +317,7 @@ void main() {
         (tester) async {
       await pumpApp(tester);
 
-      await tester.tap(find.text('Settings'));
+      await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
 
       expect(find.text('Theme'), findsOneWidget);
@@ -356,7 +368,7 @@ void main() {
         (tester) async {
       await pumpApp(tester);
 
-      await tester.tap(find.text('Settings'));
+      await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/milo_models.dart';
 import '../../providers/milo_providers.dart';
+import '../../providers/user_settings_providers.dart';
 import '../components/components.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
@@ -58,6 +60,7 @@ class _PanelHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final hasHistory = !ref.watch(miloConversationProvider).isEmpty;
+    final speaks = ref.watch(miloSpeaksProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
@@ -77,6 +80,23 @@ class _PanelHeader extends ConsumerWidget {
               'Milo',
               style: context.typography.display(size: 24, letterSpacing: -0.6),
             ),
+          ),
+          _HeaderChip(
+            // Reads as a switch rather than a button: it reports a standing
+            // state, and the slashed glyph is what tells you which.
+            icon: speaks ? PhLight.speakerHigh : PhLight.speakerSlash,
+            tooltip: speaks ? 'Milo speaks replies' : 'Milo replies silently',
+            tint: speaks ? palette.accentBright : null,
+            onTap: () {
+              // Turning it off mid-sentence should stop that sentence, not
+              // only the next one.
+              if (speaks) unawaited(ref.read(miloSpeechProvider).stop());
+              unawaited(
+                ref
+                    .read(userSettingsControllerProvider.notifier)
+                    .setSpeaksReplies(!speaks),
+              );
+            },
           ),
           if (hasHistory)
             _HeaderChip(
@@ -105,11 +125,16 @@ class _HeaderChip extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.tint,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+
+  /// Set when the chip is showing an on state rather than offering an
+  /// action, which is what separates the speaker toggle from its neighbours.
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +149,7 @@ class _HeaderChip extends StatelessWidget {
           child: SizedBox(
             width: minTouchTarget,
             height: minTouchTarget,
-            child: Icon(icon, size: 18, color: context.palette.textMuted),
+            child: Icon(icon, size: 18, color: tint ?? context.palette.textMuted),
           ),
         ),
       ),
@@ -291,7 +316,10 @@ class _ComposerState extends ConsumerState<_Composer> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final canSend = _controller.text.trim().isNotEmpty && !widget.isBusy;
+    final voice = ref.watch(miloVoiceProvider);
+    final canSend = _controller.text.trim().isNotEmpty &&
+        !widget.isBusy &&
+        !voice.isBusy;
 
     return Padding(
       // Lifts the composer with the keyboard; the drawer itself does not
@@ -303,34 +331,60 @@ class _ComposerState extends ConsumerState<_Composer> {
           color: palette.surface,
           border: Border(top: BorderSide(color: palette.hairline)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                focusNode: _focus,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                style: context.typography.ui(size: 14.5, height: 1.4),
-                decoration: appInputDecoration(
-                  context,
-                  hint: 'Ask Milo',
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+            if (voice.error != null) ...[
+              _VoiceError(
+                message: voice.error!,
+                onDismiss: () =>
+                    ref.read(miloVoiceProvider.notifier).clearError(),
+              ),
+              const SizedBox(height: 10),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focus,
+                    minLines: 1,
+                    maxLines: 4,
+                    // Typing over a recording would leave two half-finished
+                    // inputs racing for the same turn.
+                    enabled: !voice.isBusy,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    style: context.typography.ui(size: 14.5, height: 1.4),
+                    decoration: appInputDecoration(
+                      context,
+                      hint: switch (voice.phase) {
+                        MiloVoicePhase.listening => 'Listening…',
+                        MiloVoicePhase.transcribing => 'Working out what you '
+                            'said…',
+                        MiloVoicePhase.idle => 'Ask Milo, or hold the mic',
+                      },
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            _SendButton(
-              isBusy: widget.isBusy,
-              canSend: canSend,
-              onSend: _send,
-              onStop: () => ref.read(miloConversationProvider.notifier).stop(),
+                const SizedBox(width: 10),
+                _ComposerAction(
+                  isStreaming: widget.isBusy,
+                  canSend: canSend,
+                  voice: voice,
+                  onSend: _send,
+                  onStopReply: () =>
+                      ref.read(miloConversationProvider.notifier).stop(),
+                  onToggleVoice: () =>
+                      ref.read(miloVoiceProvider.notifier).toggle(),
+                ),
+              ],
             ),
           ],
         ),
@@ -339,54 +393,184 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 }
 
-/// Send, which becomes Stop for as long as a reply is streaming — one
-/// control, because there is never a moment where both apply.
-class _SendButton extends StatelessWidget {
-  const _SendButton({
-    required this.isBusy,
+/// The composer's one control.
+///
+/// Send, mic, and both kinds of stop are the same button, because there is
+/// never a moment where two of them apply: an empty box can only offer
+/// voice, a filled one can only offer send, and while either is in flight
+/// the only thing left to do is stop it. A separate mic would be dead
+/// weight two thirds of the time.
+class _ComposerAction extends StatelessWidget {
+  const _ComposerAction({
+    required this.isStreaming,
     required this.canSend,
+    required this.voice,
     required this.onSend,
-    required this.onStop,
+    required this.onStopReply,
+    required this.onToggleVoice,
   });
 
-  final bool isBusy;
+  final bool isStreaming;
   final bool canSend;
+  final MiloVoiceState voice;
   final VoidCallback onSend;
-  final VoidCallback onStop;
+  final VoidCallback onStopReply;
+  final VoidCallback onToggleVoice;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final enabled = isBusy || canSend;
+
+    final (IconData icon, String label, VoidCallback? action, Color tint) =
+        switch ((isStreaming, voice.phase, canSend)) {
+      (true, _, _) => (
+          PhLight.stopCircle,
+          'Stop Milo',
+          onStopReply,
+          palette.accent,
+        ),
+      (_, MiloVoicePhase.listening, _) => (
+          PhLight.stopCircle,
+          'Stop listening and send',
+          onToggleVoice,
+          palette.danger,
+        ),
+      (_, MiloVoicePhase.transcribing, _) => (
+          PhLight.waveform,
+          'Working out what you said',
+          null,
+          palette.accent,
+        ),
+      (_, _, true) => (
+          PhLight.paperPlaneRight,
+          'Send to Milo',
+          onSend,
+          palette.accent,
+        ),
+      _ => (PhLight.microphone, 'Speak to Milo', onToggleVoice, palette.accent),
+    };
+
+    final enabled = action != null;
 
     return Semantics(
       button: true,
       enabled: enabled,
-      label: isBusy ? 'Stop Milo' : 'Send to Milo',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: isBusy ? onStop : (canSend ? onSend : null),
-        child: SizedBox(
-          width: minTouchTarget,
-          height: minTouchTarget,
-          child: Center(
-            child: AnimatedContainer(
-              duration: context.motion.fast,
-              curve: AppMotion.spring,
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: enabled ? palette.accent : palette.glassFill,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isBusy ? PhLight.stopCircle : PhLight.paperPlaneRight,
-                size: 17,
-                color: enabled ? palette.onAccent : palette.textMuted,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: action,
+          child: SizedBox(
+            width: minTouchTarget,
+            height: minTouchTarget,
+            child: Center(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // The ring is the only proof the microphone is actually
+                  // hearing something. Without it a dead input device looks
+                  // exactly like a quiet room, and the difference only shows
+                  // up after the request has already failed.
+                  if (voice.phase == MiloVoicePhase.listening)
+                    _LevelRing(level: voice.level, colour: palette.danger),
+                  AnimatedContainer(
+                    duration: context.motion.fast,
+                    curve: AppMotion.spring,
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: enabled ? tint : palette.glassFill,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 17,
+                      color: enabled ? palette.onAccent : palette.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A ring that grows with how loudly Milo is hearing you.
+class _LevelRing extends StatelessWidget {
+  const _LevelRing({required this.level, required this.colour});
+
+  final double level;
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) {
+    // Never fully collapses: a ring that vanishes in a pause reads as the
+    // microphone dropping out rather than as silence.
+    final size = 38 + 10 * level.clamp(0.0, 1.0);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: colour.withValues(alpha: 0.45), width: 2),
+      ),
+    );
+  }
+}
+
+/// Why the last spoken turn did not land, with a way to dismiss it.
+class _VoiceError extends StatelessWidget {
+  const _VoiceError({required this.message, required this.onDismiss});
+
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: palette.danger.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.danger.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(PhLight.microphone, size: 15, color: palette.danger),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              message,
+              style: context.typography.ui(
+                size: 12.5,
+                color: palette.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: 'Dismiss',
+            child: GestureDetector(
+              onTap: onDismiss,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(PhLight.x, size: 14, color: palette.textMuted),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

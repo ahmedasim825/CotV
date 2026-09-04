@@ -10,6 +10,14 @@ const String groqModelId = 'qwen/qwen3.8-27b';
 /// Gemini's fast reasoning model, and the id sent on the wire.
 const String geminiModelId = 'gemini-3.6-flash';
 
+/// Groq's speech model, and the id sent on the wire.
+///
+/// The turbo variant is the latency-optimised Whisper: a spoken sentence
+/// measured 1.7s end to end against 1.1s for full `whisper-large-v3`, which
+/// is inside the noise for an utterance this short, so the tie goes to the
+/// model built for streaming-speed workloads.
+const String whisperModelId = 'whisper-large-v3-turbo';
+
 /// Sent on every engine request.
 ///
 /// Not cosmetic: Groq sits behind Cloudflare, which answers a request
@@ -82,6 +90,59 @@ class ChatTurn {
   final String text;
 }
 
+/// A function call the model asked for, reassembled from the stream.
+///
+/// Engine-neutral on purpose: only [GroqClient] knows the wire framing that
+/// produced it, and only [MiloTools] knows what to do with it.
+class MiloToolCall {
+  const MiloToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+
+  /// The provider's id for this call. It has to travel back on the tool
+  /// result message, or the model cannot match answer to question.
+  final String id;
+
+  final String name;
+
+  /// The decoded arguments. Decoded once, at the end of the stream — see
+  /// [GroqClient.streamTurn].
+  final Map<String, dynamic> arguments;
+
+  /// [key] as a trimmed string, or null when absent or not a string.
+  String? stringArg(String key) {
+    final value = arguments[key];
+    return value is String && value.trim().isNotEmpty ? value.trim() : null;
+  }
+
+  /// [key] as an int, accepting the number-shaped string models sometimes
+  /// emit for an integer parameter.
+  int? intArg(String key) {
+    final value = arguments[key];
+    if (value is int) return value;
+    if (value is num) return value.round();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  @override
+  String toString() => 'MiloToolCall($name, $arguments)';
+}
+
+/// A round of tool calls and what they returned, replayed to the model so
+/// it can answer with the results in hand.
+class MiloToolExchange {
+  const MiloToolExchange({required this.calls, required this.results});
+
+  /// What the model asked for, in the order it asked.
+  final List<MiloToolCall> calls;
+
+  /// Each call's result, keyed by [MiloToolCall.id].
+  final Map<String, String> results;
+}
+
 /// One line in the Milo panel.
 class MiloMessage {
   const MiloMessage({
@@ -90,6 +151,7 @@ class MiloMessage {
     required this.text,
     this.routing,
     this.pcResult,
+    this.toolNote,
     this.error,
     this.isStreaming = false,
   });
@@ -107,6 +169,13 @@ class MiloMessage {
   /// Set when the turn carried a PC command, whether or not it succeeded.
   final PcCommandResult? pcResult;
 
+  /// What a study tool did on this turn, in one sentence.
+  ///
+  /// Shown as its own receipt rather than left to the reply: the model is
+  /// asked to describe the action, and a model describing an action it did
+  /// not verify is exactly what a receipt is for.
+  final String? toolNote;
+
   /// A failure that ended the turn. The turn keeps whatever text had
   /// already streamed, so a mid-answer network drop does not erase it.
   final String? error;
@@ -117,6 +186,7 @@ class MiloMessage {
     String? text,
     RoutingDecision? routing,
     PcCommandResult? pcResult,
+    String? toolNote,
     String? error,
     bool? isStreaming,
   }) {
@@ -126,6 +196,7 @@ class MiloMessage {
       text: text ?? this.text,
       routing: routing ?? this.routing,
       pcResult: pcResult ?? this.pcResult,
+      toolNote: toolNote ?? this.toolNote,
       error: error ?? this.error,
       isStreaming: isStreaming ?? this.isStreaming,
     );
@@ -169,4 +240,50 @@ class MiloException implements Exception {
 
   @override
   String toString() => 'MiloException: $message';
+}
+
+/// Where a spoken turn has got to.
+enum MiloVoicePhase {
+  idle,
+
+  /// The microphone is open and audio is being written.
+  listening,
+
+  /// Recording stopped, waiting on Whisper.
+  transcribing,
+}
+
+/// The state of the mic button.
+class MiloVoiceState {
+  const MiloVoiceState({
+    this.phase = MiloVoicePhase.idle,
+    this.level = 0,
+    this.error,
+  });
+
+  final MiloVoicePhase phase;
+
+  /// Loudness right now, 0 to 1, for the ring around the mic button.
+  ///
+  /// Live feedback is not decoration here: without it there is no way to
+  /// tell "Milo is listening and hears you" from "the microphone is dead",
+  /// and the difference only becomes visible after the request has failed.
+  final double level;
+
+  /// Set when the last attempt failed, and cleared when a new one starts.
+  final String? error;
+
+  bool get isBusy => phase != MiloVoicePhase.idle;
+
+  MiloVoiceState copyWith({
+    MiloVoicePhase? phase,
+    double? level,
+    String? error,
+    bool clearError = false,
+  }) =>
+      MiloVoiceState(
+        phase: phase ?? this.phase,
+        level: level ?? this.level,
+        error: clearError ? null : (error ?? this.error),
+      );
 }

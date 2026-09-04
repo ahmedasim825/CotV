@@ -47,6 +47,16 @@ dependencies:
   flutter_secure_storage: ^11.0.0
   uuid: ^4.6.0
   http: ^1.6.0
+  record: ^7.1.1
+  path_provider: ^2.1.6
+  flutter_tts: ^4.2.5
+  sherpa_onnx: ^1.13.7
+  # Opens the Shortcuts app from settings. iOS only in practice, which is
+  # why the row that uses it is platform-gated.
+  url_launcher: ^6.3.2
+  # Registers the study App Intents Siri and Shortcuts call into. Needs
+  # hand-written Swift in ios/Runner/AppDelegate.swift; it generates none.
+  flutter_app_intents: ^0.7.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -68,16 +78,19 @@ dev_dependencies:
 # makes Windows treat the next build as a different app rather than an
 # upgrade, and orphans the previous install.
 msix_config:
-  display_name: Prayer Lockout
+  display_name: Milo
   publisher_display_name: Ahmed Asim
-  identity_name: AhmedAsim.PrayerLockout
+  identity_name: AhmedAsim.Milo
   publisher: CN=Ahmed Asim
-  msix_version: 1.0.0.0
+  # Windows refuses to install a package whose identity and version
+  # match an installed one but whose contents differ, so this has to
+  # move for every build you intend to install over the last.
+  msix_version: 1.0.4.0
   logo_path: assets/icons/app_icon.png
   # internetClient reaches Groq and Gemini; privateNetworkClientServer is
   # what lets the app talk to the Milo agent on the LAN.
-  capabilities: internetClient, privateNetworkClientServer
-  output_name: PrayerLockout
+  capabilities: internetClient, privateNetworkClientServer, microphone
+  output_name: Milo
   store: false
 
 # For information on the generic Dart part of this file, see the
@@ -90,6 +103,12 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # On-device wake-word model (sherpa-onnx zipformer KWS) and the app
+  # icon used by the MSIX packager. The model is copied out to real
+  # files at first run, because sherpa-onnx opens models by path.
+  assets:
+    - assets/kws/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

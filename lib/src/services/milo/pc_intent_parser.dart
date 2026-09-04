@@ -106,7 +106,7 @@ class PcIntentParser {
     return _matchControl(lower, namesMachine) ??
         _matchUrl(text) ??
         _matchPath(text, lower) ??
-        _matchApp(text, namesMachine);
+        _matchApp(text);
   }
 
   PcCommand? _matchControl(String lower, bool namesMachine) {
@@ -176,9 +176,31 @@ class PcIntentParser {
     return null;
   }
 
-  PcCommand? _matchApp(String text, bool namesMachine) {
-    if (!namesMachine) return null;
+  /// Nouns that belong to this app rather than to the PC.
+  ///
+  /// "start" is both an app-launch verb and the natural verb for a study
+  /// block, so "start a physiology timer" matched [_openVerb] and asked
+  /// Windows to launch an application called "a physiology timer". Naming
+  /// the app's own vocabulary is the narrow fix: these words mean the
+  /// thing on the phone, and no PC app worth launching through Milo is
+  /// called Timer.
+  static final RegExp _appOwnNouns = RegExp(
+    r'\b(?:timer|session|study|studying|revision|revise|pomodoro)\b',
+    caseSensitive: false,
+  );
 
+  /// An app name is a short noun phrase — "Spotify", "Visual Studio Code".
+  /// Past this, the phrase is describing something rather than naming it.
+  static const int _maxAppNameWords = 4;
+
+  /// Naming the machine is optional here, unlike for media keys.
+  ///
+  /// "Open Spotify" has only one meaning when it is said to Milo: there is
+  /// no in-app screen it could be asking for, so the alternative reading is
+  /// not "open the app's own Spotify" but nothing at all. Requiring "on my
+  /// PC" only made the common case fail. Media control still requires it,
+  /// because "pause" really does collide with ordinary conversation.
+  PcCommand? _matchApp(String text) {
     final withoutMachine = text.replaceFirst(_machineSuffix, '').trim();
     final match = _openVerb.firstMatch(withoutMachine);
     if (match == null) return null;
@@ -187,6 +209,20 @@ class PcIntentParser {
     if (name.isEmpty) return null;
     // Nothing was left but the machine word itself ("open my laptop").
     if (_machine.hasMatch(name.toLowerCase())) return null;
+
+    // "start a physiology timer" is this app's business, not the PC's.
+    if (_appOwnNouns.hasMatch(name)) return null;
+
+    // An article or possessive left in front means the phrase describes
+    // rather than names: "open Spotify" against "start a revision block".
+    // [_openVerb] already eats a leading "the"/"my", so anything still here
+    // is a second determiner.
+    if (RegExp(r'^(?:a|an|the|my|our|some)\b', caseSensitive: false)
+        .hasMatch(name)) {
+      return null;
+    }
+
+    if (name.split(RegExp(r'\s+')).length > _maxAppNameWords) return null;
 
     return PcCommand(
       kind: PcActionKind.openApp,

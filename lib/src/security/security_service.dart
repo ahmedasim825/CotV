@@ -69,7 +69,7 @@ class SecurityService {
   /// to be told about (no biometrics enrolled, hardware unavailable,
   /// lockout, etc).
   Future<bool> authenticate({
-    String reason = 'Authenticate to unlock Prayer Lockout',
+    String reason = 'Authenticate to unlock Milo',
   }) async {
     try {
       return await _localAuth.authenticate(

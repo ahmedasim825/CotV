@@ -86,7 +86,7 @@ class PrayerLockoutBanner extends ConsumerWidget {
                   children: [
                     Text(
                       isLockedOut
-                          ? '${prayer.displayName} · Prayer Lockout'
+                          ? '${prayer.displayName} · Milo'
                           : 'Next: ${prayer.displayName}',
                       style: context.typography.ui(size: 14, weight: FontWeight.w700),
                     ),

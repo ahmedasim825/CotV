@@ -43,6 +43,33 @@ class UserSettingsController extends StreamNotifier<UserSettings> {
     await _repository.update(current.copyWith(themeId: themeId));
   }
 
+  /// Turns Milo's spoken replies on or off.
+  Future<void> setSpeaksReplies(bool value) async {
+    final current = _repository.get();
+    await _repository.update(current.copyWith(speaksReplies: value));
+  }
+
+  /// Arms or disarms always-on listening for the wake word.
+  Future<void> setListensForWakeWord(bool value) async {
+    final current = _repository.get();
+    await _repository.update(current.copyWith(listensForWakeWord: value));
+  }
+
+  /// Persists which platform voice Milo speaks with.
+  Future<void> setVoiceName(String voiceName) async {
+    final current = _repository.get();
+    await _repository.update(current.copyWith(voiceName: voiceName));
+  }
+
+  /// Persists what Milo has learned about the user.
+  ///
+  /// An empty string clears it, which is how "forget me" is expressed —
+  /// `copyWith` treats null as "leave unchanged", so null could not.
+  Future<void> setAiMemorySummary(String summary) async {
+    final current = _repository.get();
+    await _repository.update(current.copyWith(aiMemorySummary: summary));
+  }
+
   Future<void> setLocation({required double latitude, required double longitude}) async {
     final current = _repository.get();
     await _repository.update(

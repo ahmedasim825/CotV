@@ -1,9 +1,13 @@
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 import '../../hive_registrar.g.dart';
+import '../models/active_study_session.dart';
+import '../models/chat_message.dart';
 import '../models/habit.dart';
 import '../models/journal_entry.dart';
 import '../models/schedule_item.dart';
+import '../models/study_log.dart';
+import '../models/subject.dart';
 import '../models/task.dart';
 import '../models/user_settings.dart';
 
@@ -16,6 +20,10 @@ class HiveBoxes {
   static const String scheduleItems = 'schedule_items';
   static const String journalEntries = 'journal_entries';
   static const String userSettings = 'user_settings';
+  static const String subjects = 'subjects';
+  static const String studyLogs = 'study_logs';
+  static const String chatMessages = 'chat_messages';
+  static const String activeStudySession = 'active_study_session';
 }
 
 bool _initialized = false;
@@ -39,6 +47,10 @@ Future<void> initializeLocalStorage() async {
     Hive.openBox<ScheduleItem>(HiveBoxes.scheduleItems),
     Hive.openBox<JournalEntry>(HiveBoxes.journalEntries),
     Hive.openBox<UserSettings>(HiveBoxes.userSettings),
+    Hive.openBox<Subject>(HiveBoxes.subjects),
+    Hive.openBox<StudyLog>(HiveBoxes.studyLogs),
+    Hive.openBox<ChatMessage>(HiveBoxes.chatMessages),
+    Hive.openBox<ActiveStudySession>(HiveBoxes.activeStudySession),
   ]);
 
   _initialized = true;

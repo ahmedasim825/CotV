@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/focus_session_providers.dart';
+import '../providers/study_providers.dart';
 import 'focus/focus_session_overlay.dart';
 import 'habits/habit_screen.dart';
 import 'home_screen.dart';
 import 'journal/journal_screen.dart';
+import '../providers/milo_providers.dart';
 import 'milo/milo_assistant_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'schedule/daily_schedule_view.dart';
 import 'settings/settings_screen.dart';
+import 'study/study_screen.dart';
 import 'tasks/task_list_view.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
@@ -17,7 +20,15 @@ import 'widgets/ph_light_icons.dart';
 import 'widgets/prayer_lockout_banner.dart';
 
 /// Top-level destinations.
-enum AppDestination { schedule, tasks, habits, journal, prayers, settings }
+enum AppDestination {
+  schedule,
+  tasks,
+  habits,
+  study,
+  journal,
+  prayers,
+  settings
+}
 
 extension AppDestinationX on AppDestination {
   String get label {
@@ -28,6 +39,8 @@ extension AppDestinationX on AppDestination {
         return 'Tasks';
       case AppDestination.habits:
         return 'Habits';
+      case AppDestination.study:
+        return 'Study';
       case AppDestination.journal:
         return 'Journal';
       case AppDestination.prayers:
@@ -45,6 +58,8 @@ extension AppDestinationX on AppDestination {
         return PhLight.listChecks;
       case AppDestination.habits:
         return PhLight.target;
+      case AppDestination.study:
+        return PhLight.timer;
       case AppDestination.journal:
         return PhLight.notePencil;
       case AppDestination.prayers:
@@ -72,6 +87,8 @@ Widget paneFor(AppDestination destination) {
       return const TaskListView();
     case AppDestination.habits:
       return const HabitScreen();
+    case AppDestination.study:
+      return const StudyScreen();
     case AppDestination.journal:
       return const JournalScreen();
     case AppDestination.prayers:
@@ -116,6 +133,25 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (session != null) {
       return FocusSessionOverlay(session: session);
     }
+
+    // Watched here, and only here, because a Riverpod notifier that nothing
+    // listens to is never constructed — so its build() never runs and the
+    // microphone is never armed. The shell outlives the Milo panel, which
+    // is what lets the wake word work with the panel closed.
+    ref.watch(wakeWordProvider);
+
+    // Same reason, different failure: StudyNotifier reconciles a session
+    // left behind by a kill in its build(). Watched from the shell so that
+    // happens on launch, rather than the first time the user happens to
+    // open the Study tab — the notification for that session has already
+    // fired, and the log has to exist by the time they look for it.
+    ref.watch(studyProvider);
+
+    // Registering the App Intents needs the same treatment: iOS only shows
+    // a shortcut it has been told about, and nothing else in the app reads
+    // this provider, so without a watch it would never run. A no-op off
+    // iOS.
+    ref.watch(studyAppIntentsProvider);
 
     return AdaptiveLayout(
       builder: (context, windowSize) {
@@ -272,8 +308,10 @@ class _NavigationSidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          // Six destinations no longer fit a short iPad in landscape, so the
-          // rail scrolls rather than overflowing.
+          // Seven destinations no longer fit a short iPad in landscape, so
+          // the rail scrolls rather than overflowing. Labels stay here —
+          // the rail has the width for them, and it is the surface where a
+          // destination's name is worth the space.
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -393,6 +431,17 @@ class _BottomNavBar extends StatelessWidget {
   }
 }
 
+/// One destination in the phone bar.
+///
+/// Icon-only. Six labels across a 393pt phone already left ~65pt each and
+/// ellipsised "Schedule"; a seventh makes them unreadable, and a truncated
+/// label names a destination no better than its glyph does.
+///
+/// The label is not dropped, only moved: it stays the [Semantics] label, so
+/// screen readers are unaffected, and becomes a [Tooltip], so a long press
+/// (or a hover on desktop) still names the destination. A selected item is
+/// marked with a pill behind the glyph, taking over the job the label
+/// colour used to do.
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
     required this.destination,
@@ -413,39 +462,35 @@ class _BottomNavItem extends StatelessWidget {
         button: true,
         selected: isSelected,
         label: destination.label,
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            // 48pt keeps the target comfortably above Apple's 44pt minimum.
-            height: 48,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  destination.icon,
-                  size: 21,
-                  color: isSelected ? palette.accentBright : palette.textMuted,
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  // Six labels across a 393pt phone leaves ~65pt each; the
-                  // clamp keeps "Schedule" from colliding with "Tasks".
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: context.typography.ui(
-                      size: 10,
-                      weight: FontWeight.w600,
-                      color:
-                          isSelected ? palette.textPrimary : palette.textMuted,
-                    ),
+        child: Tooltip(
+          message: destination.label,
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              // 48pt keeps the target comfortably above Apple's 44pt
+              // minimum.
+              height: 48,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: context.motion.fast,
+                  curve: AppMotion.spring,
+                  width: 46,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        isSelected ? palette.accentSoft : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    destination.icon,
+                    size: 21,
+                    color:
+                        isSelected ? palette.accentBright : palette.textMuted,
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),

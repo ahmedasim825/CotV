@@ -53,12 +53,12 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r PrayerProductivity.ipa Payload
+          zip -r Milo.ipa Payload
 
       - uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: PrayerProductivity.ipa
+          path: Milo.ipa
 
   windows:
     name: Windows MSIX
@@ -82,12 +82,14 @@ jobs:
       # certificate store worth writing to; msix still signs with a
       # generated test certificate, which is what the .cer beside the
       # package is for.
+      # No signing certificate on a runner, and none should be committed, so
+      # CI packages unsigned. The artifact is for inspection and for proving
+      # the Windows build still packages; installing it needs a locally
+      # signed build (see README > Signing).
       - name: Package MSIX
-        run: dart run msix:create --build-windows false --install-certificate false
+        run: dart run msix:create --build-windows false --store
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-msix
-          path: |
-            build/windows/x64/runner/Release/*.msix
-            build/windows/x64/runner/Release/*.cer
+          path: build/windows/x64/runner/Release/*.msix

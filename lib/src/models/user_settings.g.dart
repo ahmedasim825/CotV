@@ -25,13 +25,17 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       latitude: (fields[3] as num?)?.toDouble(),
       longitude: (fields[4] as num?)?.toDouble(),
       themeId: fields[5] as String?,
+      speaksReplies: fields[6] == null ? false : fields[6] as bool,
+      listensForWakeWord: fields[7] == null ? false : fields[7] as bool,
+      voiceName: fields[8] as String?,
+      aiMemorySummary: fields[9] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserSettings obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -43,7 +47,15 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       ..writeByte(4)
       ..write(obj.longitude)
       ..writeByte(5)
-      ..write(obj.themeId);
+      ..write(obj.themeId)
+      ..writeByte(6)
+      ..write(obj.speaksReplies)
+      ..writeByte(7)
+      ..write(obj.listensForWakeWord)
+      ..writeByte(8)
+      ..write(obj.voiceName)
+      ..writeByte(9)
+      ..write(obj.aiMemorySummary);
   }
 
   @override

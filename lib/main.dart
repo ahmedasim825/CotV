@@ -22,7 +22,7 @@ class PrayerLockoutApp extends ConsumerWidget {
     final variant = ref.watch(themeVariantProvider);
 
     return MaterialApp(
-      title: 'Prayer Lockout',
+      title: 'Milo',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(variant),
       // Switching themes cross-fades every color in the tree rather than

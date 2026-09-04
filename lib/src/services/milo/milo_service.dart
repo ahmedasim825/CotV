@@ -1,54 +1,17 @@
 import '../../models/milo_models.dart';
 import '../../models/pc_command.dart';
-import '../../ui/format/time_format.dart';
 import 'gemini_client.dart';
 import 'groq_client.dart';
+import 'milo_context_builder.dart';
 import 'milo_credentials.dart';
+import 'milo_tools.dart';
 import 'pc_intent_parser.dart';
 import 'pc_remote_service.dart';
 import 'milo_router.dart';
 
-/// A snapshot of the app taken when a turn starts.
-///
-/// Milo is told these facts rather than given tools to look them up: the
-/// numbers are already in memory, and a round trip to fetch what the
-/// process already knows would cost the latency the instant route exists
-/// to protect.
-class MiloContext {
-  const MiloContext({
-    required this.now,
-    required this.nextPrayer,
-    required this.nextPrayerTime,
-    required this.isLockedOut,
-    required this.openTaskCount,
-    required this.nextTaskTitles,
-  });
-
-  final DateTime now;
-  final String nextPrayer;
-  final DateTime nextPrayerTime;
-
-  /// True while the user is inside a prayer lockout block.
-  final bool isLockedOut;
-
-  final int openTaskCount;
-
-  /// The soonest few open tasks, so "what should I do next" has something
-  /// real to answer from.
-  final List<String> nextTaskTitles;
-
-  String get promptBlock {
-    final until = nextPrayerTime.difference(now);
-    return [
-      'Now: ${formatShortDate(now)}, ${formatClock(now)}',
-      'Next prayer: $nextPrayer at ${formatClock(nextPrayerTime)} '
-          '(in ${formatCountdown(until)})',
-      'Prayer lockout: ${isLockedOut ? 'active right now' : 'not active'}',
-      'Open tasks: $openTaskCount'
-          '${nextTaskTitles.isEmpty ? '' : ' — ${nextTaskTitles.join('; ')}'}',
-    ].join('\n');
-  }
-}
+/// The app snapshot and the prompt built from it are part of this service's
+/// surface — callers construct one and never touch the builder directly.
+export 'milo_context_builder.dart' show MiloContext, MiloContextBuilder;
 
 /// One step of an assistant turn, in the order the panel applies them.
 sealed class MiloEvent {
@@ -70,6 +33,14 @@ class MiloPcExecuted extends MiloEvent {
   final PcCommandResult result;
 }
 
+/// A study tool ran. [summary] is what actually happened, written by the
+/// app rather than by the model.
+class MiloToolExecuted extends MiloEvent {
+  const MiloToolExecuted(this.summary);
+
+  final String summary;
+}
+
 /// A chunk of reply text.
 class MiloTextDelta extends MiloEvent {
   const MiloTextDelta(this.text);
@@ -78,39 +49,74 @@ class MiloTextDelta extends MiloEvent {
 }
 
 /// Milo's orchestration: strip the wake word, decide which engine answers,
-/// carry out any PC command the prompt contained, then stream the reply.
+/// carry out any PC command the prompt contained, then stream the reply —
+/// running any study tool the model asks for along the way.
 class MiloService {
   const MiloService({
     required this.groq,
     required this.gemini,
     required this.pcRemote,
+    this.tools,
     this.router = const MiloRouter(),
     this.parser = const PcIntentParser(),
+    this.contextBuilder = const MiloContextBuilder(),
   });
 
   final GroqClient groq;
   final GeminiClient gemini;
   final PcRemoteService pcRemote;
+
+  /// Null in tests and anywhere the study layer is not available, in which
+  /// case no tools are offered and the turn is plain prose.
+  final MiloTools? tools;
+
   final MiloRouter router;
   final PcIntentParser parser;
+  final MiloContextBuilder contextBuilder;
 
   /// A leading "Milo", "Hey Milo" or "OK Milo", with the punctuation that
-  /// usually follows it. Anchored at the start so "what did Milo say" is
-  /// left alone.
+  /// usually follows it, and what speech-to-text tends to hear instead.
+  ///
+  /// Anchored at the start so "what did Milo say" is left alone.
+  ///
+  /// "Milo" is not in Whisper's everyday vocabulary, so a spoken
+  /// "Hey Milo" comes back as "Hey Maido", "Mylo" or "Meelo".
+  /// [GroqTranscriptionClient] biases the decoder against that, but
+  /// biasing is not a guarantee, and a wake word that survives into the
+  /// prompt is worse than one that was never said: the model is asked
+  /// to answer a request addressed to someone called Maido.
   static final RegExp _wakeWord = RegExp(
-    r'^\s*(?:hey\s+|ok(?:ay)?\s+|yo\s+|hi\s+)?milo\b[\s,:;.!?-]*',
+    r'^\s*(?:hey\s+|ok(?:ay)?\s+|yo\s+|hi\s+)?'
+    r'(?:milo|mylo|maido|meelo|mielo|milow|miloh|milo+)\b[\s,:;.!?-]*',
     caseSensitive: false,
   );
 
   static String stripWakeWord(String prompt) =>
       prompt.replaceFirst(_wakeWord, '').trim();
 
+  /// What [transcript] asked Milo to do, or null if it was not addressed to
+  /// Milo at all.
+  ///
+  /// The distinction [stripWakeWord] does not make, and the one always-on
+  /// listening needs: that strips a wake word if present and passes
+  /// everything else through, which is right when the user has already
+  /// pressed a button to talk. When nothing was pressed, overheard speech
+  /// has to be told from a request, and only the wake word does that.
+  ///
+  /// Returns the empty string for a bare "Milo" — addressed, but with
+  /// nothing asked yet, so the caller can wait for the next sentence.
+  static String? wakeWordCommand(String transcript) {
+    final match = _wakeWord.firstMatch(transcript.trimLeft());
+    if (match == null) return null;
+    return transcript.trimLeft().substring(match.end).trim();
+  }
+
   /// Runs one turn.
   ///
   /// Throws [MiloException] when the chosen engine has no key or the API
-  /// refuses the call. Any [MiloPcExecuted] already yielded stays on the
-  /// turn, so an action that worked is still reported even when the reply
-  /// that would have described it fails.
+  /// refuses the call. Any [MiloPcExecuted] or [MiloToolExecuted] already
+  /// yielded stays on the turn, so an action that worked is still reported
+  /// even when the reply that would have described it fails.
   Stream<MiloEvent> respond({
     required String rawPrompt,
     required MiloSecrets secrets,
@@ -139,9 +145,12 @@ class MiloService {
       yield MiloPcExecuted(pcResult);
     }
 
-    final systemPrompt = _systemPrompt(context, pcResult);
+    final systemPrompt = contextBuilder.build(
+      context: context,
+      history: history,
+      pcResult: pcResult,
+    );
 
-    final Stream<String> reply;
     switch (decision.engine) {
       case MiloEngine.groq:
         final key = secrets.groqApiKey;
@@ -151,12 +160,14 @@ class MiloService {
             'instant requests.',
           );
         }
-        reply = groq.streamReply(
+        yield* _groqTurn(
           apiKey: key,
           systemPrompt: systemPrompt,
           history: history,
           prompt: prompt,
+          decision: decision,
         );
+
       case MiloEngine.gemini:
         final key = secrets.geminiApiKey;
         if (key == null) {
@@ -165,71 +176,95 @@ class MiloService {
             'requests that need the deep model.',
           );
         }
-        reply = gemini.streamReply(
-          apiKey: key,
-          systemPrompt: systemPrompt,
-          history: history,
-          prompt: prompt,
+        yield* _plainTurn(
+          gemini.streamReply(
+            apiKey: key,
+            systemPrompt: systemPrompt,
+            history: history,
+            prompt: prompt,
+          ),
+          decision,
         );
     }
+  }
 
+  /// The Groq turn, including one round of tool calls if the model asks.
+  ///
+  /// Exactly one round: the follow-up call is made without `tools`, so the
+  /// model answers with the results rather than being able to ask again.
+  /// A study command is one action, and a loop here would be a loop the
+  /// user is paying for and waiting on.
+  Stream<MiloEvent> _groqTurn({
+    required String apiKey,
+    required String systemPrompt,
+    required List<ChatTurn> history,
+    required String prompt,
+    required RoutingDecision decision,
+  }) async* {
+    final tools = this.tools;
+    final calls = <MiloToolCall>[];
+    var produced = false;
+
+    await for (final delta in groq.streamTurn(
+      apiKey: apiKey,
+      systemPrompt: systemPrompt,
+      history: history,
+      prompt: prompt,
+      tools: tools == null ? null : MiloTools.schemas,
+    )) {
+      switch (delta) {
+        case GroqText(:final text):
+          produced = true;
+          yield MiloTextDelta(text);
+        case GroqToolCalls(calls: final requested):
+          calls.addAll(requested);
+      }
+    }
+
+    if (tools != null && calls.isNotEmpty) {
+      final results = await tools.dispatchAll(calls);
+      for (final call in calls) {
+        final summary = results[call.id];
+        if (summary != null) yield MiloToolExecuted(summary);
+      }
+
+      await for (final delta in groq.streamTurn(
+        apiKey: apiKey,
+        systemPrompt: systemPrompt,
+        history: history,
+        prompt: prompt,
+        exchange: MiloToolExchange(calls: calls, results: results),
+      )) {
+        if (delta is GroqText) {
+          produced = true;
+          yield MiloTextDelta(delta.text);
+        }
+      }
+    }
+
+    // An action that ran is its own answer — the receipt says what
+    // happened — so silence is only a failure when nothing happened at all.
+    if (!produced && calls.isEmpty) throw _silence(decision);
+  }
+
+  Stream<MiloEvent> _plainTurn(
+    Stream<String> reply,
+    RoutingDecision decision,
+  ) async* {
     var produced = false;
     await for (final delta in reply) {
       produced = true;
       yield MiloTextDelta(delta);
     }
+    if (!produced) throw _silence(decision);
+  }
 
-    // A stream that closes without a single token is a real failure, and
-    // the common cause is a reply whose budget went entirely on internal
-    // reasoning. Silence would otherwise render as an empty bubble that
-    // looks like Milo had nothing to say.
-    if (!produced) {
-      throw MiloException(
+  /// A stream that closes without a single token is a real failure, and
+  /// the common cause is a reply whose budget went entirely on internal
+  /// reasoning. Silence would otherwise render as an empty bubble that
+  /// looks like Milo had nothing to say.
+  MiloException _silence(RoutingDecision decision) => MiloException(
         '${decision.engine.badge} returned no text. It may have used its '
         'whole output budget reasoning — try asking something shorter.',
       );
-    }
-  }
-
-  String _systemPrompt(MiloContext context, PcCommandResult? pcResult) {
-    final buffer = StringBuffer()
-      ..writeln(
-        'You are Milo, the assistant inside Prayer Lockout — a prayer and '
-        'productivity app on the user\'s iPhone.',
-      )
-      ..writeln(
-        'Answer in at most three short sentences unless the user asks for '
-        'a plan, a summary or a breakdown.',
-      )
-      ..writeln(
-        'Use only the facts under CONTEXT for prayer times, tasks and '
-        'habits. If something is not there, say you do not have it rather '
-        'than estimating.',
-      )
-      ..writeln('Write plainly. No preamble, no bullet points under four '
-          'items, no emoji.')
-      ..writeln()
-      ..writeln('CONTEXT')
-      ..writeln(context.promptBlock);
-
-    if (pcResult != null) {
-      buffer
-        ..writeln()
-        ..writeln('PC ACTION')
-        ..writeln(
-          'The user asked for this on their Windows PC: '
-          '"${pcResult.command.summary}".',
-        )
-        ..writeln(
-          pcResult.ok
-              ? 'It succeeded. The agent reported: ${pcResult.message} '
-                  'Confirm it in one short sentence.'
-              : 'It failed: ${pcResult.message} '
-                  'Say what failed and what to check, in one or two '
-                  'sentences.',
-        );
-    }
-
-    return buffer.toString();
-  }
 }

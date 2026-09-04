@@ -78,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
                     delay: const Duration(milliseconds: 140),
                     child: const SectionHeader(
                       eyebrow: 'AUTOMATION',
-                      title: 'Prayer Lockout calendar',
+                      title: 'Milo calendar',
                       subtitle:
                           'Creates a dedicated calendar iOS Shortcuts and Jomo can key '
                           'off of to trigger focus mode during each prayer window.',

@@ -18,10 +18,10 @@ class CalendarSyncController extends AsyncNotifier<CalendarSyncResult?> {
   @override
   Future<CalendarSyncResult?> build() async => null;
 
-  /// Syncs just today onto the "Prayer Lockout" calendar.
+  /// Syncs just today onto the "Milo" calendar.
   Future<void> syncToday() => syncDays(1);
 
-  /// Syncs the next [days] days onto the "Prayer Lockout" calendar,
+  /// Syncs the next [days] days onto the "Milo" calendar,
   /// clearing out any of our own stale events in each day's range first.
   Future<void> syncDays(int days) async {
     state = const AsyncLoading();

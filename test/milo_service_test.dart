@@ -17,6 +17,7 @@ import 'package:cotv/src/services/milo/gemini_client.dart';
 import 'package:cotv/src/services/milo/groq_client.dart';
 import 'package:cotv/src/services/milo/milo_credentials.dart';
 import 'package:cotv/src/services/milo/milo_service.dart';
+import 'package:cotv/src/services/milo/milo_tools.dart';
 import 'package:cotv/src/services/milo/pc_remote_service.dart';
 
 /// The app state every turn below is answered against.
@@ -106,7 +107,12 @@ class _Transport {
       });
 }
 
-MiloService _serviceOn(http.Client client, {Duration? stall}) => MiloService(
+MiloService _serviceOn(
+  http.Client client, {
+  Duration? stall,
+  MiloTools? tools,
+}) =>
+    MiloService(
       groq: GroqClient(
         httpClient: client,
         stallTimeout: stall ?? miloStallTimeout,
@@ -116,7 +122,48 @@ MiloService _serviceOn(http.Client client, {Duration? stall}) => MiloService(
         stallTimeout: stall ?? miloStallTimeout,
       ),
       pcRemote: PcRemoteService(httpClient: client),
+      tools: tools,
     );
+
+/// Records what the study tools were asked to do.
+class _RecordingStudy implements StudyToolTarget {
+  final List<String> calls = [];
+
+  @override
+  Future<String> startTimer({
+    required String subject,
+    required int minutes,
+  }) async {
+    calls.add('start:$subject:$minutes');
+    return 'Started a $minutes-minute timer on $subject.';
+  }
+
+  @override
+  Future<String> stopTimer() async {
+    calls.add('stop');
+    return 'Stopped the timer and logged 30 minutes.';
+  }
+}
+
+/// A `tool_calls` frame naming one function and its whole argument string.
+String _groqToolFrame(String id, String name, String arguments) =>
+    'data: ${jsonEncode({
+          'choices': [
+            {
+              'delta': {
+                'tool_calls': [
+                  {
+                    'index': 0,
+                    'id': id,
+                    'type': 'function',
+                    'function': {'name': name, 'arguments': arguments},
+                  },
+                ],
+              },
+              'finish_reason': 'tool_calls',
+            },
+          ],
+        })}\n\n';
 
 Future<List<MiloEvent>> _run(
   MiloService service,
@@ -422,5 +469,131 @@ void main() {
       throwsA(isA<MiloException>()),
     );
     expect(transport.requests, isEmpty);
+  });
+
+  group('study tools', () {
+    test('runs the tool, reports it, then answers with the result',
+        () async {
+      final study = _RecordingStudy();
+      var call = 0;
+      final transport = _Transport(
+        onGroq: () async {
+          call++;
+          // First call asks for the tool; second answers with its result.
+          return call == 1
+              ? _sse([
+                  _groqToolFrame(
+                    'call_a',
+                    'start_study_timer',
+                    '{"subject": "Physiology", "minutes": 45}',
+                  ),
+                  'data: [DONE]\n\n',
+                ])
+              : _sse([
+                  _groqFrame('Timer running on Physiology.'),
+                  'data: [DONE]\n\n',
+                ]);
+        },
+      );
+
+      final events = await _run(
+        _serviceOn(transport.client, tools: MiloTools(study)),
+        'start a physiology timer for 45 minutes',
+      );
+
+      expect(study.calls, ['start:Physiology:45']);
+
+      final receipt = events.whereType<MiloToolExecuted>().single;
+      expect(receipt.summary, 'Started a 45-minute timer on Physiology.');
+
+      final answer = events
+          .whereType<MiloTextDelta>()
+          .map((event) => event.text)
+          .join();
+      expect(answer, 'Timer running on Physiology.');
+
+      // Two round trips: the ask, then the answer.
+      expect(transport.requests, hasLength(2));
+    });
+
+    test('offers the tools on the first call and not on the second',
+        () async {
+      final study = _RecordingStudy();
+      final bodies = <Map<String, dynamic>>[];
+      var call = 0;
+      final transport = _Transport(
+        onGroq: () async {
+          call++;
+          return call == 1
+              ? _sse([
+                  _groqToolFrame('call_a', 'stop_study_timer', '{}'),
+                  'data: [DONE]\n\n',
+                ])
+              : _sse([_groqFrame('Stopped.'), 'data: [DONE]\n\n']);
+        },
+      );
+
+      await _run(
+        _serviceOn(transport.client, tools: MiloTools(study)),
+        'stop the timer',
+      );
+
+      for (final request in transport.requests) {
+        bodies.add(
+          jsonDecode(transport.bodies[request.url.toString()]!)
+              as Map<String, dynamic>,
+        );
+      }
+
+      // Both requests go to the same URL, so the recorded body is the last
+      // one — the follow-up, which must carry no tools.
+      expect(bodies.last.containsKey('tools'), isFalse);
+      expect(study.calls, ['stop']);
+    });
+
+    test('no tools are offered when the service has none', () async {
+      final transport = _Transport(
+        onGroq: () async =>
+            _sse([_groqFrame('Asr is at 16:12.'), 'data: [DONE]\n\n']),
+      );
+
+      await _run(_serviceOn(transport.client), 'when is Asr');
+
+      final body = transport.bodyTo('groq');
+      expect(body.containsKey('tools'), isFalse);
+    });
+
+    test('a tool that ran is not treated as an empty reply', () async {
+      // The action is its own answer: the receipt says what happened, so a
+      // silent follow-up must not raise "returned no text".
+      final study = _RecordingStudy();
+      var call = 0;
+      final transport = _Transport(
+        onGroq: () async {
+          call++;
+          return call == 1
+              ? _sse([
+                  _groqToolFrame(
+                    'call_a',
+                    'start_study_timer',
+                    '{"subject": "Anatomy"}',
+                  ),
+                  'data: [DONE]\n\n',
+                ])
+              : _sse(['data: [DONE]\n\n']);
+        },
+      );
+
+      // "start studying anatomy" rather than "start anatomy": the latter is
+      // genuinely ambiguous with launching a PC app called Anatomy, and the
+      // parser has no way to tell. Saying "studying" is what routes it here.
+      final events = await _run(
+        _serviceOn(transport.client, tools: MiloTools(study)),
+        'start studying anatomy',
+      );
+
+      expect(study.calls, ['start:Anatomy:25']);
+      expect(events.whereType<MiloToolExecuted>(), hasLength(1));
+    });
   });
 }

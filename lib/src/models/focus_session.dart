@@ -4,7 +4,7 @@ import 'daily_prayer_times.dart';
 ///
 /// This is the app's own quiet-mode overlay. It deliberately does not try to
 /// drive iOS Focus modes directly — no public API allows that. The path to
-/// real system-level lockout is the "Prayer Lockout" calendar written by
+/// real system-level lockout is the "Milo" calendar written by
 /// `CalendarSyncService`, which an iOS Shortcuts automation (or Jomo) can
 /// watch to flip a Focus mode. This session is what the app itself shows
 /// while that is happening.

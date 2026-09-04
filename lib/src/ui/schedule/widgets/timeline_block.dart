@@ -38,7 +38,7 @@ class TimelineBlock extends StatelessWidget {
           accent: context.palette.prayerHue(window.prayer),
           fill: context.palette.prayerLockoutFill(window.prayer),
           icon: iconForPrayer(window.prayer),
-          title: '${window.prayer.displayName} · Prayer Lockout',
+          title: '${window.prayer.displayName} · Milo',
           subtitle: formatTimeRange(window.start, window.end),
           trailing: const _ReadOnlyLockBadge(),
           isCurrent: isCurrent,

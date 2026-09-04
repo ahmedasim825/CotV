@@ -7,6 +7,7 @@ import '../../providers/settings_providers.dart';
 import '../../providers/user_settings_providers.dart';
 import '../../security/security_service.dart';
 import '../../services/prayer_service.dart';
+import '../../services/shortcuts_service.dart';
 import '../components/components.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
@@ -76,11 +77,87 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const _CalculationSection(),
+            if (ShortcutsService.isSupported) ...[
+              const SizedBox(height: 36),
+              const SectionHeader(
+                eyebrow: 'AUTOMATION',
+                title: 'Shortcuts',
+                titleSize: 22,
+                subtitle: 'Study timers can be started by Siri or from a '
+                    'Shortcuts automation.',
+              ),
+              const SizedBox(height: 16),
+              const _ShortcutsSection(),
+            ],
             const SizedBox(height: 28),
             const _PrivacyNote(),
           ],
         );
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shortcuts
+// ---------------------------------------------------------------------------
+
+/// The way into the Shortcuts app, where the study App Intents this build
+/// registers show up as actions.
+///
+/// It only opens Shortcuts. iOS has no public scheme for creating a
+/// shortcut on the user's behalf, so the row says what it does rather than
+/// implying it will build one.
+class _ShortcutsSection extends StatefulWidget {
+  const _ShortcutsSection();
+
+  @override
+  State<_ShortcutsSection> createState() => _ShortcutsSectionState();
+}
+
+class _ShortcutsSectionState extends State<_ShortcutsSection> {
+  static const ShortcutsService _service = ShortcutsService();
+
+  bool _failed = false;
+
+  Future<void> _open() async {
+    final opened = await _service.open();
+    if (mounted) setState(() => _failed = !opened);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SettingsGroup(
+          children: [
+            SettingsRow(
+              icon: PhLight.lightning,
+              title: 'Open Shortcuts',
+              subtitle: '"Start Study Timer" and "Stop Study Timer" appear '
+                  'as actions once this app has been opened at least once.',
+              iconTint: palette.textMuted,
+              trailing: Icon(
+                PhLight.caretRight,
+                size: 13,
+                color: palette.textMuted,
+              ),
+              onTap: _open,
+            ),
+          ],
+        ),
+        if (_failed) ...[
+          const SizedBox(height: 12),
+          const StatusCard(
+            message: 'Could not open Shortcuts. It may have been removed '
+                'from this device.',
+            tone: StatusTone.error,
+          ),
+        ],
+      ],
     );
   }
 }

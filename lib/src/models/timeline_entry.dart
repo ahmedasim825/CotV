@@ -41,7 +41,7 @@ final class PrayerLockoutEntry extends TimelineEntry {
   String get id => 'prayer:${window.prayer.key}';
 
   @override
-  String get title => '${window.prayer.displayName} — Prayer Lockout';
+  String get title => '${window.prayer.displayName} — Milo';
 
   @override
   DateTime get start => window.start;

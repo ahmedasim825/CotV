@@ -3,19 +3,27 @@
 // Check in to version control
 
 import 'package:hive_ce/hive_ce.dart';
+import 'package:cotv/src/models/active_study_session.dart';
+import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/journal_entry.dart';
 import 'package:cotv/src/models/schedule_item.dart';
+import 'package:cotv/src/models/study_log.dart';
+import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 
 extension HiveRegistrar on HiveInterface {
   void registerAdapters() {
+    registerAdapter(ActiveStudySessionAdapter());
+    registerAdapter(ChatMessageAdapter());
     registerAdapter(HabitAdapter());
     registerAdapter(HabitFrequencyAdapter());
     registerAdapter(JournalEntryAdapter());
     registerAdapter(JournalMoodAdapter());
     registerAdapter(ScheduleItemAdapter());
+    registerAdapter(StudyLogAdapter());
+    registerAdapter(SubjectAdapter());
     registerAdapter(TaskAdapter());
     registerAdapter(TaskPriorityAdapter());
     registerAdapter(UserSettingsAdapter());
@@ -24,11 +32,15 @@ extension HiveRegistrar on HiveInterface {
 
 extension IsolatedHiveRegistrar on IsolatedHiveInterface {
   void registerAdapters() {
+    registerAdapter(ActiveStudySessionAdapter());
+    registerAdapter(ChatMessageAdapter());
     registerAdapter(HabitAdapter());
     registerAdapter(HabitFrequencyAdapter());
     registerAdapter(JournalEntryAdapter());
     registerAdapter(JournalMoodAdapter());
     registerAdapter(ScheduleItemAdapter());
+    registerAdapter(StudyLogAdapter());
+    registerAdapter(SubjectAdapter());
     registerAdapter(TaskAdapter());
     registerAdapter(TaskPriorityAdapter());
     registerAdapter(UserSettingsAdapter());

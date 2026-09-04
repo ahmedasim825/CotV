@@ -27,7 +27,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1120, 880);
-  if (!window.Create(L"Prayer Lockout", origin, size)) {
+  if (!window.Create(L"Milo", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

@@ -39,7 +39,7 @@ class PrayerLockoutWindow {
   final DateTime end;
 }
 
-/// Outcome of syncing one day's prayer windows to the "Prayer Lockout"
+/// Outcome of syncing one day's prayer windows to the "Milo"
 /// calendar — enough detail for the UI to show a meaningful success state.
 class CalendarSyncResult {
   const CalendarSyncResult({

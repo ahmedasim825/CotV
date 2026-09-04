@@ -52,3 +52,6 @@ tools/milo_pc_agent/milo_agent.toml
 
 # Milo API keys for local --dart-define-from-file builds. Never commit.
 milo_keys.json
+
+# Local MSIX code-signing certificate and its password. Never commit.
+certs/

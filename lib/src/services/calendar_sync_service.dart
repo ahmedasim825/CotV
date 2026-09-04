@@ -6,7 +6,7 @@ import 'package:flutter/material.dart' show Color;
 import '../models/calendar_sync_models.dart';
 import '../models/daily_prayer_times.dart';
 
-/// Creates and maintains a dedicated local iOS calendar ("Prayer Lockout")
+/// Creates and maintains a dedicated local iOS calendar ("Milo")
 /// with one event per obligatory prayer window each day, so that iOS
 /// Shortcuts automations and the Jomo app can key off calendar activity
 /// to trigger focus/lockout modes.
@@ -22,8 +22,17 @@ class CalendarSyncService {
 
   final DeviceCalendarPlugin _plugin;
 
-  static const String calendarName = 'Prayer Lockout';
-  static const String automationTag = 'prayer_lockout';
+  static const String calendarName = 'Milo';
+  static const String automationTag = 'milo';
+
+  /// The names this calendar and its events used before the app was renamed.
+  ///
+  /// Kept because cleanup matches on the tag: without the old one, every
+  /// event written under the previous name would be invisible to
+  /// [_clearExistingEvents] and would sit in the calendar forever,
+  /// double-booking each prayer window against its replacement.
+  static const String legacyCalendarName = 'Prayer Lockout';
+  static const String legacyAutomationTag = 'prayer_lockout';
   static const Duration defaultLockoutDuration = Duration(minutes: 30);
 
   /// `device_calendar` ships iOS and Android implementations only. Without
@@ -45,7 +54,7 @@ class CalendarSyncService {
   Future<void> requestPermissions() async {
     if (!isSupported) {
       throw CalendarSyncException(
-        'Calendar sync runs on iOS and Android only. The Prayer Lockout '
+        'Calendar sync runs on iOS and Android only. The Milo '
         'calendar exists for iOS Shortcuts to key off, so there is nothing '
         'for it to do on this platform.',
       );
@@ -64,7 +73,8 @@ class CalendarSyncService {
     }
   }
 
-  /// Finds the existing "Prayer Lockout" calendar or creates it if it
+  /// Finds the existing "Milo" calendar (or the one the previous name
+  /// left behind) or creates it if it
   /// doesn't exist yet. Returns the calendar's native ID.
   Future<String> findOrCreateLockoutCalendar() async {
     final calendarsResult = await _plugin.retrieveCalendars();
@@ -76,7 +86,9 @@ class CalendarSyncService {
     }
 
     final match = calendarsResult.data?.where(
-      (c) => c.name == calendarName && c.isReadOnly != true,
+      (c) =>
+          (c.name == calendarName || c.name == legacyCalendarName) &&
+          c.isReadOnly != true,
     );
     if (match != null && match.isNotEmpty) {
       return match.first.id!;
@@ -125,7 +137,7 @@ class CalendarSyncService {
     ];
   }
 
-  /// Syncs one day's prayer windows onto the "Prayer Lockout" calendar.
+  /// Syncs one day's prayer windows onto the "Milo" calendar.
   ///
   /// Idempotent: any of our own events already in that day's range are
   /// removed first (matched by [automationTag] in the description, not by
@@ -205,7 +217,11 @@ class CalendarSyncService {
     if (!result.isSuccess) return 0;
 
     final ours = (result.data ?? const Iterable<Event>.empty())
-        .where((e) => (e.description ?? '').contains('type:$automationTag'))
+        .where((e) {
+          final description = e.description ?? '';
+          return description.contains('type:$automationTag') ||
+              description.contains('type:$legacyAutomationTag');
+        })
         .toList();
 
     for (final event in ours) {

@@ -28,7 +28,7 @@ class FloatingHeader extends StatelessWidget {
             decoration: BoxDecoration(color: context.palette.accentBright, shape: BoxShape.circle),
           ),
           const SizedBox(width: 10),
-          Text('Prayer Lockout', style: context.typography.ui(size: 14, weight: FontWeight.w600)),
+          Text('Milo', style: context.typography.ui(size: 14, weight: FontWeight.w600)),
           const SizedBox(width: 24),
           _IconChip(icon: PhLight.arrowClockwise, onTap: onRefresh),
         ],

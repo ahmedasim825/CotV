@@ -73,6 +73,10 @@ class _AssistantTurn extends StatelessWidget {
           const SizedBox(height: 12),
           _PcReceipt(result: message.pcResult!),
         ],
+        if (message.toolNote != null) ...[
+          const SizedBox(height: 12),
+          _ToolReceipt(note: message.toolNote!),
+        ],
         if (message.text.isNotEmpty || message.isStreaming) ...[
           const SizedBox(height: 12),
           _AnswerText(text: message.text, isStreaming: message.isStreaming),
@@ -229,6 +233,49 @@ class _PcReceipt extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What a study tool actually did.
+///
+/// Separate from the reply for the same reason [_PcReceipt] is: the model
+/// is asked to describe an action it did not carry out and cannot verify,
+/// so the app states what happened in its own words alongside it. If the
+/// two ever disagree, this one is the true record.
+class _ToolReceipt extends StatelessWidget {
+  const _ToolReceipt({required this.note});
+
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: palette.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.accent.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(PhLight.timer, size: 16, color: palette.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              note,
+              style: context.typography.ui(
+                size: 12.5,
+                color: palette.textSecondary,
+                height: 1.4,
+              ),
             ),
           ),
         ],

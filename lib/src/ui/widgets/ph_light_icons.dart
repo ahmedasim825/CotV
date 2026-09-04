@@ -105,6 +105,10 @@ class PhLight {
       IconData(0xe30c, fontFamily: _family, fontPackage: _package);
   static const IconData mapPin =
       IconData(0xe316, fontFamily: _family, fontPackage: _package);
+  static const IconData microphone =
+      IconData(0xe326, fontFamily: _family, fontPackage: _package);
+  static const IconData microphoneSlash =
+      IconData(0xe328, fontFamily: _family, fontPackage: _package);
   static const IconData moon =
       IconData(0xe330, fontFamily: _family, fontPackage: _package);
   static const IconData moonStars =
@@ -149,6 +153,10 @@ class PhLight {
       IconData(0xe444, fontFamily: _family, fontPackage: _package);
   static const IconData sparkle =
       IconData(0xe6a2, fontFamily: _family, fontPackage: _package);
+  static const IconData speakerHigh =
+      IconData(0xe44a, fontFamily: _family, fontPackage: _package);
+  static const IconData speakerSlash =
+      IconData(0xe45a, fontFamily: _family, fontPackage: _package);
   static const IconData stopCircle =
       IconData(0xe46e, fontFamily: _family, fontPackage: _package);
   static const IconData sun =
@@ -179,6 +187,8 @@ class PhLight {
       IconData(0xe4ae, fontFamily: _family, fontPackage: _package);
   static const IconData warningCircle =
       IconData(0xe4e2, fontFamily: _family, fontPackage: _package);
+  static const IconData waveform =
+      IconData(0xe802, fontFamily: _family, fontPackage: _package);
   static const IconData wifiSlash =
       IconData(0xe4f2, fontFamily: _family, fontPackage: _package);
   static const IconData x =

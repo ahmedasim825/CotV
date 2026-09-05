@@ -32,6 +32,10 @@ class _AccountSheetState extends ConsumerState<_AccountSheet> {
   /// which call it makes.
   bool _isSigningUp = false;
 
+  /// A non-error message to show above the form, e.g. after a sign-up
+  /// that still needs its email confirmed.
+  String? _notice;
+
   @override
   void dispose() {
     _email.dispose();
@@ -46,11 +50,27 @@ class _AccountSheetState extends ConsumerState<_AccountSheet> {
     final email = _email.text.trim();
     final password = _password.text;
 
-    final ok = _isSigningUp
+    final outcome = _isSigningUp
         ? await controller.signUp(email: email, password: password)
         : await controller.signIn(email: email, password: password);
 
-    if (ok && mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+
+    switch (outcome) {
+      case AuthOutcome.signedIn:
+        Navigator.of(context).pop();
+      case AuthOutcome.needsEmailConfirmation:
+        // The account was created; it just has no session yet. Switching
+        // the form back to sign-in is where they will need to be once the
+        // link is clicked.
+        setState(() {
+          _isSigningUp = false;
+          _notice = 'Account created. Click the link in the confirmation '
+              'email, then sign in.';
+        });
+      case AuthOutcome.failed:
+        break;
+    }
   }
 
   @override
@@ -96,6 +116,9 @@ class _AccountSheetState extends ConsumerState<_AccountSheet> {
                 message: auth.error.toString(),
                 tone: StatusTone.error,
               ),
+              const SizedBox(height: 20),
+            ] else if (_notice != null) ...[
+              StatusCard(message: _notice!, tone: StatusTone.success),
               const SizedBox(height: 20),
             ],
             const FieldLabel(icon: PhLight.paperPlaneRight, label: 'Email'),
@@ -146,7 +169,10 @@ class _AccountSheetState extends ConsumerState<_AccountSheet> {
             GestureDetector(
               onTap: busy
                   ? null
-                  : () => setState(() => _isSigningUp = !_isSigningUp),
+                  : () => setState(() {
+                      _isSigningUp = !_isSigningUp;
+                      _notice = null;
+                    }),
               behavior: HitTestBehavior.opaque,
               child: SizedBox(
                 height: minTouchTarget,

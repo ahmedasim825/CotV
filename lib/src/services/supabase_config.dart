@@ -1,7 +1,7 @@
 /// Where the sync backend lives, and the key the app talks to it with.
 ///
 /// Both come from the build, with placeholders as the default — the same
-/// split MiloCredentials and NutritionixService use. The publishable key is
+/// split MiloCredentials and FoodApiService use. The publishable key is
 /// not a secret (it is designed to ship inside clients and every table it
 /// can reach is behind row-level security), but keeping it out of the
 /// repository means a fork of this code cannot write to this project.

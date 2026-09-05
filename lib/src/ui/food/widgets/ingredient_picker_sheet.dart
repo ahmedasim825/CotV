@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../models/food_models.dart';
-import '../../../providers/nutrition_providers.dart';
-import '../../../services/nutritionix_service.dart';
 import '../../components/components.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
@@ -63,7 +61,6 @@ class _IngredientPickerSheetState
 
   _Step _step = _Step.search;
   FoodItem? _resolved;
-  bool _isResolving = false;
   String? _error;
 
   @override
@@ -78,32 +75,16 @@ class _IngredientPickerSheetState
 
   double get _grams => double.tryParse(_gramsController.text) ?? 0;
 
-  Future<void> _resolve(FoodSearchHit hit) async {
+  /// No network call: a search hit already carries every nutrient.
+  void _resolve(FoodSearchHit hit) {
     setState(() {
-      _isResolving = true;
+      _resolved = hit.item;
       _error = null;
+      _step = _Step.weigh;
+      // Seed with one serving where the database declares one, and 100 g
+      // otherwise - which is the basis the numbers are quoted on.
+      _gramsController.text = formatAmount(hit.item.servingGrams);
     });
-
-    try {
-      final food =
-          await ref.read(nutritionixServiceProvider).getFoodDetails(hit.name);
-      if (!mounted) return;
-      setState(() {
-        _resolved = food;
-        _isResolving = false;
-        _step = _Step.weigh;
-        // Seed the weight with one serving where the database knows one,
-        // since that is the portion the numbers below are quoted for.
-        _gramsController.text =
-            formatAmount(food.servingWeightGrams ?? 100);
-      });
-    } on NutritionixException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isResolving = false;
-        _error = error.message;
-      });
-    }
   }
 
   void _saveResolved() {
@@ -178,18 +159,7 @@ class _IngredientPickerSheetState
             StatusCard(message: _error!, tone: StatusTone.error),
             const SizedBox(height: 16),
           ],
-          if (_isResolving)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 36),
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: context.palette.accent,
-                  strokeWidth: 2.5,
-                ),
-              ),
-            )
-          else
-            FoodSearchResults(onSelect: _resolve),
+          FoodSearchResults(onSelect: _resolve),
         ],
       ),
     );

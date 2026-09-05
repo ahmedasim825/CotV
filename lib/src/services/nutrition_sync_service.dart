@@ -69,6 +69,7 @@ class NutritionSyncService {
         'protein_grams': food.totals.protein,
         'carbs_grams': food.totals.carbs,
         'fat_grams': food.totals.fat,
+        'fiber_grams': food.totals.fiber,
         'sodium_mg': food.totals.sodium,
         'potassium_mg': food.totals.potassium,
         'logged_at': food.loggedAt.toUtc().toIso8601String(),
@@ -148,6 +149,7 @@ class NutritionSyncService {
             'protein_grams': recipe.ingredients[i].totals.protein,
             'carbs_grams': recipe.ingredients[i].totals.carbs,
             'fat_grams': recipe.ingredients[i].totals.fat,
+            'fiber_grams': recipe.ingredients[i].totals.fiber,
             'sodium_mg': recipe.ingredients[i].totals.sodium,
             'potassium_mg': recipe.ingredients[i].totals.potassium,
           },
@@ -292,6 +294,9 @@ class NutritionSyncService {
       protein: _double(row['protein_grams']),
       carbs: _double(row['carbs_grams']),
       fat: _double(row['fat_grams']),
+      // Rows written before the column existed read back as 0, which is
+      // also what the app shows for a food whose database omits fiber.
+      fiber: _double(row['fiber_grams']),
       sodium: _double(row['sodium_mg']),
       potassium: _double(row['potassium_mg']),
     );

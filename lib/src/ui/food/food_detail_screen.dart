@@ -60,10 +60,8 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
   }
 
   void _writeGrams() {
-    final grams = _food.gramsForServings(_servings);
-    if (grams == null) return;
     _syncing = true;
-    _gramsController.text = formatAmount(grams);
+    _gramsController.text = formatAmount(_food.gramsForServings(_servings));
     _syncing = false;
   }
 
@@ -127,7 +125,7 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
               [
                 if (_food.brandName != null && _food.brandName!.isNotEmpty)
                   _food.brandName!,
-                _food.servingLabel,
+                _food.basisLabel,
               ].join(' · '),
               style: context.typography.ui(size: 13, color: palette.textMuted),
             ),
@@ -141,7 +139,6 @@ class _FoodDetailScreenState extends ConsumerState<FoodDetailScreen> {
             _PortionControls(
               servings: _servings,
               gramsController: _gramsController,
-              canWeigh: _food.canWeigh,
               onServingsChanged: _setServings,
             ),
             const SizedBox(height: 28),
@@ -199,13 +196,11 @@ class _PortionControls extends StatelessWidget {
   const _PortionControls({
     required this.servings,
     required this.gramsController,
-    required this.canWeigh,
     required this.onServingsChanged,
   });
 
   final double servings;
   final TextEditingController gramsController;
-  final bool canWeigh;
   final ValueChanged<double> onServingsChanged;
 
   @override
@@ -240,38 +235,30 @@ class _PortionControls extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 22),
-        FieldLabel(
-          icon: PhLight.target,
-          label: 'Weight',
-          optional: !canWeigh,
-        ),
+        const FieldLabel(icon: PhLight.target, label: 'Weight'),
         const SizedBox(height: 10),
         TextField(
           controller: gramsController,
-          enabled: canWeigh,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
           ],
           decoration: appInputDecoration(
             context,
-            // A food the database carries no serving weight for cannot be
-            // logged by weight at all, so the field says why rather than
-            // accepting a number it would have to ignore.
-            hint: canWeigh ? '180' : 'No weight on record for this food',
-            suffixIcon: canWeigh
-                ? Padding(
-                    padding: const EdgeInsets.only(right: 18),
-                    child: Text(
-                      'g',
-                      textAlign: TextAlign.right,
-                      style: context.typography.ui(
-                        size: 14,
-                        color: palette.textMuted,
-                      ),
-                    ),
-                  )
-                : null,
+            // Live for every food now: a food with no declared serving
+            // is quoted per 100 g, which is itself a weight.
+            hint: '180',
+            suffixIcon: Padding(
+              padding: const EdgeInsets.only(right: 18),
+              child: Text(
+                'g',
+                textAlign: TextAlign.right,
+                style: context.typography.ui(
+                  size: 14,
+                  color: palette.textMuted,
+                ),
+              ),
+            ),
           ),
           style: context.typography.ui(size: 15),
         ),

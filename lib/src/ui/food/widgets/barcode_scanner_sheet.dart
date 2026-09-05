@@ -7,7 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../models/food_models.dart';
 import '../../../providers/nutrition_providers.dart';
-import '../../../services/nutritionix_service.dart';
+import '../../../services/food_api_service.dart';
 import '../../components/components.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
@@ -25,7 +25,7 @@ bool get barcodeCameraSupported =>
     defaultTargetPlatform == TargetPlatform.android ||
     defaultTargetPlatform == TargetPlatform.macOS;
 
-/// Scans (or asks for) a barcode and resolves it against Nutritionix.
+/// Scans (or asks for) a barcode and resolves it against Open Food Facts.
 ///
 /// Returns the food once the lookup succeeds, or null if the sheet was
 /// dismissed. The caller decides what to do with it — the search screen
@@ -109,10 +109,10 @@ class _BarcodeScannerSheetState extends ConsumerState<_BarcodeScannerSheet> {
 
     try {
       final food =
-          await ref.read(nutritionixServiceProvider).getFoodByBarcode(upc);
+          await ref.read(foodApiServiceProvider).getFoodByBarcode(upc);
       if (!mounted) return;
       Navigator.of(context).pop(food);
-    } on NutritionixException catch (error) {
+    } on FoodApiException catch (error) {
       if (!mounted) return;
       setState(() {
         _isLookingUp = false;

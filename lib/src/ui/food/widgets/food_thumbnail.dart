@@ -8,7 +8,7 @@ import '../../widgets/ph_light_icons.dart';
 /// A food photo with a plate glyph behind it.
 ///
 /// Every food image in this feature goes through here rather than a bare
-/// [Image.network]: Nutritionix photo URLs 404 often enough that an
+/// [Image.network]: food database photo URLs 404 often enough that an
 /// unguarded one shows Flutter's red error box in a release build, and a
 /// common food frequently has no photo at all.
 class FoodThumbnail extends StatelessWidget {

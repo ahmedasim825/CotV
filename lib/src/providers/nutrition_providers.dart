@@ -3,18 +3,18 @@ import 'package:http/http.dart' as http;
 
 import '../models/food_models.dart';
 import '../services/nutrition_sync_service.dart';
-import '../services/nutritionix_service.dart';
+import '../services/food_api_service.dart';
 import 'auth_providers.dart';
 import 'user_settings_providers.dart';
 
-final nutritionixClientProvider = Provider<http.Client>((ref) {
+final foodApiClientProvider = Provider<http.Client>((ref) {
   final client = http.Client();
   ref.onDispose(client.close);
   return client;
 });
 
-final nutritionixServiceProvider = Provider<NutritionixService>((ref) {
-  return NutritionixService(httpClient: ref.watch(nutritionixClientProvider));
+final foodApiServiceProvider = Provider<FoodApiService>((ref) {
+  return FoodApiService(httpClient: ref.watch(foodApiClientProvider));
 });
 
 /// What is currently in the search field, written on every keystroke.
@@ -31,7 +31,11 @@ final foodSearchQueryProvider =
 );
 
 /// How long the field has to be quiet before a query goes out.
-const Duration foodSearchDebounce = Duration(milliseconds: 300);
+///
+/// A keystroke can cost two round trips now: USDA, then Open Food Facts
+/// when USDA has nothing. 450 ms is long enough that typing a word is one
+/// search rather than six, and short enough not to feel laggy.
+const Duration foodSearchDebounce = Duration(milliseconds: 450);
 
 /// A query shorter than this searches nothing — two letters match most of
 /// the database and the result is noise, not a shortlist.
@@ -56,7 +60,7 @@ final foodSearchProvider =
   await Future<void>.delayed(foodSearchDebounce);
   if (cancelled) return const [];
 
-  return ref.watch(nutritionixServiceProvider).searchFoods(query);
+  return ref.watch(foodApiServiceProvider).searchFoods(query);
 });
 
 /// Everything logged today, and what it adds up to.

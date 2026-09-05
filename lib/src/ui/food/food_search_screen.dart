@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/food_models.dart';
 import '../../providers/nutrition_providers.dart';
-import '../../services/nutritionix_service.dart';
 import '../components/components.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
@@ -59,38 +58,14 @@ class FoodSearchScreen extends ConsumerStatefulWidget {
 
 class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   FoodSource _source = FoodSource.search;
-  bool _isResolving = false;
   String? _error;
 
-  /// Resolves a search hit to real nutrients, then opens the configurator.
+  /// Opens the configurator for a search hit.
   ///
-  /// The instant endpoint returns no nutrients for a common food and only
-  /// calories for a branded one, so this round trip is what makes a row
-  /// loggable.
-  Future<void> _openHit(FoodSearchHit hit) async {
-    setState(() {
-      _isResolving = true;
-      _error = null;
-    });
-
-    try {
-      final food =
-          await ref.read(nutritionixServiceProvider).getFoodDetails(hit.name);
-      if (!mounted) return;
-      setState(() => _isResolving = false);
-      await pushFoodPage(context, FoodDetailScreen(food: food));
-    } on NutritionixException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isResolving = false;
-        _error = error.message;
-      });
-    }
-  }
-
-  /// Swallows taps while a lookup is in flight, so a second tap cannot
-  /// start a second request against the same rate limit.
-  void _ignore(FoodSearchHit hit) {}
+  /// No network call: USDA's search response already carries every
+  /// nutrient, so a row is loggable the moment it is drawn.
+  Future<void> _openHit(FoodSearchHit hit) =>
+      pushFoodPage(context, FoodDetailScreen(food: hit.item));
 
   Future<void> _scan() async {
     final food = await showBarcodeScannerSheet(context);
@@ -105,23 +80,28 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
     );
   }
 
-  /// Logs one serving of [recipe] through the same configurator a database
-  /// food goes through, so the portion and meal are chosen the same way.
+  /// Logs one serving of [recipe] through the same configurator a
+  /// database food goes through, so the portion and meal are chosen the
+  /// same way.
   Future<void> _openRecipe(CustomRecipe recipe) {
-    final perServing = recipe.perServing;
+    final servingGrams = recipe.yieldServings > 0
+        ? recipe.totalGrams / recipe.yieldServings
+        : 0.0;
 
     return pushFoodPage(
       context,
       FoodDetailScreen(
         food: FoodItem(
           name: recipe.title,
-          perServing: perServing,
-          servingUnit: 'serving',
-          // One serving weighs its share of the finished dish, which is
-          // what lets the gram field work on a recipe too.
-          servingWeightGrams: recipe.yieldServings > 0
-              ? recipe.totalGrams / recipe.yieldServings
-              : null,
+          source: FoodDataSource.usda,
+          // A recipe's nutrients are known per serving; the model wants
+          // them per 100 g. With no ingredient weights there is nothing
+          // to divide by, so the serving itself becomes the 100 g basis.
+          per100g: servingGrams > 0
+              ? recipe.perServing.scaled(100 / servingGrams)
+              : recipe.perServing,
+          servingWeightGrams: servingGrams > 0 ? servingGrams : null,
+          servingText: '1 serving',
           thumbUrl: recipe.coverImageUrl,
           highresUrl: recipe.coverImageUrl,
         ),
@@ -172,15 +152,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
         return [
           const FoodSearchField(),
           const SizedBox(height: 18),
-          // The results stay mounted while a food is being resolved.
-          // Replacing them would dispose the autoDispose search provider,
-          // and remounting it on the way back would re-run the query — a
-          // second billed request for every food opened.
-          if (_isResolving) ...[
-            const _Busy(message: 'Fetching nutrition…'),
-            const SizedBox(height: 12),
-          ],
-          FoodSearchResults(onSelect: _isResolving ? _ignore : _openHit),
+          FoodSearchResults(onSelect: _openHit),
         ];
       case FoodSource.scan:
         return [_ScanPanel(onScan: _scan)];
@@ -494,31 +466,6 @@ class _RecipeCard extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
           MacroReadout(totals: recipe.perServing, caption: 'Per serving'),
-        ],
-      ),
-    );
-  }
-}
-
-class _Busy extends StatelessWidget {
-  const _Busy({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 36),
-      child: Column(
-        children: [
-          CircularProgressIndicator(color: palette.accent, strokeWidth: 2.5),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: context.typography.ui(size: 13, color: palette.textMuted),
-          ),
         ],
       ),
     );

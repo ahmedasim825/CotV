@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/food_models.dart';
 import '../../theme/app_theme.dart';
 
-/// The six-nutrient breakdown, shown wherever a portion has been resolved
+/// The seven-nutrient breakdown, shown wherever a portion has been resolved
 /// to numbers.
 ///
 /// Shared by the serving configurator and the recipe builder so both round
@@ -58,10 +58,10 @@ class MacroReadout extends StatelessWidget {
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
-            // Five cells across on a wide pane, and a grid of two on a
-            // phone — a fixed row would squeeze "Potassium" past the point
-            // where its number stays readable.
-            final columns = constraints.maxWidth >= 460 ? 5 : 2;
+            // Six cells now, so three across on a wide pane and two on a
+            // phone — both divide evenly. Five would strand one cell
+            // alone on a second row.
+            final columns = constraints.maxWidth >= 460 ? 3 : 2;
             final spacing = 12.0;
             final cellWidth =
                 (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -86,6 +86,7 @@ class MacroReadout extends StatelessWidget {
   List<_Nutrient> _nutrientsOf(NutritionTotals totals) => [
         _Nutrient('Protein', totals.protein, 'g'),
         _Nutrient('Carbs', totals.carbs, 'g'),
+        _Nutrient('Fiber', totals.fiber, 'g'),
         _Nutrient('Fat', totals.fat, 'g'),
         _Nutrient('Sodium', totals.sodium, 'mg'),
         _Nutrient('Potassium', totals.potassium, 'mg'),

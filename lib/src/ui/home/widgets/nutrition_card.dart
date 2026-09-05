@@ -1,38 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../providers/nutrition_providers.dart';
 import '../../components/components.dart';
+import '../../food/food_route.dart';
+import '../../food/food_search_screen.dart';
 import '../../study/widgets/study_timer_card.dart' show CountdownRing;
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 
-/// One macro's progress against its target. Mock only.
+/// One macro's progress against its target.
 class _Macro {
   const _Macro(this.name, this.grams, this.target);
 
   final String name;
-  final int grams;
+  final double grams;
   final int target;
 }
 
-const int _caloriesEaten = 1417;
-const int _calorieTarget = 2000;
-
-const List<_Macro> _mockMacros = [
-  _Macro('Protein', 96, 150),
-  _Macro('Carbs', 158, 220),
-  _Macro('Fats', 47, 70),
-];
-
 /// Calories as a ring, macros as three bars beneath it.
-class NutritionCard extends StatelessWidget {
+///
+/// Tapping the card opens the food logger; anything added there lands in
+/// [dailyNutritionProvider] and is reflected here on the next frame.
+class NutritionCard extends ConsumerWidget {
   const NutritionCard({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
+    final totals = ref.watch(dailyNutritionProvider).totals;
+    final targets = ref.watch(nutritionTargetsProvider);
+
+    final eaten = totals.calories.round();
+    final macros = [
+      _Macro('Protein', totals.protein, targets.protein),
+      _Macro('Carbs', totals.carbs, targets.carbs),
+      _Macro('Fats', totals.fat, targets.fat),
+    ];
 
     return CustomCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      onTap: () => pushFoodPage(context, const FoodSearchScreen()),
+      semanticLabel: 'Nutrition, $eaten of ${targets.calories} kilocalories. '
+          'Open the food logger.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -44,24 +54,26 @@ class NutritionCard extends StatelessWidget {
                 'Nutrition',
                 style: context.typography.ui(size: 15, weight: FontWeight.w600),
               ),
+              const Spacer(),
+              Icon(PhLight.plusCircle, size: 18, color: palette.textMuted),
             ],
           ),
           const SizedBox(height: 18),
           Center(
             child: CountdownRing(
-              progress: _caloriesEaten / _calorieTarget,
+              progress: eaten / targets.calories,
               accent: palette.secondary,
               diameter: 132,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '$_caloriesEaten',
+                    '$eaten',
                     style: context.typography.display(size: 30),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'of $_calorieTarget kcal',
+                    'of ${targets.calories} kcal',
                     style: context.typography.ui(
                       size: 11,
                       color: palette.textMuted,
@@ -72,9 +84,9 @@ class NutritionCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          for (var i = 0; i < _mockMacros.length; i++) ...[
-            _MacroBar(macro: _mockMacros[i]),
-            if (i < _mockMacros.length - 1) const SizedBox(height: 12),
+          for (var i = 0; i < macros.length; i++) ...[
+            _MacroBar(macro: macros[i]),
+            if (i < macros.length - 1) const SizedBox(height: 12),
           ],
         ],
       ),
@@ -91,9 +103,10 @@ class _MacroBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final value = (macro.grams / macro.target).clamp(0.0, 1.0);
+    final grams = macro.grams.round();
 
     return Semantics(
-      label: '${macro.name}, ${macro.grams} of ${macro.target} grams',
+      label: '${macro.name}, $grams of ${macro.target} grams',
       excludeSemantics: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +120,7 @@ class _MacroBar extends StatelessWidget {
                 ),
               ),
               Text(
-                '${macro.grams} / ${macro.target}g',
+                '$grams / ${macro.target}g',
                 style: context.typography.ui(
                   size: 12,
                   color: palette.textSecondary,

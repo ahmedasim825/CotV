@@ -70,6 +70,28 @@ class UserSettingsController extends StreamNotifier<UserSettings> {
     await _repository.update(current.copyWith(aiMemorySummary: summary));
   }
 
+  /// Persists the daily nutrition goals.
+  ///
+  /// Every field is written with a concrete number rather than a null,
+  /// because `copyWith` reads null as "leave unchanged" and so cannot
+  /// express a reset — the targets sheet writes the defaults back instead.
+  Future<void> setNutritionTargets({
+    required int calories,
+    required int protein,
+    required int carbs,
+    required int fat,
+  }) async {
+    final current = _repository.get();
+    await _repository.update(
+      current.copyWith(
+        dailyCalorieTarget: calories,
+        proteinTargetGrams: protein,
+        carbTargetGrams: carbs,
+        fatTargetGrams: fat,
+      ),
+    );
+  }
+
   Future<void> setLocation({required double latitude, required double longitude}) async {
     final current = _repository.get();
     await _repository.update(

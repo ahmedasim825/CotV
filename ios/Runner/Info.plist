@@ -6,6 +6,8 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Milo uses the camera to scan the barcode on a food package, so its nutrition can be looked up. Nothing is photographed or stored.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Milo listens to a command when you tap the microphone, and transcribes it. Nothing is recorded until you tap.</string>
 	<key>CFBundleDisplayName</key>

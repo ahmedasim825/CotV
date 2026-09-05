@@ -57,6 +57,14 @@ dependencies:
   # Registers the study App Intents Siri and Shortcuts call into. Needs
   # hand-written Swift in ios/Runner/AppDelegate.swift; it generates none.
   flutter_app_intents: ^0.7.0
+  # Camera barcode scanning for the food logger. iOS/macOS/Android only —
+  # there is no Windows implementation, which is why BarcodeScannerSheet
+  # falls back to a typed-UPC field off those platforms.
+  mobile_scanner: ^7.4.0
+  # Recipe cover photos. Picks from the photo library on iOS and through a
+  # file dialog on Windows; the chosen path is held locally until there is
+  # a Storage bucket to upload it to.
+  image_picker: ^1.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -85,7 +93,7 @@ msix_config:
   # Windows refuses to install a package whose identity and version
   # match an installed one but whose contents differ, so this has to
   # move for every build you intend to install over the last.
-  msix_version: 1.0.6.0
+  msix_version: 1.0.7.0
   logo_path: assets/icons/app_icon.png
   # internetClient reaches Groq and Gemini; privateNetworkClientServer is
   # what lets the app talk to the Milo agent on the LAN.

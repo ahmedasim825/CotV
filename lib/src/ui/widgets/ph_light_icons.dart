@@ -23,6 +23,8 @@ class PhLight {
       IconData(0xe036, fontFamily: _family, fontPackage: _package);
   static const IconData arrowLeft =
       IconData(0xe058, fontFamily: _family, fontPackage: _package);
+  static const IconData barcode =
+      IconData(0xe0b8, fontFamily: _family, fontPackage: _package);
   static const IconData bellSimple =
       IconData(0xe0d0, fontFamily: _family, fontPackage: _package);
   static const IconData bellSimpleRinging =
@@ -31,6 +33,8 @@ class PhLight {
       IconData(0xe0d2, fontFamily: _family, fontPackage: _package);
   static const IconData bookOpen =
       IconData(0xe0e6, fontFamily: _family, fontPackage: _package);
+  static const IconData bowlFood =
+      IconData(0xeaa4, fontFamily: _family, fontPackage: _package);
   static const IconData brain =
       IconData(0xe74e, fontFamily: _family, fontPackage: _package);
   static const IconData calendarBlank =
@@ -39,6 +43,8 @@ class PhLight {
       IconData(0xe712, fontFamily: _family, fontPackage: _package);
   static const IconData calendarDots =
       IconData(0xe7b4, fontFamily: _family, fontPackage: _package);
+  static const IconData camera =
+      IconData(0xe10e, fontFamily: _family, fontPackage: _package);
   static const IconData caretDown =
       IconData(0xe136, fontFamily: _family, fontPackage: _package);
   static const IconData caretLeft =
@@ -63,6 +69,8 @@ class PhLight {
       IconData(0xe1bc, fontFamily: _family, fontPackage: _package);
   static const IconData compass =
       IconData(0xe1c8, fontFamily: _family, fontPackage: _package);
+  static const IconData cookingPot =
+      IconData(0xe764, fontFamily: _family, fontPackage: _package);
   static const IconData crosshairSimple =
       IconData(0xe1d8, fontFamily: _family, fontPackage: _package);
   static const IconData desktopTower =
@@ -89,6 +97,8 @@ class PhLight {
       IconData(0xe28a, fontFamily: _family, fontPackage: _package);
   static const IconData house =
       IconData(0xe2c2, fontFamily: _family, fontPackage: _package);
+  static const IconData imageSquare =
+      IconData(0xe2cc, fontFamily: _family, fontPackage: _package);
   static const IconData info =
       IconData(0xe2ce, fontFamily: _family, fontPackage: _package);
   static const IconData key =
@@ -115,6 +125,8 @@ class PhLight {
       IconData(0xe326, fontFamily: _family, fontPackage: _package);
   static const IconData microphoneSlash =
       IconData(0xe328, fontFamily: _family, fontPackage: _package);
+  static const IconData minusCircle =
+      IconData(0xe32c, fontFamily: _family, fontPackage: _package);
   static const IconData moon =
       IconData(0xe330, fontFamily: _family, fontPackage: _package);
   static const IconData moonStars =
@@ -193,6 +205,8 @@ class PhLight {
       IconData(0xe4a6, fontFamily: _family, fontPackage: _package);
   static const IconData trendUp =
       IconData(0xe4ae, fontFamily: _family, fontPackage: _package);
+  static const IconData uploadSimple =
+      IconData(0xe4c0, fontFamily: _family, fontPackage: _package);
   static const IconData warningCircle =
       IconData(0xe4e2, fontFamily: _family, fontPackage: _package);
   static const IconData waveform =

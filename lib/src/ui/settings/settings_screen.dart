@@ -2,6 +2,7 @@ import 'package:adhan/adhan.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/nutrition_providers.dart';
 import '../../providers/security_providers.dart';
 import '../../providers/settings_providers.dart';
 import '../../providers/user_settings_providers.dart';
@@ -15,6 +16,7 @@ import '../widgets/ph_light_icons.dart';
 import '../widgets/status_card.dart';
 import 'calculation_labels.dart';
 import 'location_sheet.dart';
+import 'nutrition_targets_sheet.dart';
 import 'option_picker_sheet.dart';
 import 'widgets/settings_row.dart';
 import 'widgets/theme_picker.dart';
@@ -53,6 +55,15 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             ThemePicker(columns: windowSize.isCompact ? 2 : 3),
+            const SizedBox(height: 36),
+            const SectionHeader(
+              eyebrow: 'NUTRITION',
+              title: 'Daily targets',
+              titleSize: 22,
+              subtitle: 'What the dashboard measures the day against.',
+            ),
+            const SizedBox(height: 16),
+            const _NutritionTargetsSection(),
             const SizedBox(height: 36),
             const SectionHeader(
               eyebrow: 'SECURITY',
@@ -94,6 +105,81 @@ class SettingsScreen extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Nutrition targets
+// ---------------------------------------------------------------------------
+
+/// The four daily goals, each row opening the same editing sheet.
+///
+/// A row whose value has never been set says so, rather than presenting
+/// the fallback as if it were a choice the user made.
+class _NutritionTargetsSection extends ConsumerWidget {
+  const _NutritionTargetsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final targets = ref.watch(nutritionTargetsProvider);
+    final settings = ref.watch(userSettingsControllerProvider).value;
+
+    Widget row({
+      required IconData icon,
+      required String title,
+      required int value,
+      required String unit,
+      required bool isConfigured,
+    }) {
+      return SettingsRow(
+        icon: icon,
+        title: title,
+        subtitle: isConfigured ? null : 'Default',
+        onTap: () => showNutritionTargetsSheet(context),
+        trailing: Text(
+          '$value $unit',
+          style: context.typography.ui(
+            size: 14,
+            weight: FontWeight.w600,
+            color: isConfigured ? palette.textPrimary : palette.textMuted,
+          ),
+        ),
+      );
+    }
+
+    return SettingsGroup(
+      children: [
+        row(
+          icon: PhLight.fire,
+          title: 'Calories',
+          value: targets.calories,
+          unit: 'kcal',
+          isConfigured: settings?.dailyCalorieTarget != null,
+        ),
+        row(
+          icon: PhLight.bowlFood,
+          title: 'Protein',
+          value: targets.protein,
+          unit: 'g',
+          isConfigured: settings?.proteinTargetGrams != null,
+        ),
+        row(
+          icon: PhLight.bowlFood,
+          title: 'Carbs',
+          value: targets.carbs,
+          unit: 'g',
+          isConfigured: settings?.carbTargetGrams != null,
+        ),
+        row(
+          icon: PhLight.drop,
+          title: 'Fat',
+          value: targets.fat,
+          unit: 'g',
+          isConfigured: settings?.fatTargetGrams != null,
+        ),
+      ],
     );
   }
 }

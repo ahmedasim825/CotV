@@ -17,6 +17,10 @@ class UserSettings {
     this.listensForWakeWord = false,
     this.voiceName,
     this.aiMemorySummary,
+    this.dailyCalorieTarget,
+    this.proteinTargetGrams,
+    this.carbTargetGrams,
+    this.fatTargetGrams,
   });
 
   /// The single key this settings record is always stored under.
@@ -82,6 +86,26 @@ class UserSettings {
   @HiveField(9)
   final String? aiMemorySummary;
 
+  /// The daily nutrition goals the dashboard ring and macro bars are
+  /// measured against.
+  ///
+  /// Null means "not configured", which is what lets `NutritionTargets`
+  /// fall back per field: setting a calorie goal alone leaves the three
+  /// macro goals on their defaults rather than zeroing them. Records
+  /// written before these fields existed read back as null, which is
+  /// exactly that state.
+  @HiveField(10)
+  final int? dailyCalorieTarget;
+
+  @HiveField(11)
+  final int? proteinTargetGrams;
+
+  @HiveField(12)
+  final int? carbTargetGrams;
+
+  @HiveField(13)
+  final int? fatTargetGrams;
+
   bool get hasLocation => latitude != null && longitude != null;
 
   UserSettings copyWith({
@@ -94,6 +118,10 @@ class UserSettings {
     bool? listensForWakeWord,
     String? voiceName,
     String? aiMemorySummary,
+    int? dailyCalorieTarget,
+    int? proteinTargetGrams,
+    int? carbTargetGrams,
+    int? fatTargetGrams,
   }) {
     return UserSettings(
       id: id,
@@ -107,6 +135,10 @@ class UserSettings {
       listensForWakeWord: listensForWakeWord ?? this.listensForWakeWord,
       voiceName: voiceName ?? this.voiceName,
       aiMemorySummary: aiMemorySummary ?? this.aiMemorySummary,
+      dailyCalorieTarget: dailyCalorieTarget ?? this.dailyCalorieTarget,
+      proteinTargetGrams: proteinTargetGrams ?? this.proteinTargetGrams,
+      carbTargetGrams: carbTargetGrams ?? this.carbTargetGrams,
+      fatTargetGrams: fatTargetGrams ?? this.fatTargetGrams,
     );
   }
 }

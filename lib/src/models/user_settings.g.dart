@@ -29,13 +29,17 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       listensForWakeWord: fields[7] == null ? false : fields[7] as bool,
       voiceName: fields[8] as String?,
       aiMemorySummary: fields[9] as String?,
+      dailyCalorieTarget: (fields[10] as num?)?.toInt(),
+      proteinTargetGrams: (fields[11] as num?)?.toInt(),
+      carbTargetGrams: (fields[12] as num?)?.toInt(),
+      fatTargetGrams: (fields[13] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, UserSettings obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -55,7 +59,15 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       ..writeByte(8)
       ..write(obj.voiceName)
       ..writeByte(9)
-      ..write(obj.aiMemorySummary);
+      ..write(obj.aiMemorySummary)
+      ..writeByte(10)
+      ..write(obj.dailyCalorieTarget)
+      ..writeByte(11)
+      ..write(obj.proteinTargetGrams)
+      ..writeByte(12)
+      ..write(obj.carbTargetGrams)
+      ..writeByte(13)
+      ..write(obj.fatTargetGrams);
   }
 
   @override

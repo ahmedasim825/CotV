@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../food/food_route.dart';
+import '../../food/food_search_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 
 /// The three shortcut pills under the dashboard.
 ///
-/// "Talk to Milo" is live — it opens the same end drawer the floating
-/// launcher does. The other two are inert this pass: the dashboard is
-/// frontend-only, and a pill that silently does nothing is better than one
-/// wired to a half-built sheet.
+/// "Talk to Milo" opens the same end drawer the floating launcher does,
+/// and "Log Food" opens the food logger. "Add Task" is still inert: a
+/// pill that silently does nothing is better than one wired to a
+/// half-built sheet.
 class QuickActionsGrid extends StatelessWidget {
   const QuickActionsGrid({super.key});
 
@@ -26,7 +28,11 @@ class QuickActionsGrid extends StatelessWidget {
             onTap: () => Scaffold.of(context).openEndDrawer(),
           ),
           const _ActionPill(icon: PhLight.plus, label: 'Add Task'),
-          const _ActionPill(icon: PhLight.scan, label: 'Scan Notes'),
+          _ActionPill(
+            icon: PhLight.forkKnife,
+            label: 'Log Food',
+            onTap: () => pushFoodPage(context, const FoodSearchScreen()),
+          ),
         ];
 
         if (!horizontal) {

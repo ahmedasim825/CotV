@@ -5,6 +5,7 @@ import '../providers/focus_session_providers.dart';
 import '../providers/milo_providers.dart';
 import '../providers/study_providers.dart';
 import 'focus/focus_session_overlay.dart';
+import 'food/food_search_screen.dart';
 import 'habits/habit_screen.dart';
 import 'home/home_screen.dart';
 import 'milo/milo_assistant_screen.dart';
@@ -18,7 +19,7 @@ import 'widgets/ambient_background.dart';
 import 'widgets/ph_light_icons.dart';
 
 /// Top-level destinations.
-enum AppDestination { home, tasks, habits, study, prayers, settings }
+enum AppDestination { home, tasks, habits, study, food, prayers, settings }
 
 extension AppDestinationX on AppDestination {
   String get label {
@@ -31,6 +32,8 @@ extension AppDestinationX on AppDestination {
         return 'Habits';
       case AppDestination.study:
         return 'Study';
+      case AppDestination.food:
+        return 'Food';
       case AppDestination.prayers:
         return 'Prayers';
       case AppDestination.settings:
@@ -48,6 +51,8 @@ extension AppDestinationX on AppDestination {
         return PhLight.target;
       case AppDestination.study:
         return PhLight.timer;
+      case AppDestination.food:
+        return PhLight.bowlFood;
       case AppDestination.prayers:
         return PhLight.mosque;
       case AppDestination.settings:
@@ -67,6 +72,8 @@ Widget paneFor(AppDestination destination) {
       return const HabitScreen();
     case AppDestination.study:
       return const StudyScreen();
+    case AppDestination.food:
+      return const FoodSearchScreen();
     case AppDestination.prayers:
       return const PrayersScreen();
     case AppDestination.settings:
@@ -231,8 +238,9 @@ class _NavigationSidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          // Six destinations fit a short iPad in landscape, but the rail
-          // still scrolls rather than overflowing if the list grows again.
+          // Seven destinations fit a short iPad in landscape, but the
+          // rail still scrolls rather than overflowing if the list grows
+          // again.
           // Labels stay here — the rail has the width for them, and it is
           // the surface where a destination's name is worth the space.
           Expanded(
@@ -356,9 +364,10 @@ class _BottomNavBar extends StatelessWidget {
 
 /// One destination in the phone bar.
 ///
-/// Icon-only. Six labels across a 393pt phone leave ~65pt each, which
+/// Icon-only. Seven labels across a 393pt phone leave ~56pt each, which
 /// ellipsises the longer ones — and a truncated label names a destination no
-/// better than its glyph does.
+/// better than its glyph does. The 46pt selection pill and the 48pt touch
+/// target still fit inside that.
 ///
 /// The label is not dropped, only moved: it stays the [Semantics] label, so
 /// screen readers are unaffected, and becomes a [Tooltip], so a long press

@@ -225,7 +225,17 @@ class FoodApiService {
 
     final foods = body['foods'];
     final hits = foods is List
-        ? foods.whereType<Map<String, dynamic>>().map(_hitFromUsda).toList()
+        ? foods
+            .whereType<Map<String, dynamic>>()
+            // Some Foundation records come back with 70-odd nutrients and
+            // no Energy row of any kind - not 1008, not 1062, not the
+            // legacy 208. Energy for those lives only on the detail
+            // endpoint. Keeping them would put a 0 kcal row at the very
+            // top of the list, because generic entries are ranked first,
+            // and logging one would add nothing to the day.
+            .where(_usdaHasEnergy)
+            .map(_hitFromUsda)
+            .toList()
         : <FoodSearchHit>[];
 
     if (hits.isEmpty) return _searchOpenFoodFacts(trimmed);
@@ -273,6 +283,25 @@ class FoodApiService {
         servingWeightGrams: _usdaServingGrams(food),
       ),
     );
+  }
+
+  /// Whether a search record carries any Energy row at all.
+  ///
+  /// Distinct from an energy row whose value is zero: water really is
+  /// 0 kcal and belongs in the results, while a record with no energy row
+  /// simply did not ship one in this payload.
+  bool _usdaHasEnergy(Map<String, dynamic> food) {
+    final nutrients = food['foodNutrients'];
+    if (nutrients is! List) return false;
+
+    for (final nutrient in nutrients.whereType<Map<String, dynamic>>()) {
+      final id = _number(nutrient['nutrientId'])?.toInt();
+      if (id == _nutrientCalories || id == _nutrientKilojoules) return true;
+      if (nutrient['nutrientNumber']?.toString() == _legacyEnergyNumber) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Pulls one nutrient out by id.

@@ -475,6 +475,63 @@ void main() {
           (await api.searchFoods('water')).single.item.per100g.calories, 0);
     });
 
+    test('drops records that carry no Energy row at all', () async {
+      // Some USDA Foundation records ship 70-odd nutrients with no energy
+      // among them - it lives only on the detail endpoint. Generic
+      // entries rank first, so keeping one would put a 0 kcal row at the
+      // top of the results. Verified live: "oats" returns such a record.
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'totalHits': 2,
+            'foods': [
+              {
+                'description': 'Oats, no energy row',
+                'dataType': 'Foundation',
+                'foodNutrients': [
+                  {'nutrientId': 1003, 'value': 13.2, 'unitName': 'G'},
+                  {'nutrientId': 1079, 'value': 10.1, 'unitName': 'G'},
+                ],
+              },
+              {
+                'description': 'Oats, rolled',
+                'dataType': 'SR Legacy',
+                'foodNutrients': [
+                  {'nutrientId': 1008, 'value': 389, 'unitName': 'KCAL'},
+                ],
+              },
+            ],
+          }),
+          200));
+
+      final hits = await api.searchFoods('oats');
+
+      expect(hits.map((h) => h.item.name).toList(), ['Oats, rolled']);
+    });
+
+    test('keeps a food whose energy row really is zero', () async {
+      // Water has an Energy row reading 0. That is a measurement, not a
+      // missing field, and it belongs in the results.
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'totalHits': 1,
+            'foods': [
+              {
+                'description': 'Water, bottled, generic',
+                'dataType': 'Foundation',
+                'foodNutrients': [
+                  {'nutrientId': 1008, 'value': 0, 'unitName': 'KCAL'},
+                ],
+              },
+            ],
+          }),
+          200));
+
+      final hits = await api.searchFoods('water');
+
+      expect(hits.single.item.name, 'Water, bottled, generic');
+      expect(hits.single.item.per100g.calories, 0);
+    });
+
     test('a generic food has no declared serving and reads per 100 g',
         () async {
       final api =
@@ -531,12 +588,16 @@ void main() {
               {
                 'description': 'Something New',
                 'dataType': 'Experimental',
-                'foodNutrients': <Object>[],
+                'foodNutrients': [
+                  {'nutrientId': 1008, 'value': 100, 'unitName': 'KCAL'},
+                ],
               },
               {
                 'description': 'Broccoli, raw',
                 'dataType': 'Foundation',
-                'foodNutrients': <Object>[],
+                'foodNutrients': [
+                  {'nutrientId': 1008, 'value': 31, 'unitName': 'KCAL'},
+                ],
               },
             ],
           }),
@@ -915,12 +976,16 @@ const Map<String, dynamic> _usdaTwoBranded = {
     {
       'description': 'COLA A',
       'dataType': 'Branded',
-      'foodNutrients': <Object>[],
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 42, 'unitName': 'KCAL'},
+      ],
     },
     {
       'description': 'COLA B',
       'dataType': 'Branded',
-      'foodNutrients': <Object>[],
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 44, 'unitName': 'KCAL'},
+      ],
     },
   ],
 };

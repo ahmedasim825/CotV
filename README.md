@@ -230,6 +230,12 @@ flutter build ios --no-codesign --release
 CI packages the result as an unsigned `.ipa` for SideStore. Grab it from the
 run's artifacts.
 
+**Minimum iOS is 16.0**, raised from 15.0 because App Intents are a 16+
+API and `flutter_app_intents` refuses to resolve below it — CocoaPods fails
+the build outright rather than degrading. The target device (iPhone 14 Pro)
+shipped with iOS 16, so this costs nothing here, but it does drop iOS 15
+devices.
+
 **The App Intents are unverified.** `ios/Runner/AppDelegate.swift` declares
 `StartStudyIntent` and `StopStudyIntent` — iOS discovers intents by scanning
 the compiled binary, so they have to exist as static Swift, and

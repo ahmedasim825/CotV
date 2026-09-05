@@ -32,6 +32,18 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# local_auth_windows 2.0.2 — the newest there is — still includes
+# <experimental/coroutine>. MSVC 14.51 (Visual Studio 18) turned that header's
+# deprecation into a hard error (STL1011), so the plugin stopped compiling on
+# GitHub's windows-latest runner without anything in this repo changing. The
+# error message names this define as the way through; it silences the
+# deprecation, not a real diagnostic.
+#
+# Directory-scoped and declared before the plugins are added below, so it
+# reaches their targets. Remove it once local_auth_windows moves to the C++20
+# <coroutine> header.
+add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

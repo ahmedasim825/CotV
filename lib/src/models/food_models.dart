@@ -1,10 +1,10 @@
 import 'user_settings.dart';
 
-/// The six nutrients this app tracks, as one value.
+/// The seven nutrients this app tracks, as one value.
 ///
 /// Every scaling and aggregation in the food logger goes through this type
-/// rather than six loose doubles, so "half a serving" and "a quarter of the
-/// recipe" are written once and cannot drift apart between screens.
+/// rather than seven loose doubles, so "half a serving" and "a quarter of
+/// the recipe" are written once and cannot drift apart between screens.
 class NutritionTotals {
   const NutritionTotals({
     required this.calories,
@@ -13,6 +13,10 @@ class NutritionTotals {
     required this.fat,
     required this.sodium,
     required this.potassium,
+    // Defaulted rather than required: several databases omit fiber for
+    // a given food, and the sync layer wrote six columns before this
+    // existed. A required seventh would break both.
+    this.fiber = 0,
   });
 
   static const NutritionTotals zero = NutritionTotals(
@@ -22,6 +26,7 @@ class NutritionTotals {
     fat: 0,
     sodium: 0,
     potassium: 0,
+    fiber: 0,
   );
 
   /// Kilocalories.
@@ -31,6 +36,10 @@ class NutritionTotals {
   final double protein;
   final double carbs;
   final double fat;
+
+  /// Grams. Zero also means "this database had no value for it", which
+  /// is why nothing reads a zero here as a measured absence.
+  final double fiber;
 
   /// Milligrams.
   final double sodium;
@@ -44,6 +53,7 @@ class NutritionTotals {
       fat: fat + other.fat,
       sodium: sodium + other.sodium,
       potassium: potassium + other.potassium,
+      fiber: fiber + other.fiber,
     );
   }
 
@@ -55,6 +65,7 @@ class NutritionTotals {
       fat: fat * factor,
       sodium: sodium * factor,
       potassium: potassium * factor,
+      fiber: fiber * factor,
     );
   }
 

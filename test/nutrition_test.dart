@@ -37,6 +37,28 @@ const FoodItem _chicken = FoodItem(
 
 void main() {
   group('NutritionTotals', () {
+    test('carries fiber through scaling, addition and division', () {
+      const meal = NutritionTotals(
+        calories: 200, protein: 10, carbs: 30, fat: 5,
+        sodium: 100, potassium: 250, fiber: 4,
+      );
+
+      expect(meal.scaled(2.5).fiber, closeTo(10, 0.001));
+      expect((meal + meal).fiber, closeTo(8, 0.001));
+      expect(meal.dividedBy(4).fiber, closeTo(1, 0.001));
+      expect(NutritionTotals.zero.fiber, 0);
+    });
+
+    test('fiber defaults to zero so existing call sites still compile', () {
+      // Every database the app talks to omits fiber for some foods, and
+      // the sync layer wrote six columns before this change. A required
+      // seventh parameter would break both.
+      const noFiber = NutritionTotals(
+        calories: 100, protein: 1, carbs: 2, fat: 3, sodium: 4, potassium: 5,
+      );
+      expect(noFiber.fiber, 0);
+    });
+
     test('scales every nutrient by the same factor', () {
       final scaled = _chicken.perServing.scaled(1.5);
 

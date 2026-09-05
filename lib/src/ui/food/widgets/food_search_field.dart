@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/food_models.dart';
 import '../../../providers/nutrition_providers.dart';
-import '../../../services/nutritionix_service.dart';
 import '../../components/components.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
@@ -81,13 +80,6 @@ class FoodSearchResults extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final query = ref.watch(foodSearchQueryProvider).trim();
-
-    if (!ref.watch(nutritionixServiceProvider).isConfigured) {
-      return const StatusCard(
-        message: NutritionixService.keysMissingMessage,
-        tone: StatusTone.error,
-      );
-    }
 
     if (query.length < foodSearchMinLength) {
       return _Hint(

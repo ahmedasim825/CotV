@@ -3,10 +3,15 @@ import 'package:flutter/material.dart';
 import '../../../models/food_models.dart';
 import '../../components/components.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/eyebrow_pill.dart';
 import '../../widgets/ph_light_icons.dart';
 import 'food_thumbnail.dart';
 
 /// One row of the search results.
+///
+/// Everything shown is quoted per 100 g, which is the basis both food
+/// databases return and the only one two rows from different sources can
+/// be compared on.
 class FoodResultTile extends StatelessWidget {
   const FoodResultTile({super.key, required this.hit, required this.onTap});
 
@@ -23,7 +28,7 @@ class FoodResultTile extends StatelessWidget {
       radius: 18,
       elevated: false,
       onTap: onTap,
-      semanticLabel: subtitle == null ? hit.name : '${hit.name}, $subtitle',
+      semanticLabel: '${hit.name}, $subtitle, from ${hit.source.label}',
       child: Row(
         children: [
           FoodThumbnail(url: hit.thumbUrl),
@@ -32,24 +37,54 @@ class FoodResultTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        hit.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.typography.ui(
+                          size: 14.5,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Which database answered. Two rows can carry the same
+                    // food name with different numbers behind them, and
+                    // this is what tells them apart.
+                    EyebrowPill(
+                      label: hit.source.label,
+                      color: hit.source == FoodDataSource.usda
+                          ? palette.accent
+                          : palette.secondary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  hit.name,
+                  subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: context.typography.ui(size: 14.5, weight: FontWeight.w600),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.typography.ui(
-                      size: 12,
-                      color: palette.textMuted,
-                    ),
+                  style: context.typography.ui(
+                    size: 12,
+                    color: palette.textMuted,
                   ),
-                ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _macroLine(),
+                  maxLines: 1,
+                  // Six figures will not fit a narrow phone. That is fine:
+                  // the row is a preview, and the configurator shows all
+                  // seven nutrients in full.
+                  overflow: TextOverflow.ellipsis,
+                  style: context.typography.ui(
+                    size: 11,
+                    color: palette.textMuted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -60,15 +95,21 @@ class FoodResultTile extends StatelessWidget {
     );
   }
 
-  /// Brand, serving and calories, in whichever combination the endpoint
-  /// actually returned — a common food has no brand and no calories.
-  String? _subtitle() {
-    final parts = <String>[
-      if (hit.brandName != null && hit.brandName!.isNotEmpty) hit.brandName!,
-      if (hit.servingPreview != null) hit.servingPreview!,
-      if (hit.caloriesPreview != null)
-        '${hit.caloriesPreview!.round()} kcal',
-    ];
-    return parts.isEmpty ? null : parts.join(' · ');
+  /// Brand where there is one, then the calorie headline.
+  String _subtitle() {
+    final brand = hit.brandName;
+    final calories = '${hit.caloriesPer100g.round()} kcal / 100 g';
+    return brand == null || brand.isEmpty ? calories : '$brand · $calories';
+  }
+
+  /// The macros, fiber, and the two micronutrients, per 100 g.
+  String _macroLine() {
+    final n = hit.item.per100g;
+    return 'P ${n.protein.toStringAsFixed(1)}g · '
+        'C ${n.carbs.toStringAsFixed(1)}g · '
+        'F ${n.fat.toStringAsFixed(1)}g · '
+        'Fib ${n.fiber.toStringAsFixed(1)}g · '
+        'Na ${n.sodium.round()}mg · '
+        'K ${n.potassium.round()}mg';
   }
 }

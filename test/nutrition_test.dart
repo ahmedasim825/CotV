@@ -1,8 +1,9 @@
-// Tests for the food logger's arithmetic and its Nutritionix mapping.
+// Tests for the food logger's arithmetic and its food-API mapping.
 //
-// The scaling and aggregation live in plain value classes, and the mapping
-// runs against captured payloads through a `MockClient`, so none of this
-// needs Hive, a platform channel or a network.
+// The scaling and aggregation live in plain value classes, and the
+// mapping runs against payloads captured from the live APIs through a
+// `MockClient`, so none of this needs Hive, a platform channel or a
+// network.
 
 import 'dart:convert';
 
@@ -14,28 +15,86 @@ import 'package:http/testing.dart';
 
 import 'package:cotv/src/models/food_models.dart';
 import 'package:cotv/src/models/user_settings.dart';
-import 'package:cotv/src/services/nutritionix_service.dart';
+import 'package:cotv/src/services/food_api_service.dart';
 import 'package:cotv/src/ui/food/food_detail_screen.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 
 /// A food with a round serving weight, so a scaled figure is checkable by
-/// eye: 100 g is exactly half a serving.
+/// eye: one 200 g serving is exactly twice the 100 g basis.
 const FoodItem _chicken = FoodItem(
   name: 'grilled chicken breast',
-  perServing: NutritionTotals(
-    calories: 300,
-    protein: 56,
+  source: FoodDataSource.usda,
+  per100g: NutritionTotals(
+    calories: 150,
+    protein: 28,
     carbs: 0,
-    fat: 6.6,
-    sodium: 132,
-    potassium: 500,
+    fat: 3.3,
+    sodium: 66,
+    potassium: 250,
+    fiber: 0,
   ),
-  servingQty: 1,
-  servingUnit: 'breast',
   servingWeightGrams: 200,
 );
 
 void main() {
+  group('FoodItem on a 100 g basis', () {
+    const chicken = FoodItem(
+      name: 'Chicken breast',
+      source: FoodDataSource.usda,
+      per100g: NutritionTotals(
+        calories: 165, protein: 31, carbs: 0, fat: 3.6,
+        sodium: 74, potassium: 256, fiber: 0,
+      ),
+      servingWeightGrams: 284,
+    );
+
+    const broccoli = FoodItem(
+      name: 'Broccoli, raw',
+      source: FoodDataSource.usda,
+      per100g: NutritionTotals(
+        calories: 31, protein: 2.57, carbs: 6.27, fat: 0.34,
+        sodium: 36, potassium: 303, fiber: 2.4,
+      ),
+    );
+
+    test('scales by weight straight off the 100 g basis', () {
+      expect(chicken.totalsForGrams(200).calories, closeTo(330, 0.001));
+      expect(chicken.totalsForGrams(50).protein, closeTo(15.5, 0.001));
+    });
+
+    test('one serving is the declared serving weight', () {
+      expect(chicken.servingGrams, 284);
+      expect(chicken.totalsForServings(1).calories, closeTo(468.6, 0.001));
+      expect(chicken.gramsForServings(2), 568);
+    });
+
+    test('a food with no declared serving falls back to 100 g', () {
+      // USDA Foundation and SR Legacy foods carry servingSize: null, so
+      // 100 g is the only basis there is - and it is the one the numbers
+      // are quoted on, which makes it the honest default.
+      expect(broccoli.hasDeclaredServing, isFalse);
+      expect(broccoli.servingGrams, 100);
+      expect(broccoli.totalsForServings(1).calories, closeTo(31, 0.001));
+      expect(broccoli.basisLabel, 'Per 100 g');
+    });
+
+    test('servings and grams invert each other', () {
+      expect(chicken.servingsForGrams(568), closeTo(2, 0.001));
+      expect(chicken.servingsForGrams(chicken.gramsForServings(1.5)),
+          closeTo(1.5, 0.001));
+    });
+
+    test('every food can be weighed, so the gram field is never dead', () {
+      // The old model returned null grams for a food with no serving
+      // weight, which disabled the field. Nothing does that now.
+      expect(broccoli.gramsForServings(1), 100);
+    });
+
+    test('a declared serving is labelled with its weight', () {
+      expect(chicken.basisLabel, '1 serving · 284 g');
+    });
+  });
+
   group('NutritionTotals', () {
     test('carries fiber through scaling, addition and division', () {
       const meal = NutritionTotals(
@@ -60,13 +119,13 @@ void main() {
     });
 
     test('scales every nutrient by the same factor', () {
-      final scaled = _chicken.perServing.scaled(1.5);
+      final scaled = _chicken.per100g.scaled(1.5);
 
-      expect(scaled.calories, 450);
-      expect(scaled.protein, 84);
-      expect(scaled.fat, closeTo(9.9, 0.001));
-      expect(scaled.sodium, 198);
-      expect(scaled.potassium, 750);
+      expect(scaled.calories, 225);
+      expect(scaled.protein, 42);
+      expect(scaled.fat, closeTo(4.95, 0.001));
+      expect(scaled.sodium, 99);
+      expect(scaled.potassium, 375);
     });
 
     test('adds nutrient by nutrient', () {
@@ -98,45 +157,10 @@ void main() {
     });
 
     test('dividing by a yield of zero returns zero, not infinity', () {
-      final perServing = _chicken.perServing.dividedBy(0);
+      final perServing = _chicken.per100g.dividedBy(0);
 
       expect(perServing.calories, 0);
       expect(perServing.protein, 0);
-    });
-  });
-
-  group('FoodItem', () {
-    test("servings and grams agree at the food's own serving weight", () {
-      final byServing = _chicken.totalsForServings(1.5);
-      final byWeight = _chicken.totalsForGrams(300);
-
-      expect(byWeight.calories, byServing.calories);
-      expect(byWeight.protein, byServing.protein);
-      expect(byWeight.potassium, byServing.potassium);
-    });
-
-    test('converts between servings and grams in both directions', () {
-      expect(_chicken.servingsForGrams(100), 0.5);
-      expect(_chicken.gramsForServings(2.5), 500);
-    });
-
-    test('a food with no serving weight cannot be logged by weight', () {
-      const soup = FoodItem(
-        name: 'soup',
-        perServing: NutritionTotals(
-          calories: 120,
-          protein: 4,
-          carbs: 18,
-          fat: 3,
-          sodium: 890,
-          potassium: 300,
-        ),
-      );
-
-      expect(soup.canWeigh, isFalse);
-      expect(soup.gramsForServings(2), isNull);
-      // Falls back to one serving rather than producing a NaN.
-      expect(soup.totalsForGrams(250).calories, 120);
     });
   });
 
@@ -221,178 +245,420 @@ void main() {
     });
   });
 
-  group('NutritionixService', () {
-    test('refuses to call anything while the keys are placeholders', () async {
-      final service = NutritionixService(
-        httpClient: MockClient((_) async => http.Response('{}', 200)),
-      );
 
-      expect(service.isConfigured, isFalse);
+  group('FoodApiService - Open Food Facts', () {
+    FoodApiService service(MockClientHandler handler) =>
+        FoodApiService(httpClient: MockClient(handler));
+
+    test('identifies the app and a contact, as OFF asks', () async {
+      // OFF has no key to authenticate with - this header is the only
+      // thing distinguishing the app from anonymous traffic it throttles.
+      late http.Request sent;
+      final api = service((request) async {
+        sent = request;
+        return http.Response(jsonEncode(_offNutella), 200);
+      });
+
+      await api.getFoodByBarcode('3017620422003');
+
+      expect(sent.headers['User-Agent'], contains('CotVApp'));
+      expect(sent.headers['User-Agent'], contains('Contact:'));
+      expect(sent.url.toString(),
+          'https://world.openfoodfacts.org/api/v2/product/3017620422003.json');
+    });
+
+    test('converts sodium and potassium from grams to milligrams', () async {
+      // OFF reports both in grams (sodium_unit: "g"). Read as mg,
+      // Nutella's 0.0428 would show as 0 mg instead of 43 mg.
+      final api =
+          service((_) async => http.Response(jsonEncode(_offNutella), 200));
+
+      final food = await api.getFoodByBarcode('3017620422003');
+
+      expect(food.per100g.sodium, closeTo(42.8, 0.01));
+      expect(food.per100g.potassium, closeTo(0, 0.01));
+      expect(food.per100g.calories, 539);
+      expect(food.per100g.protein, closeTo(6.3, 0.001));
+      expect(food.source, FoodDataSource.openFoodFacts);
+    });
+
+    test('a product with potassium converts that too', () async {
+      final api =
+          service((_) async => http.Response(jsonEncode(_offChips), 200));
+
+      final food = await api.getFoodByBarcode('028400090858');
+
+      expect(food.per100g.potassium, closeTo(1236.75, 0.01));
+      expect(food.servingWeightGrams, 28.3);
+    });
+
+    test('reads fiber, which the macro grid now shows', () async {
+      final api =
+          service((_) async => http.Response(jsonEncode(_offChips), 200));
+
+      expect((await api.getFoodByBarcode('1')).per100g.fiber,
+          closeTo(4.4, 0.001));
+    });
+
+    test('an unknown barcode is a clear miss, not a crash', () async {
+      // OFF answers 200 with status 0 for a code it does not know. A
+      // status-code-only check would sail past this and then throw on the
+      // missing product key.
+      final api = service((_) async => http.Response(
+          jsonEncode(
+              {'status': 0, 'status_verbose': 'no code or invalid code'}),
+          200));
+
       await expectLater(
-        service.searchFoods('chicken'),
-        throwsA(
-          isA<NutritionixException>().having(
-            (error) => error.message,
-            'message',
-            contains('keys are not set'),
-          ),
-        ),
+        api.getFoodByBarcode('0000000000000'),
+        throwsA(isA<FoodApiException>().having(
+            (e) => e.message, 'message', contains('0000000000000'))),
       );
     });
+
+    test('falls back to product_name_en when product_name is missing',
+        () async {
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': {
+              'product_name_en': 'Sparkling Water',
+              'nutriments': {'energy-kcal_100g': 0},
+            },
+          }),
+          200));
+
+      expect((await api.getFoodByBarcode('1')).name, 'Sparkling Water');
+    });
+
+    test('a product with no nutriments reads as zeros, not an exception',
+        () async {
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': {'product_name': 'Mystery'},
+          }),
+          200));
+
+      final food = await api.getFoodByBarcode('1');
+
+      expect(food.name, 'Mystery');
+      expect(food.per100g.calories, 0);
+    });
+
+    test('a serving_quantity string still parses', () async {
+      // OFF returns this as an int, a double or a string depending on the
+      // product.
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'status': 1,
+            'product': {
+              'product_name': 'Yoghurt',
+              'serving_quantity': '125',
+              'nutriments': {'energy-kcal_100g': 60},
+            },
+          }),
+          200));
+
+      expect((await api.getFoodByBarcode('1')).servingWeightGrams, 125);
+    });
+  });
+
+  group('FoodApiService - USDA search', () {
+    FoodApiService service(MockClientHandler handler,
+            {String key = 'test-key'}) =>
+        FoodApiService(httpClient: MockClient(handler), usdaApiKey: key);
 
     test('a blank query short-circuits before any request', () async {
-      final service = _service((_) async => throw StateError('no request'));
-
-      expect(await service.searchFoods('   '), isEmpty);
+      final api = service((_) async => throw StateError('no request'));
+      expect(await api.searchFoods('   '), isEmpty);
     });
 
-    test('sends the credentials as headers, never in the URL', () async {
-      late http.Request sent;
-      final service = _service((request) async {
-        sent = request;
-        return http.Response(
-          jsonEncode({'common': <Object>[], 'branded': <Object>[]}),
-          200,
-        );
-      });
+    test('reads calories from kcal, never the kJ row', () async {
+      // USDA returns Energy twice: id 1062 in kJ and id 1008 in kcal.
+      // Matching the name "Energy" picks whichever came first and reports
+      // broccoli at 132 kcal instead of 31.
+      final api =
+          service((_) async => http.Response(jsonEncode(_usdaBroccoli), 200));
 
-      await service.searchFoods('chicken');
+      final hits = await api.searchFoods('broccoli');
 
-      expect(sent.headers['x-app-id'], 'test-id');
-      expect(sent.headers['x-app-key'], 'test-key');
-      expect(sent.headers['x-remote-user-id'], '0');
-      expect(sent.url.queryParameters['query'], 'chicken');
-      expect(sent.url.toString(), isNot(contains('test-key')));
+      expect(hits.single.item.per100g.calories, 31);
+      expect(hits.single.item.per100g.potassium, 303);
+      expect(hits.single.item.per100g.sodium, 36);
+      expect(hits.single.item.per100g.protein, closeTo(2.57, 0.001));
+      expect(hits.single.item.source, FoodDataSource.usda);
     });
 
-    test('merges common and branded hits, common first', () async {
-      final service = _service(
-        (_) async => http.Response(jsonEncode(_instantBody), 200),
-      );
+    test('reads fiber by nutrient id 1079', () async {
+      final api =
+          service((_) async => http.Response(jsonEncode(_usdaBroccoli), 200));
 
-      final hits = await service.searchFoods('cola');
-
-      expect(hits, hasLength(2));
-      expect(hits.first.name, 'cola');
-      expect(hits.first.isBranded, isFalse);
-      // A common hit carries a serving but no calories.
-      expect(hits.first.servingPreview, '1 fl oz');
-      expect(hits.first.caloriesPreview, isNull);
-
-      expect(hits.last.name, 'Coca-Cola Classic');
-      expect(hits.last.isBranded, isTrue);
-      expect(hits.last.brandName, 'Coca-Cola');
-      expect(hits.last.caloriesPreview, 140);
+      expect((await api.searchFoods('broccoli')).single.item.per100g.fiber,
+          closeTo(2.4, 0.001));
     });
 
-    test('reads every nutrient the logger shows', () async {
-      final service = _service(
-        (_) async => http.Response(jsonEncode(_naturalNutrientsBody), 200),
-      );
-
-      final food = await service.getFoodDetails('grilled chicken breast');
-
-      expect(food.name, 'grilled chicken breast');
-      expect(food.brandName, isNull);
-      expect(food.perServing.calories, 284.31);
-      expect(food.perServing.protein, 53.4);
-      expect(food.perServing.carbs, 0);
-      expect(food.perServing.fat, 6.18);
-      expect(food.servingWeightGrams, 174);
-      expect(food.servingUnit, 'breast');
-      expect(food.thumbUrl, contains('thumb'));
-      expect(food.highresUrl, contains('highres'));
-    });
-
-    test('falls back to full_nutrients when nf_potassium is null', () async {
-      final service = _service(
-        (_) async => http.Response(jsonEncode(_naturalNutrientsBody), 200),
-      );
-
-      final food = await service.getFoodDetails('grilled chicken breast');
-
-      // The payload carries `nf_potassium: null` with the real value under
-      // attr_id 306, which is the common shape from /natural/nutrients.
-      expect(food.perServing.potassium, 440.22);
-      expect(food.perServing.sodium, 127.02);
-    });
-
-    test('a barcode lookup keeps the brand and the UPC', () async {
-      late Uri requested;
-      final service = _service((request) async {
-        requested = request.url;
-        return http.Response(jsonEncode(_barcodeBody), 200);
-      });
-
-      final food = await service.getFoodByBarcode('049000006346');
-
-      expect(requested.path, endsWith('/search/item'));
-      expect(requested.queryParameters['upc'], '049000006346');
-      expect(food.name, 'Coca-Cola Classic');
-      expect(food.brandName, 'Coca-Cola');
-      expect(food.upc, '049000006346');
-      expect(food.perServing.calories, 140);
-      expect(food.perServing.sodium, 45);
-    });
-
-    test('a missing nutrient reads as zero rather than throwing', () async {
-      final service = _service(
-        (_) async => http.Response(
+    test('falls back to the legacy 208 nutrient number when 1008 is absent',
+        () async {
+      // "208" arrives in nutrientNumber, not nutrientId - matching it
+      // against nutrientId would never hit.
+      final api = service((_) async => http.Response(
           jsonEncode({
+            'totalHits': 1,
             'foods': [
-              {'food_name': 'plain water', 'nf_calories': 0},
+              {
+                'description': 'Old Record',
+                'dataType': 'SR Legacy',
+                'foodNutrients': [
+                  {
+                    'nutrientNumber': '208',
+                    'nutrientName': 'Energy',
+                    'value': 88,
+                    'unitName': 'KCAL',
+                  },
+                ],
+              },
             ],
           }),
-          200,
-        ),
-      );
+          200));
 
-      final food = await service.getFoodByBarcode('1');
-
-      expect(food.perServing.protein, 0);
-      expect(food.perServing.potassium, 0);
-      expect(food.servingWeightGrams, isNull);
-      expect(food.canWeigh, isFalse);
+      expect((await api.searchFoods('x')).single.item.per100g.calories, 88);
     });
 
-    test('a 401 names the credentials', () async {
-      final service = _service((_) async => http.Response('{}', 401));
+    test('converts a kilojoule-only record to kcal', () async {
+      // 132 kJ / 4.184 = 31.5 kcal. Reporting 0 for a real food would be
+      // worse than converting.
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'totalHits': 1,
+            'foods': [
+              {
+                'description': 'Kilojoule Only',
+                'dataType': 'Foundation',
+                'foodNutrients': [
+                  {
+                    'nutrientId': 1062,
+                    'nutrientName': 'Energy',
+                    'value': 132,
+                    'unitName': 'kJ',
+                  },
+                ],
+              },
+            ],
+          }),
+          200));
+
+      expect((await api.searchFoods('x')).single.item.per100g.calories,
+          closeTo(31.55, 0.01));
+    });
+
+    test('a genuinely zero-calorie food stays zero, not converted', () async {
+      // Water carries 1008 = 0. The fallback chain must not mistake that
+      // for "missing" and go hunting for a kJ row to inflate it with.
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'totalHits': 1,
+            'foods': [
+              {
+                'description': 'Water, bottled',
+                'dataType': 'Foundation',
+                'foodNutrients': [
+                  {'nutrientId': 1008, 'value': 0, 'unitName': 'KCAL'},
+                  {'nutrientId': 1062, 'value': 0, 'unitName': 'kJ'},
+                ],
+              },
+            ],
+          }),
+          200));
+
+      expect(
+          (await api.searchFoods('water')).single.item.per100g.calories, 0);
+    });
+
+    test('a generic food has no declared serving and reads per 100 g',
+        () async {
+      final api =
+          service((_) async => http.Response(jsonEncode(_usdaBroccoli), 200));
+
+      final food = (await api.searchFoods('broccoli')).single.item;
+
+      expect(food.hasDeclaredServing, isFalse);
+      expect(food.basisLabel, 'Per 100 g');
+    });
+
+    test('a branded food keeps its gram serving size', () async {
+      final api =
+          service((_) async => http.Response(jsonEncode(_usdaBranded), 200));
+
+      final food = (await api.searchFoods('chicken breast')).single.item;
+
+      expect(food.servingWeightGrams, 284);
+      expect(food.brandName, 'GIANT EAGLE');
+    });
+
+    test('ranks whole foods first, then survey, then branded', () async {
+      // USDA's own ordering buries the raw cut under supermarket packages.
+      final api =
+          service((_) async => http.Response(jsonEncode(_usdaMixed), 200));
+
+      final hits = await api.searchFoods('chicken breast');
+
+      expect(hits.map((h) => h.item.name).toList(), [
+        'Chicken, broilers, breast, raw',
+        'Chicken, breast, roasted',
+        'Chicken breast, rotisserie',
+        'CHICKEN BREAST',
+      ]);
+      expect(hits.first.isBranded, isFalse);
+    });
+
+    test('holds USDA relevance order within one data type', () async {
+      // The sort must not shuffle equals: USDA already ranked these two
+      // against each other and knows the query better than a tie-break.
+      final api = service(
+          (_) async => http.Response(jsonEncode(_usdaTwoBranded), 200));
+
+      final hits = await api.searchFoods('cola');
+
+      expect(hits.map((h) => h.item.name).toList(), ['COLA A', 'COLA B']);
+    });
+
+    test('an unfamiliar data type sorts last, not first', () async {
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'totalHits': 2,
+            'foods': [
+              {
+                'description': 'Something New',
+                'dataType': 'Experimental',
+                'foodNutrients': <Object>[],
+              },
+              {
+                'description': 'Broccoli, raw',
+                'dataType': 'Foundation',
+                'foodNutrients': <Object>[],
+              },
+            ],
+          }),
+          200));
+
+      expect((await api.searchFoods('x')).first.item.name, 'Broccoli, raw');
+    });
+
+    test('sends the query and the key, and asks for every data group',
+        () async {
+      late http.Request sent;
+      final api = service((request) async {
+        sent = request;
+        return http.Response(jsonEncode(_usdaBroccoli), 200);
+      });
+
+      await api.searchFoods('oats');
+
+      expect(sent.url.queryParameters['query'], 'oats');
+      expect(sent.url.queryParameters['api_key'], 'test-key');
+      expect(sent.url.queryParameters['dataType'], contains('Foundation'));
+      expect(sent.url.queryParameters['dataType'], contains('Branded'));
+    });
+
+    test('a rejected key says so', () async {
+      final api = service((_) async => http.Response(
+          jsonEncode({
+            'error': {'code': 'API_KEY_INVALID'},
+          }),
+          403));
 
       await expectLater(
-        service.getFoodDetails('chicken'),
-        throwsA(
-          isA<NutritionixException>().having(
-            (error) => error.message,
-            'message',
-            contains('app id and key'),
-          ),
-        ),
+        api.searchFoods('oats'),
+        throwsA(isA<FoodApiException>()
+            .having((e) => e.message, 'message', contains('USDA API key'))),
       );
     });
 
-    test('an unknown barcode reports the barcode, not a status code', () async {
-      final service = _service((_) async => http.Response('{}', 404));
+    test('a rate-limited DEMO_KEY names the cause', () async {
+      // DEMO_KEY is ~30 requests an hour per IP; a debounced search field
+      // burns that fast, and "429" alone would not explain why.
+      final api =
+          service((_) async => http.Response('{}', 429), key: 'DEMO_KEY');
 
       await expectLater(
-        service.getFoodByBarcode('000000000000'),
-        throwsA(
-          isA<NutritionixException>().having(
-            (error) => error.message,
-            'message',
-            contains('000000000000'),
-          ),
-        ),
+        api.searchFoods('oats'),
+        throwsA(isA<FoodApiException>()
+            .having((e) => e.message, 'message', contains('DEMO_KEY'))),
       );
     });
+  });
 
-    test('an empty foods array is a not-found, not a crash', () async {
-      final service = _service(
-        (_) async => http.Response(jsonEncode({'foods': <Object>[]}), 200),
+  group('FoodApiService - regional fallback', () {
+    test('asks Open Food Facts when USDA finds nothing', () async {
+      // USDA has no Pakistani supermarket brands; OFF does. Verified
+      // live: "shan masala" is 0 from USDA and 21 from OFF.
+      final requested = <String>[];
+      final api = FoodApiService(
+        httpClient: MockClient((request) async {
+          requested.add(request.url.host);
+          if (request.url.host.contains('nal.usda.gov')) {
+            return http.Response(
+                jsonEncode({'totalHits': 0, 'foods': <Object>[]}), 200);
+          }
+          return http.Response(jsonEncode(_offSearchShan), 200);
+        }),
+        usdaApiKey: 'test-key',
+      );
+
+      final hits = await api.searchFoods('shan masala');
+
+      expect(requested, ['api.nal.usda.gov', 'world.openfoodfacts.org']);
+      expect(hits.single.item.name, 'Chana masala mix');
+      expect(hits.single.item.source, FoodDataSource.openFoodFacts);
+      expect(hits.single.item.per100g.fiber, 10);
+    });
+
+    test('does not ask OFF when USDA already answered', () async {
+      // The fallback is for empty results, not a second opinion - an
+      // extra round trip on every successful search would be pure latency.
+      final requested = <String>[];
+      final api = FoodApiService(
+        httpClient: MockClient((request) async {
+          requested.add(request.url.host);
+          return http.Response(jsonEncode(_usdaBroccoli), 200);
+        }),
+        usdaApiKey: 'test-key',
+      );
+
+      await api.searchFoods('broccoli');
+
+      expect(requested, ['api.nal.usda.gov']);
+    });
+
+    test('a failing fallback returns nothing rather than an error', () async {
+      // OFF's legacy CGI search 503s intermittently - observed once
+      // during planning, then fine on retry. "USDA found nothing" must
+      // not become a red error card because the optional lookup flaked.
+      final api = FoodApiService(
+        httpClient: MockClient((request) async {
+          if (request.url.host.contains('nal.usda.gov')) {
+            return http.Response(
+                jsonEncode({'totalHits': 0, 'foods': <Object>[]}), 200);
+          }
+          return http.Response('upstream unavailable', 503);
+        }),
+        usdaApiKey: 'test-key',
+      );
+
+      expect(await api.searchFoods('shan masala'), isEmpty);
+    });
+
+    test('a barcode failure still raises, unlike the fallback', () async {
+      // Only the fallback swallows failures. A scan the user is waiting
+      // on must still say what went wrong.
+      final api = FoodApiService(
+        httpClient: MockClient((_) async => http.Response('nope', 503)),
       );
 
       await expectLater(
-        service.getFoodDetails('unicorn steak'),
-        throwsA(isA<NutritionixException>()),
+        api.getFoodByBarcode('3017620422003'),
+        throwsA(isA<FoodApiException>()),
       );
     });
   });
@@ -446,14 +712,6 @@ void _openViewport(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-/// A service with credentials, so the endpoints can be exercised without
-/// the build carrying real keys.
-NutritionixService _service(MockClientHandler handler) => NutritionixService(
-      httpClient: MockClient(handler),
-      appId: 'test-id',
-      appKey: 'test-key',
-    );
-
 /// The minimum a food screen needs: a themed [MaterialApp] over a scope.
 Widget _harness(Widget child) => ProviderScope(
       child: MaterialApp(
@@ -462,76 +720,207 @@ Widget _harness(Widget child) => ProviderScope(
       ),
     );
 
-/// A captured `/search/instant` response, trimmed to the fields the result
-/// list reads.
-const Map<String, dynamic> _instantBody = {
-  'common': [
-    {
-      'food_name': 'cola',
-      'serving_qty': 1,
-      'serving_unit': 'fl oz',
-      'photo': {'thumb': 'https://nix-tag-images.test/thumb/cola.jpg'},
+/// Trimmed from the live OFF response for Nutella (3017620422003).
+const Map<String, dynamic> _offNutella = {
+  'status': 1,
+  'product': {
+    'product_name': 'Nutella',
+    'brands': 'Nutella, Ferrero',
+    'image_front_url': 'https://images.openfoodfacts.test/nutella-front.jpg',
+    'image_small_url': 'https://images.openfoodfacts.test/nutella-small.jpg',
+    'serving_quantity': null,
+    'nutriments': {
+      'energy-kcal_100g': 539,
+      'proteins_100g': 6.3,
+      'carbohydrates_100g': 57.5,
+      'fat_100g': 30.9,
+      'sodium_100g': 0.0428,
+      'sodium_unit': 'g',
+      'potassium_100g': null,
     },
-  ],
-  'branded': [
-    {
-      'food_name': 'Coca-Cola Classic',
-      'brand_name': 'Coca-Cola',
-      'serving_qty': 12,
-      'serving_unit': 'fl oz',
-      'nf_calories': 140,
-      'photo': {'thumb': 'https://nix-tag-images.test/thumb/coke.jpg'},
-    },
-  ],
+  },
 };
 
-/// A captured `/natural/nutrients` response. `nf_potassium` and `nf_sodium`
-/// are null while the values sit in `full_nutrients` — the case the
-/// fallback exists for.
-const Map<String, dynamic> _naturalNutrientsBody = {
-  'foods': [
+/// Trimmed from the live OFF response for Lays (028400090858).
+const Map<String, dynamic> _offChips = {
+  'status': 1,
+  'product': {
+    'product_name': 'Lays Classic',
+    'serving_quantity': 28.3,
+    'serving_size': '1 portion (28.3 g)',
+    'nutriments': {
+      'energy-kcal_100g': 565.371024734982,
+      'proteins_100g': 6.6,
+      'carbohydrates_100g': 53,
+      'fat_100g': 35.3,
+      'fiber_100g': 4.4,
+      'sodium_100g': 0.49469964664311,
+      'sodium_unit': 'g',
+      'potassium_100g': 1.23674911660777,
+      'potassium_unit': 'g',
+    },
+  },
+};
+
+/// Trimmed from the live OFF text search for "shan masala".
+const Map<String, dynamic> _offSearchShan = {
+  'count': 21,
+  'products': [
     {
-      'food_name': 'grilled chicken breast',
-      'brand_name': null,
-      'serving_qty': 1,
-      'serving_unit': 'breast',
-      'serving_weight_grams': 174,
-      'nf_calories': 284.31,
-      'nf_total_fat': 6.18,
-      'nf_total_carbohydrate': 0,
-      'nf_protein': 53.4,
-      'nf_sodium': null,
-      'nf_potassium': null,
-      'full_nutrients': [
-        {'attr_id': 203, 'value': 53.4},
-        {'attr_id': 306, 'value': 440.22},
-        {'attr_id': 307, 'value': 127.02},
-      ],
-      'photo': {
-        'thumb': 'https://nix-tag-images.test/thumb/chicken.jpg',
-        'highres': 'https://nix-tag-images.test/highres/chicken.jpg',
+      'product_name': 'Chana masala mix',
+      'brands': 'Shan',
+      'nutriments': {
+        'energy-kcal_100g': 250,
+        'proteins_100g': 9,
+        'carbohydrates_100g': 40,
+        'fat_100g': 5,
+        'fiber_100g': 10,
+        'sodium_100g': 4.2,
+        'sodium_unit': 'g',
       },
     },
   ],
 };
 
-/// A captured `/search/item` (barcode) response.
-const Map<String, dynamic> _barcodeBody = {
+/// Trimmed from the live USDA search for "raw broccoli". Note Energy
+/// appearing twice, kJ first - the ordering that breaks a name match.
+const Map<String, dynamic> _usdaBroccoli = {
+  'totalHits': 1,
   'foods': [
     {
-      'food_name': 'Coca-Cola Classic',
-      'brand_name': 'Coca-Cola',
-      'serving_qty': 1,
-      'serving_unit': 'can',
-      'serving_weight_grams': 355,
-      'nf_calories': 140,
-      'nf_total_fat': 0,
-      'nf_total_carbohydrate': 39,
-      'nf_protein': 0,
-      'nf_sodium': 45,
-      'nf_potassium': 0,
-      'upc': '049000006346',
-      'photo': {'thumb': 'https://nix-tag-images.test/thumb/coke.jpg'},
+      'description': 'Broccoli, raw',
+      'dataType': 'Foundation',
+      'servingSize': null,
+      'servingSizeUnit': null,
+      'foodNutrients': [
+        {
+          'nutrientId': 1062,
+          'nutrientName': 'Energy',
+          'value': 132,
+          'unitName': 'kJ',
+        },
+        {
+          'nutrientId': 1008,
+          'nutrientName': 'Energy',
+          'value': 31.0,
+          'unitName': 'KCAL',
+        },
+        {
+          'nutrientId': 1003,
+          'nutrientName': 'Protein',
+          'value': 2.57,
+          'unitName': 'G',
+        },
+        {
+          'nutrientId': 1005,
+          'nutrientName': 'Carbohydrate, by difference',
+          'value': 6.27,
+          'unitName': 'G',
+        },
+        {
+          'nutrientId': 1004,
+          'nutrientName': 'Total lipid (fat)',
+          'value': 0.34,
+          'unitName': 'G',
+        },
+        {
+          'nutrientId': 1079,
+          'nutrientName': 'Fiber, total dietary',
+          'value': 2.4,
+          'unitName': 'G',
+        },
+        {
+          'nutrientId': 1093,
+          'nutrientName': 'Sodium, Na',
+          'value': 36.0,
+          'unitName': 'MG',
+        },
+        {
+          'nutrientId': 1092,
+          'nutrientName': 'Potassium, K',
+          'value': 303,
+          'unitName': 'MG',
+        },
+      ],
+    },
+  ],
+};
+
+/// Trimmed from the live USDA search for "chicken breast".
+const Map<String, dynamic> _usdaBranded = {
+  'totalHits': 1,
+  'foods': [
+    {
+      'description': 'CHICKEN BREAST',
+      'dataType': 'Branded',
+      'brandName': 'GIANT EAGLE',
+      'brandOwner': 'Giant Eagle, Inc.',
+      'servingSize': 284.0,
+      'servingSizeUnit': 'g',
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 165, 'unitName': 'KCAL'},
+        {'nutrientId': 1003, 'value': 20.4, 'unitName': 'G'},
+        {'nutrientId': 1005, 'value': 1.06, 'unitName': 'G'},
+        {'nutrientId': 1004, 'value': 8.1, 'unitName': 'G'},
+        {'nutrientId': 1093, 'value': 433, 'unitName': 'MG'},
+      ],
+    },
+  ],
+};
+
+/// All four data types, branded first - the order USDA actually returns
+/// them in. Verified live: a real 25-item page for "chicken breast" comes
+/// back 10 Branded, 8 Survey, 4 SR Legacy, 3 Foundation.
+const Map<String, dynamic> _usdaMixed = {
+  'totalHits': 4,
+  'foods': [
+    {
+      'description': 'CHICKEN BREAST',
+      'dataType': 'Branded',
+      'brandName': 'GIANT EAGLE',
+      'servingSize': 284.0,
+      'servingSizeUnit': 'g',
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 165, 'unitName': 'KCAL'},
+      ],
+    },
+    {
+      'description': 'Chicken breast, rotisserie',
+      'dataType': 'Survey (FNDDS)',
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 148, 'unitName': 'KCAL'},
+      ],
+    },
+    {
+      'description': 'Chicken, breast, roasted',
+      'dataType': 'SR Legacy',
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 165, 'unitName': 'KCAL'},
+      ],
+    },
+    {
+      'description': 'Chicken, broilers, breast, raw',
+      'dataType': 'Foundation',
+      'foodNutrients': [
+        {'nutrientId': 1008, 'value': 114, 'unitName': 'KCAL'},
+      ],
+    },
+  ],
+};
+
+/// Two entries of the same data type, to pin the tie-break.
+const Map<String, dynamic> _usdaTwoBranded = {
+  'totalHits': 2,
+  'foods': [
+    {
+      'description': 'COLA A',
+      'dataType': 'Branded',
+      'foodNutrients': <Object>[],
+    },
+    {
+      'description': 'COLA B',
+      'dataType': 'Branded',
+      'foodNutrients': <Object>[],
     },
   ],
 };

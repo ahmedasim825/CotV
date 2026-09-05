@@ -76,96 +76,123 @@ class NutritionTotals {
       servings <= 0 ? zero : scaled(1 / servings);
 }
 
-/// A food resolved to actual numbers, from either `/natural/nutrients` or
-/// a barcode lookup.
+/// Which database a food came from.
+enum FoodDataSource { usda, openFoodFacts }
+
+extension FoodDataSourceX on FoodDataSource {
+  /// Shown on a result row, so it is clear which database answered.
+  String get label {
+    switch (this) {
+      case FoodDataSource.usda:
+        return 'USDA';
+      case FoodDataSource.openFoodFacts:
+        return 'Open Food Facts';
+    }
+  }
+}
+
+/// A food resolved to actual numbers.
+///
+/// Nutrients are held **per 100 g**, because that is the basis both
+/// backing databases quote: USDA returns per-100 g values for every data
+/// type, and Open Food Facts' `*_100g` fields are the only ones a product
+/// reliably has. Storing anything else would mean inventing a serving for
+/// the many foods that declare none.
 class FoodItem {
   const FoodItem({
     required this.name,
-    required this.perServing,
+    required this.per100g,
+    required this.source,
     this.brandName,
-    this.servingQty = 1,
-    this.servingUnit = 'serving',
     this.servingWeightGrams,
+    this.servingText,
     this.thumbUrl,
     this.highresUrl,
-    this.upc,
+    this.barcode,
   });
 
   final String name;
 
-  /// Null for a common (unbranded) food.
+  /// Null for a generic (unbranded) food.
   final String? brandName;
 
-  /// The nutrients of exactly one serving as the API defines it.
-  final NutritionTotals perServing;
+  /// The nutrients of exactly 100 g of this food.
+  final NutritionTotals per100g;
 
-  final double servingQty;
-  final String servingUnit;
+  final FoodDataSource source;
 
-  /// What one serving weighs. Null for foods the database has no weight
-  /// for, which is what makes the gram field unusable for them.
+  /// What the database says one serving weighs, when it says anything.
+  /// Null for every USDA Foundation and SR Legacy food, and for OFF
+  /// products with no `serving_quantity`.
   final double? servingWeightGrams;
+
+  /// The database's own description of a serving, e.g. "1 portion (330 ml)".
+  final String? servingText;
 
   final String? thumbUrl;
   final String? highresUrl;
-  final String? upc;
+  final String? barcode;
 
-  bool get canWeigh => servingWeightGrams != null && servingWeightGrams! > 0;
+  bool get hasDeclaredServing =>
+      servingWeightGrams != null && servingWeightGrams! > 0;
 
-  /// e.g. "1 cup · 240 g", or just "1 cup" when there is no weight.
-  String get servingLabel {
-    final quantity = formatAmount(servingQty);
-    if (!canWeigh) return '$quantity $servingUnit';
-    return '$quantity $servingUnit · ${formatAmount(servingWeightGrams!)} g';
+  /// What one "serving" means in grams.
+  ///
+  /// Falls back to 100 g rather than null, so the configurator's gram
+  /// field is live for every food instead of being disabled for the
+  /// generic ones - which are exactly the foods a user is most likely to
+  /// want to weigh out.
+  double get servingGrams => hasDeclaredServing ? servingWeightGrams! : 100;
+
+  /// The line under the title saying what the numbers are quoted on.
+  String get basisLabel {
+    if (!hasDeclaredServing) return 'Per 100 g';
+    if (servingText != null && servingText!.isNotEmpty) {
+      return '$servingText · ${formatAmount(servingGrams)} g';
+    }
+    return '1 serving · ${formatAmount(servingGrams)} g';
   }
+
+  NutritionTotals totalsForGrams(double grams) => per100g.scaled(grams / 100);
 
   NutritionTotals totalsForServings(double servings) =>
-      perServing.scaled(servings);
+      totalsForGrams(servingGrams * servings);
 
-  /// Scales by weight. Falls back to one serving when the food carries no
-  /// weight, so a caller never has to branch on [canWeigh] to get a number.
-  NutritionTotals totalsForGrams(double grams) {
-    if (!canWeigh) return perServing;
-    return perServing.scaled(grams / servingWeightGrams!);
-  }
+  double servingsForGrams(double grams) => grams / servingGrams;
 
-  /// How many servings [grams] works out to.
-  double servingsForGrams(double grams) =>
-      canWeigh ? grams / servingWeightGrams! : 1;
-
-  /// What [servings] weighs.
-  double? gramsForServings(double servings) =>
-      canWeigh ? servingWeightGrams! * servings : null;
+  double gramsForServings(double servings) => servingGrams * servings;
 }
 
-/// One row of `/search/instant`.
+/// One row of the search results.
 ///
-/// Deliberately thinner than [FoodItem]: the instant endpoint returns no
-/// nutrients for common foods and only calories for branded ones, so a hit
-/// has to be resolved into a [FoodItem] before it can be logged.
+/// Carries the fully resolved [FoodItem]: USDA's search endpoint returns
+/// every nutrient inline, so unlike the two-step flow this replaced there
+/// is nothing left to fetch when a row is tapped.
 class FoodSearchHit {
   const FoodSearchHit({
-    required this.name,
-    required this.isBranded,
-    this.brandName,
-    this.thumbUrl,
-    this.servingPreview,
-    this.caloriesPreview,
-    this.upc,
+    required this.item,
+    this.isBranded = false,
+    this.sortRank = 0,
   });
 
-  final String name;
+  final FoodItem item;
+
+  /// Whether this is a packaged product rather than a generic ingredient.
+  /// Display only - ordering goes through [sortRank].
   final bool isBranded;
-  final String? brandName;
-  final String? thumbUrl;
 
-  /// e.g. "1 cup" — what the database considers one serving.
-  final String? servingPreview;
+  /// Where this entry sorts, lowest first. Set from the USDA data type:
+  /// whole-food records outrank survey composites, which outrank branded
+  /// packages. See `FoodApiService.searchFoods`.
+  final int sortRank;
 
-  /// Branded hits carry calories; common hits do not.
-  final double? caloriesPreview;
+  String get name => item.name;
+  String? get brandName => item.brandName;
+  String? get thumbUrl => item.thumbUrl;
+  FoodDataSource get source => item.source;
 
-  final String? upc;
+  /// Calories per 100 g, which is what the row previews.
+  double get caloriesPer100g => item.per100g.calories;
 }
 
 /// Which meal a logged food belongs to.

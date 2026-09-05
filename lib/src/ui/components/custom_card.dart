@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 ///
 /// This is the single-layer card. The nested "double bezel" treatment lives
 /// in `GlassShell` and is reserved for hero surfaces; everything else — a
-/// habit tile, a journal entry, a settings row — should use this so all of
+/// habit tile, a task row, a settings row — should use this so all of
 /// them share one radius, border and shadow language.
 class CustomCard extends StatefulWidget {
   const CustomCard({

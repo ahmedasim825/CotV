@@ -67,6 +67,8 @@ class PhLight {
       IconData(0xe1d8, fontFamily: _family, fontPackage: _package);
   static const IconData desktopTower =
       IconData(0xe562, fontFamily: _family, fontPackage: _package);
+  static const IconData drop =
+      IconData(0xe210, fontFamily: _family, fontPackage: _package);
   static const IconData eye =
       IconData(0xe220, fontFamily: _family, fontPackage: _package);
   static const IconData eyeSlash =
@@ -79,10 +81,14 @@ class PhLight {
       IconData(0xecf0, fontFamily: _family, fontPackage: _package);
   static const IconData floppyDisk =
       IconData(0xe248, fontFamily: _family, fontPackage: _package);
+  static const IconData forkKnife =
+      IconData(0xe262, fontFamily: _family, fontPackage: _package);
   static const IconData gear =
       IconData(0xe270, fontFamily: _family, fontPackage: _package);
   static const IconData globeHemisphereEast =
       IconData(0xe28a, fontFamily: _family, fontPackage: _package);
+  static const IconData house =
+      IconData(0xe2c2, fontFamily: _family, fontPackage: _package);
   static const IconData info =
       IconData(0xe2ce, fontFamily: _family, fontPackage: _package);
   static const IconData key =
@@ -137,6 +143,8 @@ class PhLight {
       IconData(0xe660, fontFamily: _family, fontPackage: _package);
   static const IconData repeat =
       IconData(0xe3f6, fontFamily: _family, fontPackage: _package);
+  static const IconData scan =
+      IconData(0xebb6, fontFamily: _family, fontPackage: _package);
   static const IconData shieldCheck =
       IconData(0xe40c, fontFamily: _family, fontPackage: _package);
   static const IconData smiley =

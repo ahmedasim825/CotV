@@ -40,10 +40,6 @@ extension WindowSizeX on WindowSize {
   /// bottom bar.
   bool get usesNavigationRail => this != WindowSize.compact;
 
-  /// Only expanded is wide enough to show schedule and tasks side by side
-  /// without either pane becoming unusably narrow.
-  bool get usesSplitView => this == WindowSize.expanded;
-
   /// Horizontal page padding — wider gutters as the window grows so line
   /// lengths stay readable rather than stretching edge to edge.
   double get pagePadding {
@@ -54,19 +50,6 @@ extension WindowSizeX on WindowSize {
         return 32;
       case WindowSize.expanded:
         return 40;
-    }
-  }
-
-  /// Vertical pixels per timeline hour. Larger windows can afford a taller,
-  /// more legible timeline.
-  double get hourExtent {
-    switch (this) {
-      case WindowSize.compact:
-        return 76;
-      case WindowSize.medium:
-        return 88;
-      case WindowSize.expanded:
-        return 96;
     }
   }
 }

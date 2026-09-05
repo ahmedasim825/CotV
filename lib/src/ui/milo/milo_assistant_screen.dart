@@ -141,7 +141,7 @@ Future<void> _confirmForget(BuildContext context, WidgetRef ref) async {
     title: 'Forget what Milo knows?',
     message: 'Erases the saved conversation and the summary Milo has built '
         'from it. The next turn starts from nothing. Your prayer times, '
-        'tasks, habits, journal and study logs are not touched.',
+        'tasks, habits and study logs are not touched.',
     confirmLabel: 'Forget',
     confirmIcon: PhLight.brain,
   );

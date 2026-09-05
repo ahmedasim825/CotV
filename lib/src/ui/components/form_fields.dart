@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// The shared decoration for every text input in the app, so a habit's
-/// title field, a journal tag field and a task's description all read as
+/// title field, a subject name field and a task's description all read as
 /// the same control.
 InputDecoration appInputDecoration(
   BuildContext context, {

@@ -4,8 +4,6 @@ import '../../hive_registrar.g.dart';
 import '../models/active_study_session.dart';
 import '../models/chat_message.dart';
 import '../models/habit.dart';
-import '../models/journal_entry.dart';
-import '../models/schedule_item.dart';
 import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/task.dart';
@@ -17,8 +15,6 @@ class HiveBoxes {
 
   static const String tasks = 'tasks';
   static const String habits = 'habits';
-  static const String scheduleItems = 'schedule_items';
-  static const String journalEntries = 'journal_entries';
   static const String userSettings = 'user_settings';
   static const String subjects = 'subjects';
   static const String studyLogs = 'study_logs';
@@ -44,8 +40,6 @@ Future<void> initializeLocalStorage() async {
   await Future.wait([
     Hive.openBox<Task>(HiveBoxes.tasks),
     Hive.openBox<Habit>(HiveBoxes.habits),
-    Hive.openBox<ScheduleItem>(HiveBoxes.scheduleItems),
-    Hive.openBox<JournalEntry>(HiveBoxes.journalEntries),
     Hive.openBox<UserSettings>(HiveBoxes.userSettings),
     Hive.openBox<Subject>(HiveBoxes.subjects),
     Hive.openBox<StudyLog>(HiveBoxes.studyLogs),

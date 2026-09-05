@@ -22,8 +22,6 @@ import 'package:cotv/main.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
-import 'package:cotv/src/models/journal_entry.dart';
-import 'package:cotv/src/models/schedule_item.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -97,8 +95,6 @@ void main() {
     await Future.wait([
       Hive.openBox<Task>(HiveBoxes.tasks),
       Hive.openBox<Habit>(HiveBoxes.habits),
-      Hive.openBox<ScheduleItem>(HiveBoxes.scheduleItems),
-      Hive.openBox<JournalEntry>(HiveBoxes.journalEntries),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
       // The shell reconciles a leftover study session on launch, and
       // Milo's context reads the durable transcript, so these have to

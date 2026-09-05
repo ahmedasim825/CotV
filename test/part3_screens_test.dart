@@ -1,6 +1,5 @@
-// Smoke tests for the Part 3 screens: the habit grid, the journal and its
-// full-screen writer, and the settings screen's theme picker and app-lock
-// section.
+// Smoke tests for the Part 3 screens: the habit grid, and the settings
+// screen's theme picker and app-lock section.
 //
 // Follows the same harness as `widget_test.dart`: real Hive backed by a
 // temp directory, with the plugin-backed services faked out because
@@ -27,14 +26,11 @@ import 'package:cotv/main.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
-import 'package:cotv/src/models/journal_entry.dart';
-import 'package:cotv/src/models/schedule_item.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/habit_providers.dart';
-import 'package:cotv/src/providers/journal_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
 import 'package:cotv/src/providers/theme_providers.dart';
@@ -45,8 +41,6 @@ import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
 import 'package:cotv/src/ui/habits/habit_form_sheet.dart';
 import 'package:cotv/src/ui/habits/widgets/habit_tile.dart';
-import 'package:cotv/src/ui/journal/journal_writer_screen.dart';
-import 'package:cotv/src/ui/widgets/ph_light_icons.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 
 /// Stands in for every `local_auth` / `flutter_secure_storage` call the
@@ -102,8 +96,6 @@ void main() {
     await Future.wait([
       Hive.openBox<Task>(HiveBoxes.tasks),
       Hive.openBox<Habit>(HiveBoxes.habits),
-      Hive.openBox<ScheduleItem>(HiveBoxes.scheduleItems),
-      Hive.openBox<JournalEntry>(HiveBoxes.journalEntries),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
       // The shell reconciles a leftover study session on launch, and
       // Milo's context reads the durable transcript, so these have to
@@ -242,70 +234,6 @@ void main() {
         find.descendant(
           of: find.byType(HabitTile),
           matching: find.text('1'),
-        ),
-        findsOneWidget,
-      );
-    });
-  });
-
-  group('journal', () {
-    testWidgets('lists a stored entry and opens it in the writer',
-        (tester) async {
-      await pumpApp(tester);
-
-      await tester.tap(find.byTooltip('Journal'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Search entries and tags'), findsOneWidget);
-      expect(
-        find.text('Nothing written yet.\nThe first entry is the hard one.'),
-        findsOneWidget,
-      );
-
-      final journal = containerOf(tester).read(journalListProvider.notifier);
-      final entry = JournalEntry(
-        id: 'entry-1',
-        date: DateTime(2026, 9, 2),
-        content: '# Today\n\nA quiet day. **Alhamdulillah.**',
-        mood: JournalMood.good,
-        tags: const ['salah'],
-      );
-
-      await tester.runAsync(() => journal.addEntry(entry));
-      await pumpUntil(
-        tester,
-        () => find.textContaining('A quiet day.').evaluate().isNotEmpty,
-      );
-
-      // The card previews the markdown as plain text — no stray # or **.
-      expect(find.text('Today A quiet day. Alhamdulillah.'), findsOneWidget);
-      // Twice: on the card, and in the tag filter row the entry has
-      // just populated.
-      expect(find.text('#salah'), findsNWidgets(2));
-
-      await tester.tap(find.text('Today A quiet day. Alhamdulillah.'));
-      await pumpUntilPresented(
-        tester,
-        () => find.byType(JournalWriterScreen).evaluate().isNotEmpty,
-      );
-
-      // The writer opens on the stored entry with the raw markdown back in
-      // the editor.
-      expect(
-        find.text('# Today\n\nA quiet day. **Alhamdulillah.**'),
-        findsOneWidget,
-      );
-      expect(find.text('Save'), findsOneWidget);
-
-      // The mood is read from the preview, not the picker: the picker
-      // renders all five labels whatever is selected, so asserting there
-      // would pass for any stored mood.
-      await tester.tap(find.byIcon(PhLight.eye));
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(
-        find.descendant(
-          of: find.byType(JournalWriterScreen),
-          matching: find.text('Good'),
         ),
         findsOneWidget,
       );

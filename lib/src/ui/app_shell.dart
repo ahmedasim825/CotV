@@ -2,47 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/focus_session_providers.dart';
+import '../providers/milo_providers.dart';
 import '../providers/study_providers.dart';
 import 'focus/focus_session_overlay.dart';
 import 'habits/habit_screen.dart';
-import 'home_screen.dart';
-import 'journal/journal_screen.dart';
-import '../providers/milo_providers.dart';
+import 'home/home_screen.dart';
 import 'milo/milo_assistant_screen.dart';
+import 'prayers/prayers_screen.dart';
 import 'responsive/breakpoints.dart';
-import 'schedule/daily_schedule_view.dart';
 import 'settings/settings_screen.dart';
 import 'study/study_screen.dart';
 import 'tasks/task_list_view.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
 import 'widgets/ph_light_icons.dart';
-import 'widgets/prayer_lockout_banner.dart';
 
 /// Top-level destinations.
-enum AppDestination {
-  schedule,
-  tasks,
-  habits,
-  study,
-  journal,
-  prayers,
-  settings
-}
+enum AppDestination { home, tasks, habits, study, prayers, settings }
 
 extension AppDestinationX on AppDestination {
   String get label {
     switch (this) {
-      case AppDestination.schedule:
-        return 'Schedule';
+      case AppDestination.home:
+        return 'Home';
       case AppDestination.tasks:
         return 'Tasks';
       case AppDestination.habits:
         return 'Habits';
       case AppDestination.study:
         return 'Study';
-      case AppDestination.journal:
-        return 'Journal';
       case AppDestination.prayers:
         return 'Prayers';
       case AppDestination.settings:
@@ -52,47 +40,35 @@ extension AppDestinationX on AppDestination {
 
   IconData get icon {
     switch (this) {
-      case AppDestination.schedule:
-        return PhLight.calendarBlank;
+      case AppDestination.home:
+        return PhLight.house;
       case AppDestination.tasks:
         return PhLight.listChecks;
       case AppDestination.habits:
         return PhLight.target;
       case AppDestination.study:
         return PhLight.timer;
-      case AppDestination.journal:
-        return PhLight.notePencil;
       case AppDestination.prayers:
         return PhLight.mosque;
       case AppDestination.settings:
         return PhLight.gear;
     }
   }
-
-  /// Whether this destination can share the screen with another one.
-  ///
-  /// Only the timeline and the task list read well at half width; the
-  /// prayer bento, the habit grid, the journal and settings are already
-  /// multi-column or long-form layouts and take the full pane instead.
-  bool get sharesSplitView =>
-      this == AppDestination.schedule || this == AppDestination.tasks;
 }
 
 /// The pane a destination renders.
 Widget paneFor(AppDestination destination) {
   switch (destination) {
-    case AppDestination.schedule:
-      return const DailyScheduleView();
+    case AppDestination.home:
+      return const HomeScreen();
     case AppDestination.tasks:
       return const TaskListView();
     case AppDestination.habits:
       return const HabitScreen();
     case AppDestination.study:
       return const StudyScreen();
-    case AppDestination.journal:
-      return const JournalScreen();
     case AppDestination.prayers:
-      return const HomeScreen();
+      return const PrayersScreen();
     case AppDestination.settings:
       return const SettingsScreen();
   }
@@ -100,15 +76,15 @@ Widget paneFor(AppDestination destination) {
 
 /// The app's adaptive root.
 ///
-/// Three layouts off one navigation state:
+/// Two layouts off one navigation state:
 ///   * **compact** (iPhone, iPad Slide Over) — one pane, bottom navigation.
-///   * **medium** (iPad portrait) — one pane, navigation rail.
-///   * **expanded** (iPad landscape) — schedule and tasks side by side with
-///     a shared lockout banner above them.
+///   * **medium and expanded** (iPad, desktop) — one pane, navigation rail.
 ///
-/// The banner is hoisted out of the panes in split view so it isn't
-/// duplicated; both child views take a flag for that rather than reaching
-/// for the window size themselves.
+/// Every destination takes the full pane. There is no split view: the two
+/// halves it used to pair were the timeline and the task list, and the
+/// timeline is gone. The dashboard, the prayer bento and the habit grid all
+/// widen into their own multi-column layouts instead, which reads better
+/// than two unrelated screens sharing a window.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -117,7 +93,7 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  AppDestination _destination = AppDestination.schedule;
+  AppDestination _destination = AppDestination.home;
 
   void _select(AppDestination destination) {
     if (_destination != destination) {
@@ -160,9 +136,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           endDrawer: const MiloAssistantScreen(),
           // The launcher is the only way in. The right-edge drag that
           // would otherwise open the drawer starts inside the same 20pt
-          // strip the timeline uses to change days and the task and
-          // journal rows use to swipe away, so it would take those
-          // gestures rather than share them.
+          // strip the task rows use to swipe away, so it would take that
+          // gesture rather than share it.
           endDrawerEnableOpenDragGesture: false,
           body: AmbientBackground(
             child: SafeArea(
@@ -173,7 +148,6 @@ class _AppShellState extends ConsumerState<AppShell> {
                 children: [
                   windowSize.usesNavigationRail
                       ? _RailLayout(
-                          windowSize: windowSize,
                           destination: _destination,
                           onSelect: _select,
                         )
@@ -203,15 +177,10 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-/// Navigation rail plus content, splitting into two panes when wide enough.
+/// Navigation rail plus the active pane.
 class _RailLayout extends StatelessWidget {
-  const _RailLayout({
-    required this.windowSize,
-    required this.destination,
-    required this.onSelect,
-  });
+  const _RailLayout({required this.destination, required this.onSelect});
 
-  final WindowSize windowSize;
   final AppDestination destination;
   final ValueChanged<AppDestination> onSelect;
 
@@ -225,53 +194,7 @@ class _RailLayout extends StatelessWidget {
           thickness: 1,
           color: context.palette.hairline,
         ),
-        Expanded(
-          child: windowSize.usesSplitView && destination.sharesSplitView
-              ? _SplitPanes(destination: destination)
-              : paneFor(destination),
-        ),
-      ],
-    );
-  }
-}
-
-/// Master-detail: the timeline beside the task list, with the prayer status
-/// banner shared above both.
-class _SplitPanes extends StatelessWidget {
-  const _SplitPanes({required this.destination});
-
-  final AppDestination destination;
-
-  /// The timeline gets the larger share: it is the denser of the two and
-  /// degrades faster when narrowed.
-  static const int _scheduleFlex = 6;
-  static const int _tasksFlex = 5;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(40, 16, 40, 0),
-          child: PrayerLockoutBanner(),
-        ),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Expanded(
-                flex: _scheduleFlex,
-                child: DailyScheduleView(showBanner: false),
-              ),
-              VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: context.palette.hairline,
-              ),
-              const Expanded(flex: _tasksFlex, child: TaskListView()),
-            ],
-          ),
-        ),
+        Expanded(child: paneFor(destination)),
       ],
     );
   }
@@ -308,10 +231,10 @@ class _NavigationSidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          // Seven destinations no longer fit a short iPad in landscape, so
-          // the rail scrolls rather than overflowing. Labels stay here —
-          // the rail has the width for them, and it is the surface where a
-          // destination's name is worth the space.
+          // Six destinations fit a short iPad in landscape, but the rail
+          // still scrolls rather than overflowing if the list grows again.
+          // Labels stay here — the rail has the width for them, and it is
+          // the surface where a destination's name is worth the space.
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -433,9 +356,9 @@ class _BottomNavBar extends StatelessWidget {
 
 /// One destination in the phone bar.
 ///
-/// Icon-only. Six labels across a 393pt phone already left ~65pt each and
-/// ellipsised "Schedule"; a seventh makes them unreadable, and a truncated
-/// label names a destination no better than its glyph does.
+/// Icon-only. Six labels across a 393pt phone leave ~65pt each, which
+/// ellipsises the longer ones — and a truncated label names a destination no
+/// better than its glyph does.
 ///
 /// The label is not dropped, only moved: it stays the [Semantics] label, so
 /// screen readers are unaffected, and becomes a [Tooltip], so a long press

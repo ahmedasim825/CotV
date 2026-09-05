@@ -6,14 +6,13 @@ import '../models/prayer_window.dart';
 import 'calendar_providers.dart';
 import 'clock_providers.dart';
 import 'prayer_providers.dart';
-import 'selected_date_providers.dart';
 import 'settings_providers.dart';
 
 /// The full prayer picture for one day: validity windows plus the lockout
 /// blocks that get synced to the device calendar.
 ///
 /// The lockout blocks come from [CalendarSyncService.buildWindows] rather
-/// than being recomputed here, so what the timeline draws and what a
+/// than being recomputed here, so what the app draws and what a
 /// Shortcuts automation reads off the calendar can never drift apart.
 ///
 /// Pass a midnight-normalized date (see [startOfDay]).
@@ -36,14 +35,8 @@ final dailyPrayerScheduleProvider =
   );
 });
 
-/// The schedule for whichever day the timeline is showing.
-final selectedDayPrayerScheduleProvider =
-    Provider.autoDispose<DailyPrayerSchedule>((ref) {
-  return ref.watch(dailyPrayerScheduleProvider(ref.watch(selectedDateProvider)));
-});
-
-/// Live prayer status for *right now*, regardless of which day the timeline
-/// is showing. This is what the lockout banner renders from.
+/// Live prayer status for *right now*. This is what the lockout banner
+/// renders from.
 ///
 /// [activeLockout] is non-null only while the user is inside a lockout
 /// block; [activeWindow] is the (longer) validity window, non-null except in

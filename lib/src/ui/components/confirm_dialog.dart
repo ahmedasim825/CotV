@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 import 'primary_button.dart';
 
 /// Asks the user to confirm something irreversible — deleting a habit,
-/// discarding an unsaved journal entry.
+/// discarding an unsaved task.
 ///
 /// Resolves to true only on an explicit confirm; dismissing by scrim, back
 /// gesture or Cancel all resolve to false, so a caller can treat anything

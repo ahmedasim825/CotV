@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/calendar_sync_models.dart';
-import '../models/daily_prayer_times.dart';
-import '../models/notification_models.dart';
-import '../providers/calendar_providers.dart';
-import '../providers/notification_providers.dart';
-import '../providers/prayer_providers.dart';
-import '../services/calendar_sync_service.dart';
-import 'components/components.dart';
-import 'theme/app_theme.dart';
-import 'widgets/ambient_background.dart';
-import 'widgets/floating_header.dart';
-import 'widgets/ph_light_icons.dart';
-import 'widgets/prayer_grid_tile.dart';
-import 'widgets/prayer_hero_card.dart';
-import 'widgets/reveal_on_entrance.dart';
-import 'widgets/status_card.dart';
+import '../../models/calendar_sync_models.dart';
+import '../../models/daily_prayer_times.dart';
+import '../../models/notification_models.dart';
+import '../../providers/calendar_providers.dart';
+import '../../providers/notification_providers.dart';
+import '../../providers/prayer_providers.dart';
+import '../../services/calendar_sync_service.dart';
+import '../components/components.dart';
+import '../theme/app_theme.dart';
+import '../widgets/ambient_background.dart';
+import '../widgets/floating_header.dart';
+import '../widgets/ph_light_icons.dart';
+import '../widgets/prayer_grid_tile.dart';
+import '../widgets/prayer_hero_card.dart';
+import '../widgets/reveal_on_entrance.dart';
+import '../widgets/status_card.dart';
 
-/// Exercises all three Part 1 services end to end: today's computed prayer
-/// times as an asymmetrical bento grid, and calendar sync / notification
-/// scheduling with visible loading/success/error states.
-class HomeScreen extends ConsumerWidget {
-  const HomeScreen({super.key});
+/// The Prayers tab: today's computed prayer times as an asymmetrical bento
+/// grid, plus calendar sync and notification scheduling with visible
+/// loading/success/error states.
+class PrayersScreen extends ConsumerWidget {
+  const PrayersScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

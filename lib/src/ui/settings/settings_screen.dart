@@ -516,7 +516,7 @@ class _PrivacyNote extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Tasks, habits, journal entries and settings are stored only '
+              'Tasks, habits, study logs and settings are stored only '
               'on this device. The app-lock preference lives in the '
               'system keychain.',
               style: context.typography.ui(

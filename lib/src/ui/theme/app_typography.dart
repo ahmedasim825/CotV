@@ -82,7 +82,7 @@ class AppTypography {
         letterSpacing: 2.4,
       );
 
-  /// Fixed-width, for journal code spans and coordinate readouts.
+  /// Fixed-width, for coordinate readouts and other tabular figures.
   TextStyle mono({
     double size = 12.5,
     Color? color,

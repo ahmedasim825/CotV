@@ -5,7 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/food_models.dart';
+import '../../providers/auth_providers.dart';
 import '../../providers/nutrition_providers.dart';
+import '../../services/nutrition_sync_service.dart';
 import '../components/components.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
@@ -47,6 +49,10 @@ class _RecipeBuilderScreenState extends ConsumerState<RecipeBuilderScreen> {
       List.of(widget.existing?.ingredients ?? const []);
 
   late String? _coverImagePath = widget.existing?.coverImagePath;
+
+  /// True while a cover is going up, so Save can show a spinner rather
+  /// than looking hung on a slow connection.
+  bool _isUploadingCover = false;
 
   String? _error;
 
@@ -112,9 +118,36 @@ class _RecipeBuilderScreenState extends ConsumerState<RecipeBuilderScreen> {
     }
   }
 
-  void _save() {
-    ref.read(customRecipeListProvider.notifier).save(_draft);
-    Navigator.of(context).pop();
+  /// Saves the recipe, uploading a newly picked cover first.
+  ///
+  /// The upload happens before the save rather than after, so the row is
+  /// written with the object path already in it and there is no window
+  /// where a recipe points at a cover that is not there yet. A failed
+  /// upload does not block the save: the recipe is worth more than its
+  /// photo, so it is stored with the local path still set and the error
+  /// shown.
+  Future<void> _save() async {
+    final sync = ref.read(nutritionSyncServiceProvider);
+    final localCover = _coverImagePath;
+    var recipe = _draft;
+
+    if (sync != null && localCover != null) {
+      setState(() => _isUploadingCover = true);
+      try {
+        final objectPath = await sync.uploadRecipeCover(
+          recipeId: recipe.id,
+          filePath: localCover,
+        );
+        recipe = recipe.copyWith(coverImageUrl: objectPath);
+      } on NutritionSyncException catch (error) {
+        if (mounted) setState(() => _error = error.message);
+      } finally {
+        if (mounted) setState(() => _isUploadingCover = false);
+      }
+    }
+
+    await ref.read(customRecipeListProvider.notifier).save(recipe);
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -252,7 +285,8 @@ class _RecipeBuilderScreenState extends ConsumerState<RecipeBuilderScreen> {
               label: 'Save recipe',
               icon: PhLight.floppyDisk,
               expand: true,
-              onPressed: _canSave ? _save : null,
+              loading: _isUploadingCover,
+              onPressed: _canSave && !_isUploadingCover ? _save : null,
             ),
             if (!_canSave) ...[
               const SizedBox(height: 12),

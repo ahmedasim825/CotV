@@ -2,6 +2,7 @@ import 'package:adhan/adhan.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/auth_providers.dart';
 import '../../providers/nutrition_providers.dart';
 import '../../providers/security_providers.dart';
 import '../../providers/settings_providers.dart';
@@ -9,11 +10,13 @@ import '../../providers/user_settings_providers.dart';
 import '../../security/security_service.dart';
 import '../../services/prayer_service.dart';
 import '../../services/shortcuts_service.dart';
+import '../../services/supabase_config.dart';
 import '../components/components.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
 import '../widgets/status_card.dart';
+import 'account_sheet.dart';
 import 'calculation_labels.dart';
 import 'location_sheet.dart';
 import 'nutrition_targets_sheet.dart';
@@ -64,6 +67,15 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const _NutritionTargetsSection(),
+            const SizedBox(height: 36),
+            const SectionHeader(
+              eyebrow: 'SYNC',
+              title: 'Account',
+              titleSize: 22,
+              subtitle: 'Sign in to carry your food log between devices.',
+            ),
+            const SizedBox(height: 16),
+            const _AccountSection(),
             const SizedBox(height: 36),
             const SectionHeader(
               eyebrow: 'SECURITY',
@@ -194,6 +206,90 @@ class _NutritionTargetsSection extends ConsumerWidget {
 /// It only opens Shortcuts. iOS has no public scheme for creating a
 /// shortcut on the user's behalf, so the row says what it does rather than
 /// implying it will build one.
+/// Who is signed in, and the control to change that.
+///
+/// The whole food logger works signed out — this section is the difference
+/// between a log that lives on this device and one that follows the
+/// account, so it says which of those is currently true rather than
+/// implying sync is required.
+class _AccountSection extends ConsumerWidget {
+  const _AccountSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final user = ref.watch(currentUserProvider);
+    final configured = SupabaseConfig.isConfigured;
+    final syncError = ref.watch(syncErrorProvider);
+
+    if (!configured) {
+      return const SettingsGroup(
+        children: [
+          SettingsRow(
+            icon: PhLight.wifiSlash,
+            title: 'Sync not set up in this build',
+            subtitle:
+                'Rebuild with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to '
+                'enable it. The food log works without it, on this device.',
+            enabled: false,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        if (syncError != null) ...[
+          StatusCard(message: syncError, tone: StatusTone.error),
+          const SizedBox(height: 16),
+        ],
+        SettingsGroup(
+          children: [
+            SettingsRow(
+              icon: user == null ? PhLight.lockKeyOpen : PhLight.checkCircle,
+              title: user == null ? 'Not signed in' : 'Signed in',
+              subtitle: user == null
+                  ? 'Your food log and recipes stay on this device.'
+                  : user.email ?? 'Syncing to your account.',
+              iconTint: user == null ? palette.textMuted : palette.success,
+              trailing: Icon(
+                PhLight.caretRight,
+                size: 13,
+                color: palette.textMuted,
+              ),
+              onTap: user == null
+                  ? () => showAccountSheet(context)
+                  : () => _confirmSignOut(context, ref),
+            ),
+            if (user != null)
+              SettingsRow(
+                icon: PhLight.arrowClockwise,
+                title: 'Refresh now',
+                subtitle: 'Pull the log and recipes from the server again.',
+                iconTint: palette.textMuted,
+                onTap: () {
+                  ref.read(dailyNutritionProvider.notifier).refresh();
+                  ref.read(customRecipeListProvider.notifier).refresh();
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Sign out?',
+      message: 'Your food log stays on the server. This device drops back '
+          'to a local-only log until you sign in again.',
+      confirmLabel: 'Sign out',
+    );
+    if (confirmed) await ref.read(authControllerProvider.notifier).signOut();
+  }
+}
+
 class _ShortcutsSection extends StatefulWidget {
   const _ShortcutsSection();
 

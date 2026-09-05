@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/food_models.dart';
+import '../services/nutrition_sync_service.dart';
 import '../services/nutritionix_service.dart';
+import 'auth_providers.dart';
 import 'user_settings_providers.dart';
 
 final nutritionixClientProvider = Provider<http.Client>((ref) {
@@ -81,25 +83,61 @@ class DailyNutrition {
 
 /// Today's meal log.
 ///
-/// In memory for this pass, which is why the state is a plain [Notifier]
-/// rather than the [StreamNotifier]-over-Hive shape the rest of the app
-/// uses: the log is rebuilt from the backend once there is one to sync
-/// with, and adding a Hive box now would only have to be migrated then.
+/// Local first, synced when there is an account behind it. Writes land in
+/// [state] immediately and go to Supabase afterwards, so logging a food is
+/// never blocked on the network — the ring moves as soon as the button is
+/// pressed. A failed write surfaces in [syncError] and leaves the local
+/// entry alone rather than yanking a row back out from under the user.
+///
+/// Signing in reloads the day from the server, which is also what makes a
+/// second device show what the first one logged.
 class DailyNutritionNotifier extends Notifier<DailyNutrition> {
-  @override
-  DailyNutrition build() => const DailyNutrition();
+  NutritionSyncService? get _sync => ref.read(nutritionSyncServiceProvider);
 
-  void log(LoggedFood food) {
-    state = DailyNutrition(entries: [...state.entries, food]);
+  @override
+  DailyNutrition build() {
+    // Re-runs on sign-in and sign-out. Signing out drops back to an empty
+    // local log rather than leaving the previous account's food on screen.
+    final signedIn = ref.watch(isSignedInProvider);
+    if (signedIn) Future.microtask(refresh);
+    return const DailyNutrition();
   }
 
-  void remove(String id) {
+  /// Replaces the local log with today's rows from the server.
+  Future<void> refresh() async {
+    final sync = _sync;
+    if (sync == null) return;
+    try {
+      final entries = await sync.fetchLog(DateTime.now());
+      state = DailyNutrition(entries: entries);
+      ref.read(syncErrorProvider.notifier).clear();
+    } on NutritionSyncException catch (error) {
+      ref.read(syncErrorProvider.notifier).set(error.message);
+    }
+  }
+
+  Future<void> log(LoggedFood food) async {
+    state = DailyNutrition(entries: [...state.entries, food]);
+    await _push(() => _sync?.insertLoggedFood(food, DateTime.now()));
+  }
+
+  Future<void> remove(String id) async {
     state = DailyNutrition(
       entries: state.entries.where((entry) => entry.id != id).toList(),
     );
+    await _push(() => _sync?.deleteLoggedFood(id));
   }
 
   void clearDay() => state = const DailyNutrition();
+
+  Future<void> _push(Future<void>? Function() write) async {
+    try {
+      await write();
+      ref.read(syncErrorProvider.notifier).clear();
+    } on NutritionSyncException catch (error) {
+      ref.read(syncErrorProvider.notifier).set(error.message);
+    }
+  }
 }
 
 final dailyNutritionProvider =
@@ -119,26 +157,53 @@ final nutritionTargetsProvider = Provider<NutritionTargets>((ref) {
       );
 });
 
-/// The user's own recipes. In memory alongside the meal log, and for the
-/// same reason.
+/// The user's own recipes. Local first and synced, like the meal log.
 class CustomRecipeNotifier extends Notifier<List<CustomRecipe>> {
+  NutritionSyncService? get _sync => ref.read(nutritionSyncServiceProvider);
+
   @override
-  List<CustomRecipe> build() => const [];
+  List<CustomRecipe> build() {
+    final signedIn = ref.watch(isSignedInProvider);
+    if (signedIn) Future.microtask(refresh);
+    return const [];
+  }
+
+  Future<void> refresh() async {
+    final sync = _sync;
+    if (sync == null) return;
+    try {
+      state = await sync.fetchRecipes();
+      ref.read(syncErrorProvider.notifier).clear();
+    } on NutritionSyncException catch (error) {
+      ref.read(syncErrorProvider.notifier).set(error.message);
+    }
+  }
 
   /// Inserts a new recipe, or replaces the one with the same id.
-  void save(CustomRecipe recipe) {
+  Future<void> save(CustomRecipe recipe) async {
     final index = state.indexWhere((existing) => existing.id == recipe.id);
     if (index == -1) {
       state = [...state, recipe];
-      return;
+    } else {
+      final next = [...state];
+      next[index] = recipe;
+      state = next;
     }
-    final next = [...state];
-    next[index] = recipe;
-    state = next;
+    await _push(() => _sync?.saveRecipe(recipe));
   }
 
-  void delete(String id) {
+  Future<void> delete(String id) async {
     state = state.where((recipe) => recipe.id != id).toList();
+    await _push(() => _sync?.deleteRecipe(id));
+  }
+
+  Future<void> _push(Future<void>? Function() write) async {
+    try {
+      await write();
+      ref.read(syncErrorProvider.notifier).clear();
+    } on NutritionSyncException catch (error) {
+      ref.read(syncErrorProvider.notifier).set(error.message);
+    }
   }
 }
 
@@ -146,3 +211,46 @@ final customRecipeListProvider =
     NotifierProvider<CustomRecipeNotifier, List<CustomRecipe>>(
   CustomRecipeNotifier.new,
 );
+
+/// The last sync failure, or null when the last write went through.
+///
+/// One shared slot rather than an error field on each notifier: the user
+/// cares that syncing is broken, not which of two writes noticed first.
+class SyncErrorNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String message) => state = message;
+
+  void clear() {
+    if (state != null) state = null;
+  }
+}
+
+final syncErrorProvider =
+    NotifierProvider<SyncErrorNotifier, String?>(SyncErrorNotifier.new);
+
+/// A cover reference resolved to something an Image widget can load.
+///
+/// Two different kinds of value reach [CustomRecipe.coverImageUrl]: a URL
+/// the user typed into the builder, and an object path in the private
+/// `recipe-covers` bucket that an upload produced. Only the second needs
+/// signing, and a signed URL expires — which is why this resolves at
+/// render time instead of being stored alongside the recipe.
+///
+/// Returns null rather than throwing when there is no session to sign
+/// with, so the tile falls back to its plate glyph.
+final recipeCoverUrlProvider =
+    FutureProvider.autoDispose.family<String?, String?>((ref, reference) async {
+  if (reference == null || reference.isEmpty) return null;
+  if (reference.startsWith('http')) return reference;
+
+  final sync = ref.watch(nutritionSyncServiceProvider);
+  if (sync == null) return null;
+
+  try {
+    return await sync.signedCoverUrl(reference);
+  } on NutritionSyncException {
+    return null;
+  }
+});

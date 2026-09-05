@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/providers/theme_providers.dart';
+import 'src/services/supabase_config.dart';
 import 'src/storage/local_storage.dart';
 import 'src/ui/app_shell.dart';
 import 'src/ui/security_gate.dart';
@@ -11,6 +13,18 @@ import 'src/ui/theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeLocalStorage();
+
+  // Sync is optional: a build with no Supabase defines skips this entirely
+  // and the app runs local-only, exactly as it did before sync existed.
+  // Initialising with placeholder credentials would throw here and take
+  // the whole app down over a feature the user may not be using.
+  if (SupabaseConfig.isConfigured) {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      publishableKey: SupabaseConfig.publishableKey,
+    );
+  }
+
   runApp(const ProviderScope(child: PrayerLockoutApp()));
 }
 

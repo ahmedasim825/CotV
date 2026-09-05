@@ -408,7 +408,7 @@ class _RecipeList extends ConsumerWidget {
   }
 }
 
-class _RecipeCard extends StatelessWidget {
+class _RecipeCard extends ConsumerWidget {
   const _RecipeCard({
     super.key,
     required this.recipe,
@@ -421,8 +421,13 @@ class _RecipeCard extends StatelessWidget {
   final VoidCallback onEdit;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
+    // A cover uploaded from another device is an object path in a private
+    // bucket, not a URL, so it has to be signed before it can be shown.
+    final coverUrl = ref
+        .watch(recipeCoverUrlProvider(recipe.coverImageUrl))
+        .value;
 
     return CustomCard(
       padding: const EdgeInsets.all(14),
@@ -437,7 +442,7 @@ class _RecipeCard extends StatelessWidget {
             children: [
               FoodThumbnail(
                 filePath: recipe.coverImagePath,
-                url: recipe.coverImageUrl,
+                url: coverUrl,
                 icon: PhLight.cookingPot,
               ),
               const SizedBox(width: 14),

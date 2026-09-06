@@ -15,9 +15,10 @@ import 'widgets/study_breakdown_card.dart';
 /// The Home tab: Milo, the day's headline numbers, and the shortcuts into
 /// the rest of the app.
 ///
-/// Frontend only for now. Every card but [NextPrayerCard] renders mock
-/// constants declared in its own file, so wiring one up later is a
-/// single-file change rather than a rewrite of this layout.
+/// Every card reads its own providers, so this file is layout and nothing
+/// else. Each of them also renders a neutral line when it has nothing to
+/// show — a dashboard whose only honest answer is "nothing yet" has to be
+/// able to say so, which is the state it is in on a fresh install.
 ///
 /// No [Scaffold] here on purpose: [AppShell] already supplies one, along
 /// with the ambient background and the Milo end drawer. Nesting a second

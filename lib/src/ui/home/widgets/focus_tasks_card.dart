@@ -1,53 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/task.dart';
+import '../../../providers/clock_providers.dart';
+import '../../../providers/task_providers.dart';
+import '../../../providers/task_view_providers.dart';
 import '../../components/components.dart';
+import '../../format/time_format.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
+import 'home_card_note.dart';
 
-/// One row of the focus list. Mock only — the real list will come from
-/// `visibleTasksProvider` once this screen is wired up.
-class _FocusItem {
-  const _FocusItem(this.id, this.title, this.detail, this.priority);
-
-  final String id;
-  final String title;
-  final String detail;
-  final TaskPriority priority;
-}
-
-const List<_FocusItem> _mockFocus = [
-  _FocusItem('f1', 'Finish Anatomy dissection notes', 'Due 18:00', TaskPriority.high),
-  _FocusItem('f2', 'Review Pathology flashcards', '40 cards left', TaskPriority.high),
-  _FocusItem('f3', 'Email Dr. Farouk about the rotation', 'Due today', TaskPriority.medium),
-  _FocusItem('f4', 'Refill water bottle', 'Habit', TaskPriority.low),
-];
-
-/// Today's shortlist, with working checkboxes over hardcoded rows.
+/// How many of today's tasks the dashboard names.
 ///
-/// The tick state lives in this widget and dies with it — deliberately, this
-/// pass. Persisting it would mean a repository and a Hive box, which is the
-/// step after this one.
-class FocusTasksCard extends StatefulWidget {
+/// The shortlist is a prompt, not the list: five rows is what fits beside
+/// the rest of the dashboard, and anything past that is one tap away on the
+/// Tasks screen.
+const int _shortlistLength = 5;
+
+/// Today's shortlist, ticked straight through to the repository.
+///
+/// Reads [todayFocusTasksProvider] rather than `visibleTasksProvider` so
+/// what the dashboard calls "today" cannot be changed by the filter chips on
+/// another screen.
+class FocusTasksCard extends ConsumerWidget {
   const FocusTasksCard({super.key});
 
   @override
-  State<FocusTasksCard> createState() => _FocusTasksCardState();
-}
-
-class _FocusTasksCardState extends State<FocusTasksCard> {
-  final Set<String> _done = <String>{};
-
-  void _toggle(String id) {
-    setState(() {
-      if (!_done.remove(id)) _done.add(id);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final remaining = _mockFocus.length - _done.length;
+    final tasks = ref.watch(todayFocusTasksProvider);
 
     return CustomCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
@@ -64,47 +46,128 @@ class _FocusTasksCardState extends State<FocusTasksCard> {
                   style: context.typography.ui(size: 15, weight: FontWeight.w600),
                 ),
               ),
-              Text(
-                remaining == 0 ? 'All clear' : '$remaining left',
-                style: context.typography.ui(
-                  size: 12,
-                  color: remaining == 0 ? palette.success : palette.textMuted,
-                ),
-              ),
+              _RemainingLabel(tasks: tasks),
             ],
           ),
           const SizedBox(height: 6),
-          for (final item in _mockFocus)
-            _FocusRow(
-              item: item,
-              isDone: _done.contains(item.id),
-              onTap: () => _toggle(item.id),
+          tasks.when(
+            data: (list) => _Rows(tasks: list),
+            // A spinner rather than an empty list: on a cold launch the Hive
+            // stream has not delivered yet, and "No tasks today" would be a
+            // claim the app cannot back at that point.
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 26),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             ),
+            error: (_, _) => const HomeCardNote(
+              icon: PhLight.warningCircle,
+              message: 'Your tasks could not be read.',
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _FocusRow extends StatelessWidget {
-  const _FocusRow({
-    required this.item,
-    required this.isDone,
-    required this.onTap,
-  });
+/// `3 left` / `All clear`, or nothing at all until the list has arrived.
+class _RemainingLabel extends StatelessWidget {
+  const _RemainingLabel({required this.tasks});
 
-  final _FocusItem item;
-  final bool isDone;
-  final VoidCallback onTap;
+  final AsyncValue<List<Task>> tasks;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final list = tasks.value;
+    if (list == null) return const SizedBox.shrink();
+
+    final remaining = list.where((task) => !task.isCompleted).length;
+
+    return Text(
+      remaining == 0 ? 'All clear' : '$remaining left',
+      style: context.typography.ui(
+        size: 12,
+        color: remaining == 0 ? palette.success : palette.textMuted,
+      ),
+    );
+  }
+}
+
+class _Rows extends ConsumerWidget {
+  const _Rows({required this.tasks});
+
+  final List<Task> tasks;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (tasks.isEmpty) {
+      return const HomeCardNote(
+        icon: PhLight.listChecks,
+        message: 'No tasks today',
+      );
+    }
+
+    final now = ref.watch(currentMinuteProvider);
+    final shown = tasks.take(_shortlistLength).toList(growable: false);
+    final hidden = tasks.length - shown.length;
+
+    return Column(
+      children: [
+        for (final task in shown)
+          _FocusRow(
+            task: task,
+            now: now,
+            onTap: () =>
+                ref.read(taskListProvider.notifier).toggleCompleted(task.id),
+          ),
+        if (hidden > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
+            child: Text(
+              '+$hidden more on Tasks',
+              style: context.typography.ui(
+                size: 11.5,
+                color: context.palette.textMuted,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FocusRow extends StatelessWidget {
+  const _FocusRow({
+    required this.task,
+    required this.now,
+    required this.onTap,
+  });
+
+  final Task task;
+  final DateTime now;
+  final VoidCallback onTap;
+
+  /// The line under the title: when it is due if it has a time today, and
+  /// what it belongs to otherwise.
+  String get _detail =>
+      task.dueDate == null ? task.category : formatDueLabel(task.dueDate!, now);
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final isDone = task.isCompleted;
 
     return Semantics(
       button: true,
       checked: isDone,
-      label: item.title,
+      label: task.title,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
@@ -138,11 +201,13 @@ class _FocusRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.title,
+                      task.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      // Struck through rather than removed: a list that
-                      // reshuffles under the finger is hard to tick twice.
+                      // Struck through rather than removed: a completed task
+                      // leaves the Today filter on the repository's next
+                      // event, and the strike is what makes that read as a
+                      // tick rather than a row vanishing under the finger.
                       style: context.typography.ui(
                         size: 13.5,
                         color: isDone ? palette.textMuted : palette.textPrimary,
@@ -154,7 +219,7 @@ class _FocusRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      item.detail,
+                      _detail,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: context.typography.ui(
@@ -166,7 +231,7 @@ class _FocusRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              PriorityBadge(priority: item.priority, compact: true),
+              PriorityBadge(priority: task.priority, compact: true),
             ],
           ),
         ),

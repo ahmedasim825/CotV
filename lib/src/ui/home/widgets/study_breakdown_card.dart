@@ -1,37 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/study_view.dart';
+import '../../../models/subject.dart';
+import '../../../providers/study_providers.dart';
 import '../../components/components.dart';
 import '../../study/subject_colors.dart';
 import '../../study/widgets/study_timer_card.dart' show CountdownRing;
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
+import 'home_card_note.dart';
 
-/// One subject's share of the day. Mock only — the real numbers will come
-/// from `studyLogRepository` totals.
-class _SubjectSlice {
-  const _SubjectSlice(this.name, this.minutes, this.colorValue);
-
-  final String name;
-  final int minutes;
-  final int colorValue;
-}
-
+/// What a full day of study looks like on the ring.
+///
+/// A target rather than a measurement, so it is a constant on purpose:
+/// the stored user settings carry no study goal to read it from, and the
+/// ring needs something to be a fraction of.
 const int _dailyTargetMinutes = 480;
 
-const List<_SubjectSlice> _mockSubjects = [
-  _SubjectSlice('Anatomy', 180, 0xFF7B8FCB),
-  _SubjectSlice('Pathology', 150, 0xFF34D399),
-  _SubjectSlice('Pharmacology', 30, 0xFFE5B769),
-];
-
 /// Hours studied today, as a ring plus a per-subject breakdown.
-class StudyBreakdownCard extends StatelessWidget {
+///
+/// Both come from [studySummaryProvider], the same transform the Study
+/// screen and Milo's context block read, so the dashboard cannot quote a
+/// different total than the screen it links to.
+class StudyBreakdownCard extends ConsumerWidget {
   const StudyBreakdownCard({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final total = _mockSubjects.fold<int>(0, (sum, s) => sum + s.minutes);
+    final summary = ref.watch(studySummaryProvider);
+    final subjects = ref.watch(subjectListProvider).value ?? const <Subject>[];
+
+    final total = summary.todayMinutes;
+    final today = [
+      for (final entry in summary.bySubject)
+        if (entry.todayMinutes > 0) entry,
+    ];
+
+    // Colours live on the subject, not on the totals: a log keeps the name
+    // of a subject that has since been deleted, so a row can outlive the
+    // swatch it was drawn in.
+    final colors = {
+      for (final subject in subjects) subject.id: subjectColor(subject.colorValue),
+    };
 
     return CustomCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
@@ -58,12 +70,12 @@ class StudyBreakdownCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _hours(total),
+                    formatStudyMinutes(total),
                     style: context.typography.display(size: 30),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'of ${_hours(_dailyTargetMinutes)}',
+                    'of ${formatStudyMinutes(_dailyTargetMinutes)}',
                     style: context.typography.ui(
                       size: 11,
                       color: palette.textMuted,
@@ -73,10 +85,22 @@ class StudyBreakdownCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          for (var i = 0; i < _mockSubjects.length; i++) ...[
-            _SubjectRow(subject: _mockSubjects[i], total: total),
-            if (i < _mockSubjects.length - 1) const SizedBox(height: 12),
+          if (today.isEmpty)
+            const HomeCardNote(
+              icon: PhLight.timer,
+              message: 'Nothing logged today',
+              padding: EdgeInsets.only(top: 20),
+            )
+          else ...[
+            const SizedBox(height: 20),
+            for (var i = 0; i < today.length; i++) ...[
+              _SubjectRow(
+                subject: today[i],
+                total: total,
+                color: colors[today[i].subjectId] ?? palette.accent,
+              ),
+              if (i < today.length - 1) const SizedBox(height: 12),
+            ],
           ],
         ],
       ),
@@ -85,19 +109,24 @@ class StudyBreakdownCard extends StatelessWidget {
 }
 
 class _SubjectRow extends StatelessWidget {
-  const _SubjectRow({required this.subject, required this.total});
+  const _SubjectRow({
+    required this.subject,
+    required this.total,
+    required this.color,
+  });
 
-  final _SubjectSlice subject;
+  final SubjectStudyTotal subject;
   final int total;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final color = subjectColor(subject.colorValue);
-    final share = total == 0 ? 0.0 : subject.minutes / total;
+    final minutes = subject.todayMinutes;
+    final share = total == 0 ? 0.0 : minutes / total;
 
     return Semantics(
-      label: '${subject.name}, ${_hours(subject.minutes)}',
+      label: '${subject.subjectName}, ${formatStudyMinutes(minutes)}',
       excludeSemantics: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,14 +141,14 @@ class _SubjectRow extends StatelessWidget {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  subject.name,
+                  subject.subjectName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: context.typography.ui(size: 12.5),
                 ),
               ),
               Text(
-                _hours(subject.minutes),
+                formatStudyMinutes(minutes),
                 style: context.typography.ui(
                   size: 12.5,
                   weight: FontWeight.w600,
@@ -142,14 +171,4 @@ class _SubjectRow extends StatelessWidget {
       ),
     );
   }
-}
-
-/// `3h`, `2h 30m`, `30m` — the same shape the study screen uses, kept local
-/// because this card counts a whole day rather than one session.
-String _hours(int minutes) {
-  final h = minutes ~/ 60;
-  final m = minutes % 60;
-  if (h == 0) return '${m}m';
-  if (m == 0) return '${h}h';
-  return '${h}h ${m}m';
 }

@@ -183,8 +183,16 @@ void main() {
     expect(find.text("Today's focus"), findsOneWidget);
     expect(find.text('Study today'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);
-    expect(find.text('day streak'), findsOneWidget);
     expect(find.text('Quick actions'), findsOneWidget);
+
+    // Nothing has been logged in this fresh profile, so every card that
+    // counts something renders its neutral line rather than a number it
+    // cannot back. Four zeros in the strip, or four invented values, would
+    // both pass a looser assertion than this one.
+    expect(find.text('Nothing tracked yet today'), findsOneWidget);
+    expect(find.text('No tasks today'), findsOneWidget);
+    expect(find.text('Nothing logged today'), findsOneWidget);
+    expect(find.text('Nothing logged yet'), findsOneWidget);
     expect(find.text('Talk to Milo'), findsOneWidget);
 
     // The removed quick action must not have survived anywhere.

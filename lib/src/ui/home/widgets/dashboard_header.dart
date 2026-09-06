@@ -33,7 +33,7 @@ class DashboardHeader extends ConsumerWidget {
 
     return Column(
       children: [
-        MiloOrbWidget(diameter: orbDiameter),
+        MiloOrb(diameter: orbDiameter),
         const SizedBox(height: 8),
         Text(
           '${_greetingFor(DateTime.now().hour)}, Ahmed',

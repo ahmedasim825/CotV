@@ -48,6 +48,26 @@ final visibleTasksProvider = Provider.autoDispose<AsyncValue<List<Task>>>((ref) 
       );
 });
 
+/// Today's open tasks, priority first — what the dashboard shortlists.
+///
+/// Deliberately not [visibleTasksProvider]: that one follows the Tasks
+/// screen's own filter chips, so leaving that screen on Completed would
+/// silently change what the dashboard says is left today. Same transform,
+/// fixed arguments.
+final todayFocusTasksProvider =
+    Provider.autoDispose<AsyncValue<List<Task>>>((ref) {
+  final now = ref.watch(currentMinuteProvider);
+
+  return ref.watch(taskListProvider).whenData(
+        (tasks) => buildTaskView(
+          tasks,
+          filter: TaskFilter.today,
+          sort: TaskSort.priority,
+          now: now,
+        ),
+      );
+});
+
 /// Per-tab counts for the filter chips. Uses the same [filterTasks] the list
 /// itself does, so a badge can never disagree with what the tab opens to.
 final taskFilterCountsProvider =

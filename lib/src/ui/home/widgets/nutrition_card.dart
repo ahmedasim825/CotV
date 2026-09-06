@@ -28,7 +28,8 @@ class NutritionCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final totals = ref.watch(dailyNutritionProvider).totals;
+    final log = ref.watch(dailyNutritionProvider);
+    final totals = log.totals;
     final targets = ref.watch(nutritionTargetsProvider);
 
     final eaten = totals.calories.round();
@@ -83,6 +84,21 @@ class NutritionCard extends ConsumerWidget {
               ),
             ),
           ),
+          if (log.isEmpty)
+            // The ring at zero is already honest; this says whether that is
+            // a day not started or a day the log failed to load.
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Center(
+                child: Text(
+                  'Nothing logged yet',
+                  style: context.typography.ui(
+                    size: 12.5,
+                    color: palette.textMuted,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 20),
           for (var i = 0; i < macros.length; i++) ...[
             _MacroBar(macro: macros[i]),

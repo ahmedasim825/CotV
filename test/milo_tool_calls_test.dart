@@ -1,4 +1,4 @@
-// Tool calling: the SSE reassembly in GroqClient, and the dispatch in
+// Tool calling: the SSE reassembly in OllamaClient, and the dispatch in
 // MiloTools.
 //
 // The fake is at the socket, as in milo_service_test.dart, so the request
@@ -17,7 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:cotv/src/models/milo_models.dart';
-import 'package:cotv/src/services/milo/groq_client.dart';
+import 'package:cotv/src/services/milo/ollama_client.dart';
 import 'package:cotv/src/services/milo/milo_tools.dart';
 
 /// One `text/event-stream` response, each frame delivered as its own chunk.
@@ -55,12 +55,12 @@ String _toolFrame(
       ],
     });
 
-GroqClient _clientReturning(
+OllamaClient _clientReturning(
   List<String> frames, {
   List<http.Request>? capture,
 }) {
   var call = 0;
-  return GroqClient(
+  return OllamaClient(
     httpClient: MockClient.streaming((request, body) async {
       capture?.add(request as http.Request);
       call++;
@@ -97,7 +97,7 @@ class _RecordingStudy implements StudyToolTarget {
   }
 }
 
-Future<List<GroqDelta>> _drain(Stream<GroqDelta> stream) => stream.toList();
+Future<List<LocalDelta>> _drain(Stream<LocalDelta> stream) => stream.toList();
 
 void main() {
   group('tool-call accumulation', () {
@@ -113,14 +113,13 @@ void main() {
       ]);
 
       final deltas = await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'start a physiology timer for 45 minutes',
         tools: MiloTools.schemas,
       ));
 
-      final calls = deltas.whereType<GroqToolCalls>().single.calls;
+      final calls = deltas.whereType<LocalToolCalls>().single.calls;
       expect(calls, hasLength(1));
       expect(calls.single.id, 'call_a');
       expect(calls.single.name, 'start_study_timer');
@@ -139,14 +138,13 @@ void main() {
       ]);
 
       final deltas = await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'stop that and start anatomy',
         tools: MiloTools.schemas,
       ));
 
-      final calls = deltas.whereType<GroqToolCalls>().single.calls;
+      final calls = deltas.whereType<LocalToolCalls>().single.calls;
       expect(calls, hasLength(2));
 
       // Ordered by index, not by arrival.
@@ -165,13 +163,12 @@ void main() {
       ]);
 
       final calls = (await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'stop the timer',
         tools: MiloTools.schemas,
       )))
-          .whereType<GroqToolCalls>()
+          .whereType<LocalToolCalls>()
           .single
           .calls;
 
@@ -189,13 +186,12 @@ void main() {
       ]);
 
       final calls = (await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'start anatomy',
         tools: MiloTools.schemas,
       )))
-          .whereType<GroqToolCalls>()
+          .whereType<LocalToolCalls>()
           .single
           .calls;
 
@@ -212,15 +208,14 @@ void main() {
       ]);
 
       final deltas = await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'start anatomy',
         tools: MiloTools.schemas,
       ));
 
-      expect(deltas.whereType<GroqText>().single.text, 'On it. ');
-      expect(deltas.whereType<GroqToolCalls>().single.calls, hasLength(1));
+      expect(deltas.whereType<LocalText>().single.text, 'On it. ');
+      expect(deltas.whereType<LocalToolCalls>().single.calls, hasLength(1));
     });
 
     test('offers no tools when none are passed', () async {
@@ -231,7 +226,6 @@ void main() {
       ], capture: requests);
 
       await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'hello',
@@ -254,18 +248,16 @@ void main() {
       ], capture: requests);
 
       final calls = (await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'start anatomy',
         tools: MiloTools.schemas,
       )))
-          .whereType<GroqToolCalls>()
+          .whereType<LocalToolCalls>()
           .single
           .calls;
 
       await _drain(client.streamTurn(
-        apiKey: 'gsk_test',
         systemPrompt: 'system',
         history: const [],
         prompt: 'start anatomy',

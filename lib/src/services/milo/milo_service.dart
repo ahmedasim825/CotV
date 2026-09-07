@@ -1,7 +1,7 @@
 import '../../models/milo_models.dart';
 import '../../models/pc_command.dart';
 import 'gemini_client.dart';
-import 'groq_client.dart';
+import 'ollama_client.dart';
 import 'milo_context_builder.dart';
 import 'milo_credentials.dart';
 import 'milo_tools.dart';
@@ -53,18 +53,28 @@ class MiloTextDelta extends MiloEvent {
 /// running any study tool the model asks for along the way.
 class MiloService {
   const MiloService({
-    required this.groq,
+    required this.local,
     required this.gemini,
     required this.pcRemote,
     this.tools,
     this.router = const MiloRouter(),
     this.parser = const PcIntentParser(),
     this.contextBuilder = const MiloContextBuilder(),
+    this.localAvailability,
   });
 
-  final GroqClient groq;
+  final OllamaClient local;
   final GeminiClient gemini;
   final PcRemoteService pcRemote;
+
+  /// Whether the local brain can take a turn on this platform and this
+  /// machine, checked once per turn that might go local.
+  ///
+  /// Injected rather than read from [local] directly because the answer is
+  /// partly a platform fact — iOS has no local runtime at all, and asking
+  /// Ollama about it would mean a doomed connection attempt per turn. Null
+  /// means "ask the client", which is what Windows does.
+  final Future<LocalBrainStatus> Function()? localAvailability;
 
   /// Null in tests and anywhere the study layer is not available, in which
   /// case no tools are offered and the turn is plain prose.
@@ -81,7 +91,7 @@ class MiloService {
   ///
   /// "Milo" is not in Whisper's everyday vocabulary, so a spoken
   /// "Hey Milo" comes back as "Hey Maido", "Mylo" or "Meelo".
-  /// [GroqTranscriptionClient] biases the decoder against that, but
+  /// [LocalTranscriptionClient] biases the decoder against that, but
   /// biasing is not a guarantee, and a wake word that survives into the
   /// prompt is worse than one that was never said: the model is asked
   /// to answer a request addressed to someone called Maido.
@@ -129,7 +139,17 @@ class MiloService {
     }
 
     final command = parser.parse(prompt);
-    final decision = router.classify(prompt, isPcCommand: command != null);
+    var decision = router.classify(prompt, isPcCommand: command != null);
+
+    // Resolved before the rail is shown, so the badge names the engine that
+    // is actually about to run rather than one that gets corrected a
+    // second later.
+    if (decision.engine == MiloEngine.local) {
+      final status = await (localAvailability?.call() ?? local.probe());
+      final why = status.reason;
+      if (why != null) decision = router.fallback(decision, why);
+    }
+
     yield MiloRouted(decision);
 
     PcCommandResult? pcResult;
@@ -152,16 +172,8 @@ class MiloService {
     );
 
     switch (decision.engine) {
-      case MiloEngine.groq:
-        final key = secrets.groqApiKey;
-        if (key == null) {
-          throw MiloException(
-            'No Groq API key yet. Add one in Milo settings to answer '
-            'instant requests.',
-          );
-        }
-        yield* _groqTurn(
-          apiKey: key,
+      case MiloEngine.local:
+        yield* _localTurn(
           systemPrompt: systemPrompt,
           history: history,
           prompt: prompt,
@@ -188,14 +200,13 @@ class MiloService {
     }
   }
 
-  /// The Groq turn, including one round of tool calls if the model asks.
+  /// The local turn, including one round of tool calls if the model asks.
   ///
   /// Exactly one round: the follow-up call is made without `tools`, so the
   /// model answers with the results rather than being able to ask again.
   /// A study command is one action, and a loop here would be a loop the
-  /// user is paying for and waiting on.
-  Stream<MiloEvent> _groqTurn({
-    required String apiKey,
+  /// user is waiting on.
+  Stream<MiloEvent> _localTurn({
     required String systemPrompt,
     required List<ChatTurn> history,
     required String prompt,
@@ -205,18 +216,17 @@ class MiloService {
     final calls = <MiloToolCall>[];
     var produced = false;
 
-    await for (final delta in groq.streamTurn(
-      apiKey: apiKey,
+    await for (final delta in local.streamTurn(
       systemPrompt: systemPrompt,
       history: history,
       prompt: prompt,
       tools: tools == null ? null : MiloTools.schemas,
     )) {
       switch (delta) {
-        case GroqText(:final text):
+        case LocalText(:final text):
           produced = true;
           yield MiloTextDelta(text);
-        case GroqToolCalls(calls: final requested):
+        case LocalToolCalls(calls: final requested):
           calls.addAll(requested);
       }
     }
@@ -228,14 +238,13 @@ class MiloService {
         if (summary != null) yield MiloToolExecuted(summary);
       }
 
-      await for (final delta in groq.streamTurn(
-        apiKey: apiKey,
+      await for (final delta in local.streamTurn(
         systemPrompt: systemPrompt,
         history: history,
         prompt: prompt,
         exchange: MiloToolExchange(calls: calls, results: results),
       )) {
-        if (delta is GroqText) {
+        if (delta is LocalText) {
           produced = true;
           yield MiloTextDelta(delta.text);
         }

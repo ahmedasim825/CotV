@@ -1,6 +1,7 @@
-// The speech path: what goes on the wire to Whisper, and what comes back
-// when it fails. The transport is faked, so GroqTranscriptionClient itself
-// runs for real including its multipart encoding.
+// The speech path: what goes on the wire to the PC agent's Faster-Whisper,
+// and what comes back when it fails. The transport is faked, so
+// LocalTranscriptionClient itself runs for real including its multipart
+// encoding.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -10,7 +11,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:cotv/src/models/milo_models.dart';
-import 'package:cotv/src/services/milo/groq_transcription_client.dart';
+import 'package:cotv/src/services/milo/local_transcription_client.dart';
+import 'package:cotv/src/services/milo/milo_credentials.dart';
 import 'package:cotv/src/services/milo/milo_service.dart';
 import 'package:cotv/src/services/milo/wake_word_listener.dart';
 
@@ -35,82 +37,92 @@ http.StreamedResponse _json(int status, Object body) => http.StreamedResponse(
 
 final _audio = List<int>.filled(2048, 7);
 
+final _agent = PcAgentConfig.parse('192.168.1.20:8765', 'agent_test')!;
+
 void main() {
-  test('sends the audio as multipart with the model and language pinned',
-      () async {
+  test('sends the audio as a raw body with the language pinned', () async {
     final capture = _Capture();
-    final client = GroqTranscriptionClient(
+    final client = LocalTranscriptionClient(
       httpClient: capture.client(
         () async => _json(200, {'text': '  Open Spotify on my PC.  '}),
       ),
     );
 
-    final text = await client.transcribe(
-      apiKey: 'gsk_test',
-      bytes: _audio,
-      filename: 'command.wav',
-    );
+    final text = await client.transcribe(agent: _agent, bytes: _audio);
 
     // Surrounding whitespace is Whisper's, not the user's.
     expect(text, 'Open Spotify on my PC.');
 
     final request = capture.request!;
     expect(request.method, 'POST');
-    expect(request.url, GroqTranscriptionClient.endpoint);
-    expect(request.headers['Authorization'], 'Bearer gsk_test');
+    expect(request.url.path, LocalTranscriptionClient.path);
+    expect(request.headers['Authorization'], 'Bearer agent_test');
     expect(request.headers['User-Agent'], miloUserAgent);
-    expect(request.headers['content-type'], startsWith('multipart/form-data'));
 
-    final body = capture.body!;
-    expect(body, contains('name="model"'));
-    expect(body, contains(whisperModelId));
+    // Raw bytes, not multipart. A FastAPI route declaring UploadFile raises
+    // at import time without python-multipart, which would stop the agent
+    // starting and take the PC commands with it — so the wire format here
+    // is load-bearing, not a preference.
+    expect(request.headers['content-type'], 'audio/wav');
+    expect(capture.body!.codeUnits, hasLength(_audio.length));
+
     // Pinned so an accented command is transcribed, not translated.
-    expect(body, contains('name="language"'));
-    expect(body, contains('en'));
-    // Whisper heard "Milo" as "Maido" and "Asr" as "ASR" without this.
-    expect(body, contains('name="prompt"'));
-    expect(body, contains('Milo'));
-    expect(body, contains('Maghrib'));
-    expect(body, contains('filename="command.wav"'));
-    expect(body.codeUnits.length, greaterThan(_audio.length));
+    expect(request.url.queryParameters['language'], 'en');
   });
 
-  test('a rejected key is reported as a key problem', () async {
+  test('a rejected token is reported as a token problem', () async {
     final capture = _Capture();
-    final client = GroqTranscriptionClient(
+    final client = LocalTranscriptionClient(
       httpClient: capture.client(
-        () async => _json(401, {
-          'error': {'message': 'Invalid API Key'},
-        }),
+        () async => _json(401, {'detail': 'Bad or missing token.'}),
       ),
     );
 
     await expectLater(
-      client.transcribe(apiKey: 'bad', bytes: _audio),
+      client.transcribe(agent: _agent, bytes: _audio),
       throwsA(
         isA<MiloException>().having(
           (error) => error.message,
           'message',
-          contains('rejected the API key'),
+          contains('rejected the token'),
         ),
       ),
     );
   });
 
-  test('an oversized recording says so in terms the user can act on',
-      () async {
+  test('an agent without Faster-Whisper says how to install it', () async {
     final capture = _Capture();
-    final client = GroqTranscriptionClient(
-      httpClient: capture.client(() async => _json(413, '')),
+    final client = LocalTranscriptionClient(
+      httpClient: capture.client(
+        () async => _json(503, {'detail': 'faster-whisper is not installed.'}),
+      ),
     );
 
     await expectLater(
-      client.transcribe(apiKey: 'gsk_test', bytes: _audio),
+      client.transcribe(agent: _agent, bytes: _audio),
       throwsA(
         isA<MiloException>().having(
           (error) => error.message,
           'message',
-          allOf(contains('too long'), contains('sentence or two')),
+          contains('requirements.txt'),
+        ),
+      ),
+    );
+  });
+
+  test('an older agent with no /transcribe says to update it', () async {
+    final capture = _Capture();
+    final client = LocalTranscriptionClient(
+      httpClient: capture.client(() async => _json(404, '')),
+    );
+
+    await expectLater(
+      client.transcribe(agent: _agent, bytes: _audio),
+      throwsA(
+        isA<MiloException>().having(
+          (error) => error.message,
+          'message',
+          contains('no /transcribe endpoint'),
         ),
       ),
     );
@@ -118,7 +130,7 @@ void main() {
 
   test('an unreachable host is a connection problem, not a key problem',
       () async {
-    final client = GroqTranscriptionClient(
+    final client = LocalTranscriptionClient(
       httpClient: MockClient.streaming((request, bodyStream) async {
         await bodyStream.bytesToString();
         throw http.ClientException('Connection refused', request.url);
@@ -126,12 +138,12 @@ void main() {
     );
 
     await expectLater(
-      client.transcribe(apiKey: 'gsk_test', bytes: _audio),
+      client.transcribe(agent: _agent, bytes: _audio),
       throwsA(
         isA<MiloException>().having(
           (error) => error.message,
           'message',
-          contains('Could not reach Groq'),
+          contains('Could not reach the PC agent'),
         ),
       ),
     );
@@ -140,12 +152,12 @@ void main() {
   test('a body that is not a transcription is refused rather than guessed',
       () async {
     final capture = _Capture();
-    final client = GroqTranscriptionClient(
+    final client = LocalTranscriptionClient(
       httpClient: capture.client(() async => _json(200, {'unexpected': 1})),
     );
 
     await expectLater(
-      client.transcribe(apiKey: 'gsk_test', bytes: _audio),
+      client.transcribe(agent: _agent, bytes: _audio),
       throwsA(isA<MiloException>()),
     );
   });
@@ -156,13 +168,13 @@ void main() {
     // is the seam between the two: the transcript is passed through
     // untouched, and MiloService is what removes it.
     final capture = _Capture();
-    final client = GroqTranscriptionClient(
+    final client = LocalTranscriptionClient(
       httpClient: capture.client(
         () async => _json(200, {'text': 'Hey Milo, open Spotify on my PC'}),
       ),
     );
 
-    final text = await client.transcribe(apiKey: 'k', bytes: _audio);
+    final text = await client.transcribe(agent: _agent, bytes: _audio);
     expect(text, 'Hey Milo, open Spotify on my PC');
     expect(MiloService.stripWakeWord(text), 'open Spotify on my PC');
   });
@@ -207,6 +219,98 @@ void main() {
       final wav = WakeWordListener.encodeWav([]);
       expect(wav.length, 44);
       expect(ByteData.view(wav.buffer).getUint32(40, Endian.little), 0);
+    });
+  });
+
+  group('clap to wake', () {
+    // 20ms of 16kHz mono 16-bit audio, which is the frame size the recorder
+    // actually delivers. Only the byte count matters here — the detector
+    // works on levels, not samples.
+    const frame = 640;
+
+    /// Feeds [levels] one frame at a time and returns the indexes that
+    /// fired, so a test can assert *when* as well as whether.
+    List<int> fire(ClapDetector detector, List<double> levels) => [
+          for (var i = 0; i < levels.length; i++)
+            if (detector.accept(levels[i], frame)) i,
+        ];
+
+    /// A quiet room, then a spike, then quiet again.
+    List<double> clapAfter(double quiet, double peak, {int lead = 40}) => [
+          ...List<double>.filled(lead, quiet),
+          peak,
+          quiet,
+          quiet,
+          quiet,
+        ];
+
+    test('a spike that decays fires, one frame after the peak', () {
+      final detector = ClapDetector();
+      final fired = fire(detector, clapAfter(0.01, 0.5));
+
+      // Not on the peak itself: the shape is not knowable until it falls.
+      expect(fired, [41]);
+    });
+
+    test('speech does not fire, however loud it gets', () {
+      final detector = ClapDetector();
+      // A syllable ramps up and holds, which is the whole difference.
+      final speech = [
+        ...List<double>.filled(40, 0.01),
+        0.04, 0.09, 0.16, 0.24, 0.30, 0.32, 0.31, 0.28, 0.24, 0.18,
+        0.12, 0.06, 0.02,
+      ];
+
+      expect(fire(detector, speech), isEmpty);
+    });
+
+    test('a sustained loud noise does not fire', () {
+      final detector = ClapDetector();
+      // A door slamming into a held rumble, or music starting.
+      final sustained = [
+        ...List<double>.filled(40, 0.01),
+        ...List<double>.filled(30, 0.55),
+      ];
+
+      expect(fire(detector, sustained), isEmpty);
+    });
+
+    test('a quiet tap in a silent room does not fire', () {
+      final detector = ClapDetector();
+      // Clears the rise ratio against near-silence but not the absolute
+      // floor, which is what that second test is for.
+      expect(fire(detector, clapAfter(0.001, 0.05)), isEmpty);
+    });
+
+    test('the echo of a clap does not open a second capture', () {
+      final detector = ClapDetector();
+      final levels = [
+        ...List<double>.filled(40, 0.01),
+        0.6, 0.05, // the clap
+        0.35, 0.04, // its reflection off the far wall
+        0.30, 0.03,
+      ];
+
+      expect(fire(detector, levels), hasLength(1));
+    });
+
+    test('a noisy room raises the bar rather than firing constantly', () {
+      final detector = ClapDetector();
+      // A fan: loud enough to clear the absolute floor on its own, and
+      // steady, so nothing about it is a step change.
+      final fan = List<double>.filled(200, 0.2);
+
+      expect(fire(detector, fan), isEmpty);
+      expect(detector.idleFloor, greaterThan(0.15));
+    });
+
+    test('reset returns it to a silent room', () {
+      final detector = ClapDetector();
+      fire(detector, List<double>.filled(200, 0.2));
+      detector.reset();
+
+      expect(detector.idleFloor, 0.01);
+      expect(fire(detector, clapAfter(0.01, 0.5)), isNotEmpty);
     });
   });
 }

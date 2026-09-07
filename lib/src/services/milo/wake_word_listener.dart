@@ -8,7 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
-/// Listens for "Hey Milo" on device, then captures the command that follows.
+/// Listens for "Hey Milo" — or a clap — on device, then captures the
+/// command that follows.
 ///
 /// The wake word is spotted by a sherpa-onnx zipformer keyword model running
 /// locally, not by uploading audio and reading the transcript. That is the
@@ -18,13 +19,22 @@ import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 /// Keywords are BPE token sequences rather than a trained model, so adding a
 /// phrase is a line in `assets/kws/keywords.txt` and needs no training run.
 ///
+/// A clap opens the same capture, and is detected by shape rather than by a
+/// model: see [ClapDetector]. It exists for the case the wake word is worst
+/// at — hands wet, mouth full, across a room — and costs nothing when
+/// unused, because the arithmetic runs on frames the spotter is already
+/// being fed.
+///
 /// One microphone stream serves both jobs. While idle every frame goes to
-/// the spotter; once it fires, frames are buffered instead until the speaker
-/// stops, and that buffer — only that buffer — is handed back to be
-/// transcribed.
+/// the spotter; once either trigger fires, frames are buffered instead until
+/// the speaker stops, and that buffer — only that buffer — is handed back to
+/// be transcribed.
 class WakeWordListener {
-  WakeWordListener({AudioRecorder? recorder})
+  WakeWordListener({AudioRecorder? recorder, this.clapToWake = true})
       : _recorder = recorder ?? AudioRecorder();
+
+  /// Whether a clap also opens a capture.
+  final bool clapToWake;
 
   static const RecordConfig config = RecordConfig(
     encoder: AudioEncoder.pcm16bits,
@@ -73,6 +83,12 @@ class WakeWordListener {
   int samplesSeen = 0;
   double peakLevel = 0;
   int detections = 0;
+
+  /// Captures opened by a clap rather than by the wake word. Counted
+  /// separately because the two fail differently: a spotter that never
+  /// fires is a model problem, and a clap detector that never fires is a
+  /// threshold problem.
+  int clapDetections = 0;
   String? lastError;
 
   bool _capturing = false;
@@ -82,6 +98,11 @@ class WakeWordListener {
   int _sinceWakeBytes = 0;
   bool _heardAnything = false;
   double _noiseFloor = 0.01;
+
+  /// Judges claps against the idle room, separately from [_noiseFloor] —
+  /// that one only moves during a capture, and a clap has to be measured
+  /// against the room as it was before anything happened.
+  final ClapDetector _clap = ClapDetector();
 
   bool get isListening => _frames != null;
 
@@ -101,7 +122,9 @@ class WakeWordListener {
     samplesSeen = 0;
     peakLevel = 0;
     detections = 0;
+    clapDetections = 0;
     lastError = null;
+    _clap.reset();
     final commands = StreamController<Uint8List>();
     _commands = commands;
     _resetCapture();
@@ -208,6 +231,18 @@ class WakeWordListener {
     final level = _rms(frame);
     if (level > peakLevel) peakLevel = level;
 
+    // Before the spotter, because a clap has to be judged on the frame it
+    // landed on and the spotter's decode loop can span several.
+    if (clapToWake && _clap.accept(level, frame.length)) {
+      clapDetections++;
+      detections++;
+      // The decoder holds whatever it had half-heard; leaving it would let
+      // it fire again on its own tail once capture ends.
+      spotter.reset(stream);
+      _beginCapture();
+      return;
+    }
+
     stream.acceptWaveform(samples: samples, sampleRate: sampleRate);
     while (spotter.isReady(stream)) {
       spotter.decode(stream);
@@ -280,6 +315,10 @@ class WakeWordListener {
     _silentBytes = 0;
     _sinceWakeBytes = 0;
     _heardAnything = false;
+    // The half-detected spike is dropped with the capture, but the
+    // refractory count is not: a clap's echo arrives after the capture it
+    // opened, and would otherwise open a second one.
+    _clap.dropPendingSpike();
   }
 
   static int _bytes(Duration duration) =>
@@ -357,5 +396,129 @@ class WakeWordListener {
       offset += frame.length;
     }
     return out;
+  }
+}
+
+/// Decides whether a run of frame levels contains a clap.
+///
+/// Its own class so the thresholds can be exercised directly: driving this
+/// through [WakeWordListener] would mean a microphone and a loaded ONNX
+/// model to test three floating-point comparisons.
+///
+/// Stateful by necessity — a clap is a shape across frames, not a property
+/// of one — so a detector belongs to a single listening session and is
+/// [reset] when that session restarts.
+class ClapDetector {
+  /// How far above the running noise floor a frame has to jump to be a
+  /// clap candidate.
+  ///
+  /// A clap is not merely loud — speech is loud too. What separates them is
+  /// the ratio: a clap is a step change of roughly 20dB inside a single
+  /// 20ms frame, where a spoken syllable ramps over several.
+  static const double riseRatio = 8.0;
+
+  /// The absolute floor a clap must also clear, so a jump out of near
+  /// silence in a very quiet room is not counted.
+  static const double minLevel = 0.16;
+
+  /// A clap is over almost immediately. A frame this loud that is *still*
+  /// loud two frames later is a door, a shout or music, and is rejected —
+  /// which is the check that stops the feature firing all day.
+  static const double decayRatio = 0.35;
+
+  /// Frames examined after the spike to see whether it decayed.
+  static const int decayFrames = 3;
+
+  /// Nothing can re-trigger a clap for this long after one fires. Covers
+  /// the second half of a double clap and the room's own echo.
+  static const Duration refractory = Duration(milliseconds: 1200);
+
+
+  /// The room while nothing is happening. Follows slowly, so a fan starting
+  /// up raises the bar for a clap instead of triggering one.
+  double idleFloor = 0.01;
+
+  /// A spike waiting to be confirmed or rejected by what follows it.
+  double? _peak;
+  int _framesLeft = 0;
+
+  /// Frames still to ignore after a clap fired.
+  int _cooldownFrames = 0;
+
+  void reset() {
+    idleFloor = 0.01;
+    _peak = null;
+    _framesLeft = 0;
+    _cooldownFrames = 0;
+  }
+
+  /// Forgets a spike that has not resolved, keeping the refractory count.
+  void dropPendingSpike() {
+    _peak = null;
+    _framesLeft = 0;
+  }
+
+  /// Whether the frame at [level] completes a clap.
+  ///
+  /// Three tests, and it takes all three, because any one alone fires on
+  /// something ordinary:
+  ///
+  ///   * a step of [riseRatio] over the idle room, which rejects speech —
+  ///     a syllable ramps across frames rather than jumping inside one;
+  ///   * an absolute level over [minLevel], which rejects a jump out of
+  ///     near silence in a very quiet room;
+  ///   * a decay back under [decayRatio] of the peak within [decayFrames],
+  ///     which rejects everything that is loud and *stays* loud — a door, a
+  ///     shout, a bass note, music.
+  ///
+  /// The decay test is why this returns false on the loud frame itself and
+  /// true a frame or two later: the shape is not knowable at the peak.
+  /// Those frames are the start of the capture buffer anyway, so nothing
+  /// spoken immediately after the clap is lost.
+  bool accept(double level, int frameBytes) {
+    if (_cooldownFrames > 0) {
+      _cooldownFrames--;
+      _trackIdle(level);
+      return false;
+    }
+
+    final peak = _peak;
+    if (peak != null) {
+      _framesLeft--;
+      if (level <= peak * decayRatio) {
+        // It rose and fell inside a handful of frames. That is a clap.
+        _peak = null;
+        _framesLeft = 0;
+        _cooldownFrames = _framesIn(refractory, frameBytes);
+        return true;
+      }
+      if (_framesLeft <= 0) {
+        // Still loud. Whatever it was, it was not a clap — and it has been
+        // raising the idle floor the whole time, which is correct.
+        _peak = null;
+        _trackIdle(level);
+      }
+      return false;
+    }
+
+    if (level >= minLevel && level >= idleFloor * riseRatio) {
+      _peak = level;
+      _framesLeft = decayFrames;
+      return false;
+    }
+
+    _trackIdle(level);
+    return false;
+  }
+
+  void _trackIdle(double level) {
+    idleFloor = idleFloor * 0.97 + level * 0.03;
+  }
+
+  static int _framesIn(Duration duration, int frameBytes) {
+    if (frameBytes <= 0) return 0;
+    final bytes =
+        (duration.inMilliseconds * WakeWordListener.sampleRate * 2) ~/ 1000;
+    return (bytes / frameBytes).ceil();
   }
 }

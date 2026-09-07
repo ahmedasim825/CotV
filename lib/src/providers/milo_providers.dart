@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart' show Amplitude;
@@ -17,8 +19,8 @@ import '../models/task_view.dart';
 import '../repositories/chat_repository.dart';
 import '../services/milo/gemini_client.dart';
 import '../services/milo/memory_summarizer.dart';
-import '../services/milo/groq_client.dart';
-import '../services/milo/groq_transcription_client.dart';
+import '../services/milo/ollama_client.dart';
+import '../services/milo/local_transcription_client.dart';
 import '../services/milo/milo_credentials.dart';
 import '../services/milo/milo_service.dart';
 import '../services/milo/milo_speech_service.dart';
@@ -48,26 +50,70 @@ final miloCredentialsProvider =
 /// The keys, read once and cached. The settings sheet invalidates this
 /// after a save, which is what makes a newly entered key take effect
 /// without a relaunch.
-final miloSecretsProvider = FutureProvider<MiloSecrets>(
-  (ref) => ref.watch(miloCredentialsProvider).load(),
+///
+/// Erasing the retired Groq key rides along with the first load rather than
+/// getting its own call site: this is the one place that already reaches
+/// the keystore on launch, and a one-shot cleanup with a launch of its own
+/// would be a launch step nobody remembers is there.
+final miloSecretsProvider = FutureProvider<MiloSecrets>((ref) async {
+  final credentials = ref.watch(miloCredentialsProvider);
+  unawaited(credentials.purgeRetiredKeys());
+  return credentials.load();
+});
+
+/// Whether this platform can run a model locally at all.
+///
+/// Windows only for now, where Ollama serves Qwen on loopback. iOS has no
+/// runtime Flutter can reach: PocketPal is a separate app with no inference
+/// API, and putting llama.cpp in-process means shipping or downloading a
+/// multi-gigabyte GGUF. When one exists, it plugs in here — every caller
+/// already routes through [localBrainStatusProvider] and would need no
+/// change.
+bool get supportsLocalBrain => defaultTargetPlatform == TargetPlatform.windows;
+
+final ollamaClientProvider = Provider<OllamaClient>(
+  (ref) => OllamaClient(httpClient: ref.watch(miloHttpClientProvider)),
 );
 
-final groqClientProvider = Provider<GroqClient>(
-  (ref) => GroqClient(httpClient: ref.watch(miloHttpClientProvider)),
+/// Whether the local brain can take this turn.
+///
+/// Re-probed rather than cached for the session: Ollama is a process the
+/// user can start or stop at any time, and a cached "unreachable" would
+/// keep sending prompts to the cloud long after they started it.
+final localBrainStatusProvider = Provider<Future<LocalBrainStatus> Function()>(
+  (ref) => () async {
+    if (!supportsLocalBrain) return const LocalBrainStatus.unsupported();
+    return ref.read(ollamaClientProvider).probe();
+  },
 );
 
 final geminiClientProvider = Provider<GeminiClient>(
   (ref) => GeminiClient(httpClient: ref.watch(miloHttpClientProvider)),
 );
 
-final transcriptionClientProvider = Provider<GroqTranscriptionClient>(
-  (ref) => GroqTranscriptionClient(httpClient: ref.watch(miloHttpClientProvider)),
+final transcriptionClientProvider = Provider<LocalTranscriptionClient>(
+  (ref) => LocalTranscriptionClient(
+    httpClient: ref.watch(miloHttpClientProvider),
+  ),
 );
 
 /// Holds the text-to-speech engine, silenced when the scope goes away so a
 /// reply cannot keep talking after the panel that produced it is gone.
+///
+/// Windows speaks through Kokoro in the PC agent, with the OS voice behind
+/// it for when the agent is not running; everywhere else speaks through the
+/// OS directly, which on iOS is `AVSpeechSynthesizer` and its neural
+/// voices.
 final miloSpeechProvider = Provider<MiloSpeechService>((ref) {
-  final speech = MiloSpeechService();
+  final system = SystemSpeechService();
+  final speech = defaultTargetPlatform == TargetPlatform.windows
+      ? KokoroSpeechService(
+          httpClient: ref.watch(miloHttpClientProvider),
+          agent: () async =>
+              (await ref.read(miloSecretsProvider.future)).pcAgent,
+          fallback: system,
+        )
+      : system;
   ref.onDispose(speech.dispose);
 
   // Re-applied whenever the choice changes, so picking a voice takes effect
@@ -108,10 +154,11 @@ final miloToolsProvider = Provider<MiloTools>(
 
 final miloServiceProvider = Provider<MiloService>(
   (ref) => MiloService(
-    groq: ref.watch(groqClientProvider),
+    local: ref.watch(ollamaClientProvider),
     gemini: ref.watch(geminiClientProvider),
     pcRemote: ref.watch(pcRemoteServiceProvider),
     tools: ref.watch(miloToolsProvider),
+    localAvailability: ref.watch(localBrainStatusProvider),
   ),
 );
 
@@ -569,18 +616,17 @@ class MiloVoiceNotifier extends Notifier<MiloVoiceState> {
         return;
       }
 
-      final secrets = await ref.read(miloSecretsProvider.future);
-      final key = secrets.groqApiKey;
-      if (key == null) {
+      final agent = (await ref.read(miloSecretsProvider.future)).pcAgent;
+      if (agent == null) {
         throw MiloException(
-          'Speech needs the Groq key, which is also what transcribes it. '
-          'Add one in Milo settings.',
+          'Speech is transcribed on your PC now, by the Milo agent. Add its '
+          'address and token in Milo settings, and make sure it is running.',
         );
       }
 
       final text = await ref
           .read(transcriptionClientProvider)
-          .transcribe(apiKey: key, bytes: bytes);
+          .transcribe(agent: agent, bytes: bytes);
       if (_disposed) return;
 
       // Whisper returns punctuation for silence ("." or "you"), so an
@@ -723,13 +769,12 @@ class WakeWordNotifier extends Notifier<WakeWordStatus> {
     if (_busy || _disposed) return;
     _busy = true;
     try {
-      final secrets = await ref.read(miloSecretsProvider.future);
-      final key = secrets.groqApiKey;
-      if (key == null) return;
+      final agent = (await ref.read(miloSecretsProvider.future)).pcAgent;
+      if (agent == null) return;
 
       final transcript = await ref
           .read(transcriptionClientProvider)
-          .transcribe(apiKey: key, bytes: wav);
+          .transcribe(agent: agent, bytes: wav);
       if (_disposed || transcript.isEmpty) return;
 
       // The wake word was matched on device, so this audio is already known

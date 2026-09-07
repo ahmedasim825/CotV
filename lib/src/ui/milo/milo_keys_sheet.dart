@@ -31,7 +31,6 @@ class MiloKeysSheet extends ConsumerStatefulWidget {
 }
 
 class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
-  final _groq = TextEditingController();
   final _gemini = TextEditingController();
   final _host = TextEditingController();
   final _token = TextEditingController();
@@ -48,7 +47,6 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
 
   @override
   void dispose() {
-    _groq.dispose();
     _gemini.dispose();
     _host.dispose();
     _token.dispose();
@@ -60,7 +58,6 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
     await ref.read(miloCredentialsProvider).save(
           // Null leaves a stored value alone; only a field the user
           // actually typed in is written.
-          groqApiKey: _groq.text.isEmpty ? null : _groq.text,
           geminiApiKey: _gemini.text.isEmpty ? null : _gemini.text,
           pcHost: _host.text,
           pcToken: _token.text.isEmpty ? null : _token.text,
@@ -103,30 +100,22 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SecretField(
-            controller: _groq,
-            icon: PhLight.lightning,
-            label: 'Groq API key',
-            hint: 'gsk_...',
-            isSet: secrets?.hasGroq ?? false,
-            help: 'Answers instant requests and PC commands.',
-          ),
-          const SizedBox(height: 22),
-          _SecretField(
             controller: _gemini,
             icon: PhLight.brain,
             label: 'Gemini API key',
             hint: 'AIza...',
             isSet: secrets?.hasGemini ?? false,
-            help: 'Answers planning, summaries and anything long.',
+            help: 'Answers medical questions, research and anything long. '
+                'Everything else is answered by Qwen on this machine, which '
+                'needs no key.',
           ),
-          const SizedBox(height: 30),
           const SizedBox(height: 30),
           SectionHeader(
             eyebrow: 'VOICE',
             title: 'Hands-free',
             titleSize: 20,
-            subtitle: 'Milo can wait for its name instead of waiting for a '
-                'tap.',
+            subtitle: 'Milo can wait for its name — or a clap — instead of '
+                'waiting for a tap.',
             accent: context.palette.accentBright,
           ),
           const SizedBox(height: 16),
@@ -318,9 +307,10 @@ class _WakeWordToggle extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  'The wake word is matched on this device, so nothing is '
-                  'sent anywhere until it hears its name. Only what you say '
-                  'after it is transcribed.',
+                  'The wake word is matched on this device, and a clap is '
+                  'recognised by its shape rather than by a model, so '
+                  'nothing is sent anywhere until one of them fires. Only '
+                  'what you say after it is transcribed.',
                   style: context.typography.ui(
                     size: 12,
                     color: palette.textSecondary,
@@ -565,6 +555,7 @@ class _WakeWordDiagnosticsState
       ('Audio heard', '${seconds.toStringAsFixed(1)}s', listener.framesSeen > 0),
       ('Loudest so far', '$level%', listener.peakLevel > 0.02),
       ('Wake word hits', '${listener.detections}', listener.detections > 0),
+      ('Claps', '${listener.clapDetections}', listener.clapDetections > 0),
     ];
 
     return Container(

@@ -70,7 +70,7 @@ void main() {
         isPcCommand: true,
       );
 
-      expect(decision.engine, MiloEngine.groq);
+      expect(decision.engine, MiloEngine.local);
       expect(decision.reason, contains('PC command'));
     });
 
@@ -107,7 +107,7 @@ void main() {
 
       expect(
         router.classify(prompt, isPcCommand: false).engine,
-        MiloEngine.groq,
+        MiloEngine.local,
       );
     });
 
@@ -119,7 +119,7 @@ void main() {
       ]) {
         expect(
           router.classify(prompt, isPcCommand: false).engine,
-          MiloEngine.groq,
+          MiloEngine.local,
           reason: prompt,
         );
       }

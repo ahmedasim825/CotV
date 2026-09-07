@@ -1,2 +1,16 @@
 fastapi>=0.115,<1.0
 uvicorn>=0.30,<1.0
+
+# Nothing else is required. /transcribe takes the WAV as a raw body rather
+# than as a multipart upload, precisely so that a missing python-multipart
+# cannot stop the agent starting and take the PC commands down with it.
+#
+# Local speech, both optional. The agent starts and serves every other
+# endpoint without them; /transcribe and /speak answer 503 instead.
+#
+# Kokoro also needs its two model files, which are not on PyPI. Fetch
+# kokoro-v1.0.onnx and voices-v1.0.bin from
+# https://github.com/thewh1teagle/kokoro-onnx/releases and point the
+# [speech] section of milo_agent.toml at them.
+faster-whisper>=1.0,<2.0
+kokoro-onnx>=0.4,<1.0

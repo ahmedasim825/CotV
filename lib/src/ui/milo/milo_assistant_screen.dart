@@ -215,19 +215,18 @@ class _EmptyState extends ConsumerWidget {
   const _EmptyState();
 
   /// One prompt per route, so the empty panel doubles as the explanation of
-  /// what Milo can reach: the instant model, the deep model, and the PC.
+  /// what Milo can reach: the local model, the deep model, and the PC.
   static const List<String> _examples = [
     "What's my next prayer?",
     'Open Spotify on my PC',
-    'Plan a study block around Maghrib tonight',
+    'What are the contraindications for metformin?',
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final secrets = ref.watch(miloSecretsProvider).value;
-    final needsKey =
-        secrets != null && !secrets.hasGroq && !secrets.hasGemini;
+    final needsKey = secrets != null && !secrets.hasGemini;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -239,12 +238,14 @@ class _EmptyState extends ConsumerWidget {
             title: needsKey ? 'Milo needs a key' : 'Ask Milo.',
             titleSize: 26,
             subtitle: needsKey
-                ? 'Add a Groq key for instant answers, a Gemini key for '
-                    'planning, or both. Milo routes each request to '
-                    'whichever fits.'
-                : 'Say what you want. Short commands go to Groq, anything '
-                    'that needs working out goes to Gemini, and anything '
-                    'aimed at the laptop goes to your PC agent.',
+                ? 'Everyday requests are answered by Qwen on this machine '
+                    'and need no key. Add a Gemini key for medical '
+                    'questions and deep research, which are the ones Milo '
+                    'will not answer from a 3B model.'
+                : 'Say what you want. Most requests are answered on this '
+                    'machine, medical and research questions go to Gemini, '
+                    'and anything aimed at the laptop goes to your PC '
+                    'agent.',
           ),
           const SizedBox(height: 20),
           if (needsKey)

@@ -43,8 +43,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 import uvicorn
+
+from milo_speech import Speaker, SpeechUnavailable, Transcriber
 
 LOG = logging.getLogger("milo_pc_agent")
 
@@ -87,6 +90,22 @@ class Config:
             slug(key): expand(value) for key, value in paths.items()
         }
 
+        # Speech is entirely optional, so every value here has a default and
+        # nothing validates the paths at load time — the endpoints report a
+        # missing model when they are actually called, which is the only
+        # moment the user can do anything about it.
+        speech = raw.get("speech", {})
+        self.whisper_model: str = speech.get("whisper_model", "base.en")
+        self.whisper_compute: str = speech.get("whisper_compute_type", "int8")
+        self.kokoro_model: Path = beside_agent(
+            speech.get("kokoro_model", "models/kokoro-v1.0.onnx")
+        )
+        self.kokoro_voices: Path = beside_agent(
+            speech.get("kokoro_voices", "models/voices-v1.0.bin")
+        )
+        self.kokoro_voice: str = speech.get("kokoro_voice", "af_heart")
+        self.kokoro_speed: float = float(speech.get("kokoro_speed", 1.0))
+
     @classmethod
     def load(cls, path: Path) -> "Config":
         if not path.exists():
@@ -108,6 +127,18 @@ class Config:
 def expand(value: str) -> Path:
     """`~/Documents` and `%USERPROFILE%\\Documents` both become real paths."""
     return Path(os.path.expandvars(str(value))).expanduser()
+
+
+def beside_agent(value: str) -> Path:
+    """[value], with a relative path taken as relative to this script.
+
+    Model files are configured relative to the agent rather than to the
+    working directory, because the agent is normally started from a
+    shortcut or the Startup folder and the working directory is then
+    whatever Windows felt like.
+    """
+    path = expand(value)
+    return path if path.is_absolute() else (Path(__file__).parent / path)
 
 
 def slug(name: str) -> str:
@@ -231,6 +262,17 @@ def shell_open(target: str) -> None:
 app = FastAPI(title="Milo PC Agent", docs_url=None, redoc_url=None)
 CONFIG: Config
 
+# Both hold a model once loaded, so they are built at start-up and load
+# lazily. Neither reaches its library or its files until an endpoint is
+# actually called, which is what lets the agent run with neither installed.
+TRANSCRIBER: Transcriber
+SPEAKER: Speaker
+
+
+class SpeakRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+    voice: str = Field("", max_length=64)
+
 
 def require_token(request: Request) -> None:
     """Rejects anything without the shared secret.
@@ -252,9 +294,91 @@ def health() -> dict[str, Any]:
     """Unauthenticated, and says nothing but that the agent is up.
 
     Lets the phone tell "asleep" from "wrong token" without handing an
-    unauthenticated caller the app list.
+    unauthenticated caller the app list. The two speech flags are the
+    exception, and are safe to expose: they say which optional models are
+    installed, not what is on the machine.
     """
-    return {"ok": True, "message": "Milo agent is running."}
+    return {
+        "ok": True,
+        "message": "Milo agent is running.",
+        "stt": TRANSCRIBER.model_name,
+        "tts": SPEAKER.installed,
+    }
+
+
+# --------------------------------------------------------------------------
+# Speech
+# --------------------------------------------------------------------------
+
+
+@app.post("/transcribe", dependencies=[Depends(require_token)])
+async def transcribe(request: Request, language: str = "en") -> dict[str, Any]:
+    """Turns a recording into text with Faster-Whisper.
+
+    The WAV arrives as the raw request body rather than as a multipart
+    upload. That is not a micro-optimisation: a route declaring `UploadFile`
+    makes FastAPI raise at *import* time unless `python-multipart` is
+    installed, so adding one here would have stopped the agent starting at
+    all — taking the PC commands down with it — on any machine that updated
+    the agent without reinstalling its requirements.
+
+    The checkpoint and the vocabulary hint are the agent's, not the app's.
+    The machine that has to hold the model in memory is the one that should
+    choose it, and the hint describes Milo's vocabulary, which is the same
+    whichever device is asking. The reply names what actually ran so the app
+    is never guessing.
+    """
+    audio = await request.body()
+    if not audio:
+        raise HTTPException(status_code=400, detail="No audio in the request.")
+
+    try:
+        text = await run_in_threadpool(
+            lambda: TRANSCRIBER.transcribe(audio, language=language or "en")
+        )
+    except SpeechUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:  # noqa: BLE001 - reported, not handled
+        LOG.exception("Transcription failed")
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    LOG.info("Transcribed %d bytes to %d characters", len(audio), len(text))
+    return {"ok": True, "text": text, "model": TRANSCRIBER.model_name}
+
+
+@app.post("/speak", dependencies=[Depends(require_token)])
+async def speak(body: SpeakRequest) -> dict[str, Any]:
+    """Reads a line aloud through this machine's speakers, with Kokoro."""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Nothing to say.")
+
+    try:
+        await run_in_threadpool(
+            lambda: SPEAKER.speak(text, voice=body.voice or None)
+        )
+    except SpeechUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:  # noqa: BLE001 - reported, not handled
+        LOG.exception("Synthesis failed")
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return {"ok": True, "message": "Speaking."}
+
+
+@app.post("/speak/stop", dependencies=[Depends(require_token)])
+async def speak_stop() -> dict[str, Any]:
+    """Silences whatever Kokoro is playing.
+
+    Never fails: this is called when the user has already decided they do
+    not want to hear the rest, and reporting that the silence could not be
+    arranged would be worse than useless.
+    """
+    try:
+        await run_in_threadpool(SPEAKER.stop)
+    except Exception:  # noqa: BLE001 - nothing to recover
+        pass
+    return {"ok": True, "message": "Stopped."}
 
 
 @app.post("/open-app", dependencies=[Depends(require_token)])
@@ -437,7 +561,7 @@ def system_control(body: SystemControlRequest) -> dict[str, Any]:
 
 
 def main() -> None:
-    global CONFIG
+    global CONFIG, TRANSCRIBER, SPEAKER
 
     logging.basicConfig(
         level=logging.INFO,
@@ -452,6 +576,16 @@ def main() -> None:
         )
 
     CONFIG = Config.load(CONFIG_PATH)
+    TRANSCRIBER = Transcriber(
+        model=CONFIG.whisper_model,
+        compute_type=CONFIG.whisper_compute,
+    )
+    SPEAKER = Speaker(
+        model_path=CONFIG.kokoro_model,
+        voices_path=CONFIG.kokoro_voices,
+        voice=CONFIG.kokoro_voice,
+        speed=CONFIG.kokoro_speed,
+    )
 
     if CONFIG.allow_any_app or CONFIG.allow_any_path:
         # Said loudly on every start: in this mode the token is the only
@@ -468,6 +602,14 @@ def main() -> None:
         len(CONFIG.paths),
         CONFIG.host,
         CONFIG.port,
+    )
+    # Said at start-up rather than discovered on the first spoken turn: the
+    # models are a separate download, and "voice does not work" is a much
+    # worse way to learn one is missing than a line in the log.
+    LOG.info(
+        "Speech in: Faster-Whisper %s. Speech out: Kokoro %s.",
+        CONFIG.whisper_model,
+        "ready" if SPEAKER.installed else f"missing at {CONFIG.kokoro_model}",
     )
     LOG.info("Point Milo at http://<this-pc-lan-ip>:%d", CONFIG.port)
 

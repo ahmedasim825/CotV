@@ -28,21 +28,22 @@ class PcAgentConfig {
   Uri endpoint(String path) => baseUrl.replace(path: path);
 }
 
-/// The four secrets Milo needs, resolved from storage and the build.
+/// The secrets Milo needs, resolved from storage and the build.
+///
+/// Three rather than four since the local brain replaced the instant
+/// engine: Ollama runs on loopback and authenticates nobody, so there is no
+/// credential to hold for it. The PC agent's token now covers speech in
+/// both directions as well as commands.
 class MiloSecrets {
   const MiloSecrets({
-    this.groqApiKey,
     this.geminiApiKey,
     this.pcHost,
     this.pcToken,
   });
 
-  final String? groqApiKey;
   final String? geminiApiKey;
   final String? pcHost;
   final String? pcToken;
-
-  bool get hasGroq => groqApiKey != null;
 
   bool get hasGemini => geminiApiKey != null;
 
@@ -63,12 +64,18 @@ class MiloCredentials {
   MiloCredentials({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage();
 
-  static const String groqKeyName = 'milo.groq_api_key';
   static const String geminiKeyName = 'milo.gemini_api_key';
   static const String pcHostName = 'milo.pc_host';
   static const String pcTokenName = 'milo.pc_token';
 
-  static const String _envGroq = String.fromEnvironment('MILO_GROQ_API_KEY');
+  /// The key the Groq engine used, kept only so it can be erased.
+  ///
+  /// Dropping the engine does not remove what it stored: a device that ran
+  /// the previous build still holds that key in the Keychain, and leaving
+  /// a credential behind for a service the app no longer talks to is the
+  /// kind of thing that is only ever found by someone looking for it.
+  static const String retiredGroqKeyName = 'milo.groq_api_key';
+
   static const String _envGemini =
       String.fromEnvironment('MILO_GEMINI_API_KEY');
   static const String _envPcHost = String.fromEnvironment('MILO_PC_HOST');
@@ -78,17 +85,15 @@ class MiloCredentials {
 
   Future<MiloSecrets> load() async {
     final stored = await Future.wait([
-      _storage.read(key: groqKeyName),
       _storage.read(key: geminiKeyName),
       _storage.read(key: pcHostName),
       _storage.read(key: pcTokenName),
     ]);
 
     return MiloSecrets(
-      groqApiKey: _resolve(stored[0], _envGroq),
-      geminiApiKey: _resolve(stored[1], _envGemini),
-      pcHost: _resolve(stored[2], _envPcHost),
-      pcToken: _resolve(stored[3], _envPcToken),
+      geminiApiKey: _resolve(stored[0], _envGemini),
+      pcHost: _resolve(stored[1], _envPcHost),
+      pcToken: _resolve(stored[2], _envPcToken),
     );
   }
 
@@ -96,17 +101,29 @@ class MiloCredentials {
   /// field set to the empty string is deleted, which is how the settings
   /// sheet clears a key.
   Future<void> save({
-    String? groqApiKey,
     String? geminiApiKey,
     String? pcHost,
     String? pcToken,
   }) async {
     await Future.wait([
-      _write(groqKeyName, groqApiKey),
       _write(geminiKeyName, geminiApiKey),
       _write(pcHostName, pcHost),
       _write(pcTokenName, pcToken),
     ]);
+  }
+
+  /// Deletes the credential the retired Groq engine left behind.
+  ///
+  /// Best-effort and idempotent: a device that never held one, or a
+  /// platform whose keystore refuses the read, is not a failure worth
+  /// surfacing — there is nothing the user could do about it and nothing
+  /// depending on the result.
+  Future<void> purgeRetiredKeys() async {
+    try {
+      await _storage.delete(key: retiredGroqKeyName);
+    } on Object {
+      // Keychain locked, or no such entry. Either way nothing is using it.
+    }
   }
 
   Future<void> _write(String key, String? value) {

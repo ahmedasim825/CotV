@@ -52,3 +52,24 @@ documents = "~/Documents"
 # resolve inside one of these roots. Leave the list empty to refuse literal
 # paths entirely and allow only the aliases above.
 allowed_roots = ["D:/Study", "~/Documents", "~/Downloads"]
+
+# Local speech models. Both are optional — the agent runs without either and
+# answers 503 on /transcribe and /speak, which the app handles: voice input
+# reports that it needs the agent, and replies are read by the Windows OS
+# voice instead of Kokoro.
+[speech]
+# Faster-Whisper's checkpoint, downloaded on first use and cached under
+# ~/.cache/huggingface. base.en is the smallest one that hears "Maghrib" as
+# a word; drop to tiny.en on a machine short on memory.
+whisper_model = "base.en"
+# int8 on CPU. Use "float16" only with a CUDA build of CTranslate2.
+whisper_compute_type = "int8"
+
+# Kokoro's two files, from the kokoro-onnx releases:
+# https://github.com/thewh1teagle/kokoro-onnx/releases
+# A relative path is taken as relative to the agent, not to whatever
+# directory it happened to be started from.
+kokoro_model = "models/kokoro-v1.0.onnx"
+kokoro_voices = "models/voices-v1.0.bin"
+kokoro_voice = "af_heart"
+kokoro_speed = 1.0

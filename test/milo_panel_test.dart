@@ -4,7 +4,12 @@
 // Same harness as the other widget tests — real Hive in a temp directory,
 // plugin-backed services faked — plus two Milo-specific overrides: the
 // secrets (so no Keychain channel is needed) and the HTTP client (so the
-// real GroqClient runs against a scripted event stream).
+// real OllamaClient runs against a scripted event stream).
+//
+// The local brain's availability is overridden too. Under flutter_test
+// `defaultTargetPlatform` is Android, which has no local runtime, so every
+// turn would otherwise fall through to Gemini and the local path would go
+// untested on the one surface that renders its badge.
 
 import 'dart:convert';
 import 'dart:io';
@@ -22,6 +27,7 @@ import 'package:cotv/main.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/milo_models.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -31,6 +37,7 @@ import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
 import 'package:cotv/src/security/security_service.dart';
 import 'package:cotv/src/services/milo/milo_credentials.dart';
+import 'package:cotv/src/services/milo/ollama_client.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
@@ -74,7 +81,7 @@ class _FakeNotificationService extends NotificationService {
   Future<void> cancelReminder(String key) async {}
 }
 
-String _groqFrame(String text) =>
+String _localFrame(String text) =>
     'data: ${jsonEncode({
           'choices': [
             {
@@ -131,7 +138,10 @@ void main() {
               .overrideWithValue(_FakeNotificationService()),
           miloHttpClientProvider.overrideWithValue(client),
           miloSecretsProvider.overrideWith(
-            (ref) async => const MiloSecrets(groqApiKey: 'gsk_test'),
+            (ref) async => const MiloSecrets(geminiApiKey: 'gemini_test'),
+          ),
+          localBrainStatusProvider.overrideWithValue(
+            () async => const LocalBrainStatus.ready(),
           ),
         ],
         child: const PrayerLockoutApp(),
@@ -186,7 +196,7 @@ void main() {
     expect(find.text("What's my next prayer?"), findsOneWidget);
     expect(find.text('Open Spotify on my PC'), findsOneWidget);
     expect(
-      find.text('Plan a study block around Maghrib tonight'),
+      find.text('What are the contraindications for metformin?'),
       findsOneWidget,
     );
   });
@@ -197,7 +207,7 @@ void main() {
       await bodyStream.bytesToString();
       return http.StreamedResponse(
         Stream.fromIterable(
-          [_groqFrame('Asr, at 16:12.'), 'data: [DONE]\n\n'].map(utf8.encode),
+          [_localFrame('Asr, at 16:12.'), 'data: [DONE]\n\n'].map(utf8.encode),
         ),
         200,
         headers: const {'content-type': 'text/event-stream'},
@@ -228,20 +238,18 @@ void main() {
     // badge of the engine that actually ran.
     expect(find.text("What's my next prayer?"), findsOneWidget);
     expect(find.text('Asr, at 16:12.'), findsOneWidget);
-    expect(find.text('GROQ INSTANT'), findsOneWidget);
+    expect(find.text('QWEN LOCAL'), findsOneWidget);
     // The engine that did not run stays an unlabelled ring.
     expect(find.text('GEMINI DEEP'), findsNothing);
     expect(find.text('DONE ON PC'), findsNothing);
   });
 
-  testWidgets('a rejected key is reported on the turn, not swallowed',
+  testWidgets('an engine failure is reported on the turn, not swallowed',
       (tester) async {
     final client = MockClient(
       (request) async => http.Response(
-        jsonEncode({
-          'error': {'message': 'Invalid API Key'},
-        }),
-        401,
+        jsonEncode({'error': 'model not found'}),
+        404,
       ),
     );
 
@@ -252,13 +260,14 @@ void main() {
     await pumpUntil(
       tester,
       () => find
-          .textContaining('Groq rejected the API key')
+          .textContaining('has no model called')
           .evaluate()
           .isNotEmpty,
     );
 
+    // The message names the command that fixes it, not just the status.
     expect(
-      find.textContaining('Check it in Milo settings.'),
+      find.textContaining('ollama pull $localModelId'),
       findsOneWidget,
     );
   });

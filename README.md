@@ -22,14 +22,61 @@ wake word ("Milo", "Hey Milo"), and routes it:
 
 | Route | Model | When |
 |---|---|---|
-| Instant | Groq `qwen/qwen3.8-27b` | short commands and lookups |
-| Deep | Gemini `gemini-3.6-flash` | planning, summaries, anything with constraints |
+| Local | Qwen 2.5 3B Instruct `qwen2.5:3b-instruct`, via Ollama | everything, by default |
+| Deep | Gemini `gemini-2.5-flash` | medical questions, research, planning, anything long |
 | PC | the Windows agent | anything aimed at the laptop |
 
-Speech is an input path, not a second assistant. A recording goes to Groq's
-`whisper-large-v3-turbo`, and the transcript enters the same pipeline a typed
-message does — so a spoken "open Spotify on my PC" and a typed one cannot
-drift apart in behaviour, and the wake word is stripped the same way for both.
+The default is the machine you are on. Every routing rule is therefore a
+reason to *upload* a prompt rather than a reason to keep it, which is worth
+reading the rules as: a clinical term, a research phrase, a synthesis verb,
+or more than 22 words. Everything else is answered by a 3B model over
+loopback, with no key and no bill.
+
+Clinical terms are checked first and are not overridable by length — "is
+40mg amlodipine safe" is five words and is not a question to answer from a
+3B model on a laptop.
+
+If the local brain is not running, the turn goes to Gemini and the rail
+says so in the same sentence that gave the original reason. The check
+happens *before* the rail is drawn, so the badge never names an engine that
+did not run.
+
+**iOS has no local brain.** PocketPal is a separate app with no inference
+API, and putting llama.cpp in-process means shipping or downloading a
+multi-gigabyte GGUF. Until one exists, iOS routes every turn to Gemini and
+says so. The seam is `supportsLocalBrain` and `localBrainStatusProvider` in
+`lib/src/providers/milo_providers.dart` — a runtime plugs in there without
+touching the router.
+
+Speech is an input path, not a second assistant. A recording goes to
+**Faster-Whisper** (`base.en`, CTranslate2, int8 on CPU) inside the PC
+agent, and the transcript enters the same pipeline a typed message does — so
+a spoken "open Spotify on my PC" and a typed one cannot drift apart in
+behaviour, and the wake word is stripped the same way for both. There is no
+cloud speech path: when the agent is not reachable, voice input says so
+rather than falling back to somewhere the audio would be uploaded.
+
+Replies are read aloud by **Kokoro 82M** (`af_heart`, ONNX) in the same
+agent on Windows, and by `AVSpeechSynthesizer` on iOS, which is what puts
+Apple's neural voices (Ava, Zoe) within reach — nothing in that API
+distinguishes a neural voice from a compact one except its name. Kokoro
+synthesises and plays on the PC rather than streaming audio back: on
+Windows the app and the agent are the same machine. When Kokoro is not
+installed, the OS voice reads the line instead.
+
+### Waking Milo
+
+Two triggers, both matched on device, both opening the same capture:
+
+- **The wake word**, spotted by a sherpa-onnx zipformer keyword model.
+- **A clap**, recognised by shape rather than by a model — a step of 8x
+  over the idle room inside one 20ms frame, above an absolute floor, that
+  then decays to a third of its peak within three frames. All three tests
+  are needed: the rise alone fires on a shout, the level alone fires on
+  music, and the decay is what actually separates a clap from a door. See
+  `ClapDetector` in `lib/src/services/milo/wake_word_listener.dart`.
+
+Nothing leaves the machine until one of them fires.
 
 The composer has one button rather than three. An empty box can only offer
 the microphone, a filled one can only offer send, and while either is in
@@ -44,20 +91,36 @@ taps and is deleted as soon as its bytes have been uploaded.
 The routing rail on each answer shows which engine ran **and the rule that
 chose it**, so a bad route is distinguishable from a bad answer.
 
-Model ids go stale. Both of the originally specified ones,
-`llama-3.1-8b-instant` and `gemini-2.0-flash`, are retired. To see what a key
-can actually reach today, ask each provider:
+Model ids go stale. `llama-3.1-8b-instant`, `gemini-2.0-flash` and the Groq
+`qwen/qwen3.8-27b` this stack replaced are all retired. To see what the key
+can reach today:
 
 ```bash
-curl -H "Authorization: Bearer $GROQ_KEY" https://api.groq.com/openai/v1/models
 curl -H "x-goog-api-key: $GEMINI_KEY" https://generativelanguage.googleapis.com/v1beta/models
 ```
 
+### The local brain
+
+```bash
+winget install Ollama.Ollama
+ollama pull qwen2.5:3b-instruct
+```
+
+Ollama listens on `127.0.0.1:11434` — loopback, not the LAN, because the
+local brain is the one part of Milo meant never to leave the machine.
+Nothing authenticates to it and nothing should: a key on that request would
+mean the prompt was going somewhere that needs one.
+
+`dart run tool/live_check.dart` drives both engines against the real
+runtimes and reports which model each actually reached. It skips the local
+half with a reason rather than failing when Ollama is not running.
+
 ### Keys
 
-Milo needs a [Groq key](https://console.groq.com/keys) and/or a
-[Gemini key](https://aistudio.google.com/apikey). Two ways in, and stored
-values always win:
+Milo needs one key: a [Gemini key](https://aistudio.google.com/apikey) from
+AI Studio, which starts `AIza`. A Vertex or OAuth token will not work — the
+REST endpoint takes an API key in `x-goog-api-key`, not a bearer token.
+Two ways in, and stored values always win:
 
 1. **On device** — Milo → gear → Milo settings. Held in the iOS Keychain, or
    Windows Credential Manager. This is the normal path.
@@ -65,7 +128,6 @@ values always win:
 
    ```json
    {
-     "MILO_GROQ_API_KEY": "gsk_...",
      "MILO_GEMINI_API_KEY": "AIza...",
      "MILO_PC_HOST": "127.0.0.1:8765",
      "MILO_PC_TOKEN": "..."

@@ -104,10 +104,12 @@ and reports which model each actually reached.
 Milo needs a [Groq key](https://console.groq.com/keys) and/or a
 [Gemini key](https://aistudio.google.com/apikey).
 
-The Gemini one must be an **AI Studio** key, which starts `AIza`. A Vertex
-or gcloud OAuth token will not work: the REST endpoint takes an API key in
-`x-goog-api-key`, not a bearer token, and refuses one with a 404 that reads
-like a missing model rather than a rejected credential.
+The Gemini one comes from **AI Studio**, and goes in the `x-goog-api-key`
+header. Google does not document a key prefix, so the app does not check
+for one — it reports what the server said instead. Worth knowing: this
+endpoint answers a credential it cannot resolve with a **404**, which reads
+like a missing model rather than a rejected key, so check the credential
+before you go renaming models.
 
 Two ways in, and stored values always win:
 
@@ -117,8 +119,8 @@ Two ways in, and stored values always win:
 
    ```json
    {
-     "MILO_GROQ_API_KEY": "gsk_...",
-     "MILO_GEMINI_API_KEY": "AIza...",
+     "MILO_GROQ_API_KEY": "<Groq key>",
+     "MILO_GEMINI_API_KEY": "<AI Studio key>",
      "MILO_PC_HOST": "127.0.0.1:8765",
      "MILO_PC_TOKEN": "..."
    }

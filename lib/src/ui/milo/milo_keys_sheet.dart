@@ -116,7 +116,7 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
             controller: _gemini,
             icon: PhLight.brain,
             label: 'Gemini API key',
-            hint: 'AIza...',
+            hint: 'Your AI Studio key',
             isSet: secrets?.hasGemini ?? false,
             help: 'Answers medical questions, research, planning and '
                 'anything long.',

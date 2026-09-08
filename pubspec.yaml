@@ -95,7 +95,7 @@ msix_config:
   # Windows refuses to install a package whose identity and version
   # match an installed one but whose contents differ, so this has to
   # move for every build you intend to install over the last.
-  msix_version: 1.0.16.0
+  msix_version: 1.0.17.0
   logo_path: assets/icons/app_icon.png
   # internetClient reaches Groq and Gemini; privateNetworkClientServer is
   # what lets the app talk to the Milo agent on the LAN.

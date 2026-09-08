@@ -85,11 +85,7 @@ class GeminiClient {
     final response = await _http.send(request);
     if (response.statusCode != 200) {
       throw MiloException(
-        _failureMessage(
-          response.statusCode,
-          await _readError(response),
-          apiKey,
-        ),
+        _failureMessage(response.statusCode, await _readError(response)),
       );
     }
 
@@ -147,43 +143,43 @@ class GeminiClient {
     return body.isEmpty ? null : body;
   }
 
-  /// An AI Studio key, which is the only kind this endpoint takes.
+  /// Where a working credential comes from, appended to auth failures.
   ///
-  /// Checked by shape rather than by asking, because the mistake it catches
-  /// is common and specific: a Vertex or gcloud OAuth token starts `AQ.` or
-  /// `ya29.`, looks every bit like a credential, and is refused by every
-  /// status below — including 404, which otherwise reads as the model being
-  /// wrong and sends you off renaming a model that was fine.
-  static bool _looksLikeApiKey(String key) => key.startsWith('AIza');
+  /// Deliberately says nothing about what a key *looks like*. An earlier
+  /// version keyed off an "AIza" prefix and told the user their key was the
+  /// wrong kind — which is the same failure as the 404 below blaming the
+  /// model, just moved one step along: an assertion the code is in no
+  /// position to make, stated with more confidence than the evidence.
+  /// Google does not document a prefix, and a format can change without
+  /// asking us.
+  ///
+  /// The server already says what it rejected, and [detail] carries that
+  /// through. This only adds where to get another one.
+  static const String _keySource =
+      '\nGet a key at https://aistudio.google.com/apikey and paste it into '
+      'Milo settings.';
 
-  /// Appended to auth-shaped failures. Empty when the key is the right
-  /// shape, so a real model or quota problem is not muddied by a guess.
-  String _keyHint(String apiKey) => _looksLikeApiKey(apiKey)
-      ? ''
-      : '\nThat key is not an AI Studio key — those start "AIza". An OAuth '
-          'or Vertex token is refused here whatever the model is. Get one '
-          'at https://aistudio.google.com/apikey';
-
-  String _failureMessage(int status, String? detail, String apiKey) {
+  String _failureMessage(int status, String? detail) {
     switch (status) {
       case 400:
         // Gemini reports a malformed or unrecognised key as 400, not 401.
-        return 'Gemini rejected the request${detail == null ? '' : ': $detail'}'
-            '${_keyHint(apiKey)}';
+        return 'Gemini rejected the request'
+            '${detail == null ? '' : ': $detail'}$_keySource';
       case 401:
       case 403:
-        return 'Gemini rejected the API key.${_keyHint(apiKey)}';
+        return 'Gemini rejected the credential'
+            '${detail == null ? '.' : ': $detail'}$_keySource';
       case 429:
         return 'Gemini is rate limiting this key. Try again shortly.';
       case 404:
-        // Deliberately not "no such model" on its own. A credential this
-        // endpoint cannot resolve 404s here as well, so blaming the model
-        // outright is how an afternoon goes into renaming one that worked.
-        return _looksLikeApiKey(apiKey)
-            ? 'Gemini has no model called "$model" for this key. Model ids '
-                'go stale — list what the key can actually reach with a GET '
-                'on /v1beta/models.'
-            : 'Gemini returned 404 for "$model".${_keyHint(apiKey)}';
+        // Two causes, and the app cannot tell them apart from here: the
+        // model really is gone, or the credential could not be resolved and
+        // the endpoint answered as though the model were not there. Naming
+        // both is honest; picking one is how an afternoon goes into
+        // renaming a model that worked.
+        return 'Gemini returned 404 for "$model". Either that model id is '
+            'retired, or the key was not accepted — this endpoint answers '
+            '404 for both.$_keySource';
       default:
         return 'Gemini returned $status${detail == null ? '.' : ': $detail'}';
     }

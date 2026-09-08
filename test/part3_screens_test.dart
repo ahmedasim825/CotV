@@ -37,6 +37,8 @@ import 'package:cotv/src/providers/theme_providers.dart';
 import 'package:cotv/src/providers/user_settings_providers.dart';
 import 'package:cotv/src/security/security_service.dart';
 import 'package:cotv/src/services/notification_service.dart';
+import 'package:cotv/src/providers/chat_session_providers.dart';
+import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
 import 'package:cotv/src/ui/habits/habit_form_sheet.dart';
@@ -87,7 +89,12 @@ class _FakeNotificationService extends NotificationService {
 void main() {
   late Directory tempDir;
 
+  late AppDatabase database;
+
   setUp(() async {
+    // The app opens this in main(); tests get an in-memory one with the
+    // same schema, so the chat tables exist without a file to clean up.
+    database = AppDatabase.openAt(':memory:');
     tempDir = await Directory.systemTemp.createTemp('cotv_part3_test_');
     Hive.init(tempDir.path);
     if (!Hive.isAdapterRegistered(0)) {
@@ -108,6 +115,7 @@ void main() {
   });
 
   tearDown(() async {
+    database.dispose();
     await Hive.close();
     if (tempDir.existsSync()) {
       try {
@@ -130,6 +138,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appDatabaseProvider.overrideWithValue(database),
           securityServiceProvider.overrideWithValue(_FakeSecurityService()),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),

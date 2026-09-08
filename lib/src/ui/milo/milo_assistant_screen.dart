@@ -11,6 +11,7 @@ import '../components/components.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
 import 'milo_keys_sheet.dart';
+import 'widgets/session_drawer.dart';
 import 'widgets/milo_turn.dart';
 
 /// Milo's panel: the conversation, the composer, and the way into its keys.
@@ -98,11 +99,18 @@ class _PanelHeader extends ConsumerWidget {
               );
             },
           ),
+          _HeaderChip(
+            icon: PhLight.listBullets,
+            tooltip: 'Chats',
+            onTap: () => showSessionDrawer(context),
+          ),
           if (hasHistory)
             _HeaderChip(
-              icon: PhLight.trash,
-              tooltip: 'Clear conversation',
-              onTap: () => ref.read(miloConversationProvider.notifier).clear(),
+              icon: PhLight.notePencil,
+              tooltip: 'New chat',
+              onTap: () => unawaited(
+                ref.read(miloConversationProvider.notifier).newSession(),
+              ),
             ),
           // Distinct from clearing, and confirmed, because it is the only
           // control that reaches what Milo has kept: the durable transcript

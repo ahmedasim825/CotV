@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'src/providers/chat_session_providers.dart';
 import 'src/providers/theme_providers.dart';
 import 'src/services/supabase_config.dart';
 import 'src/storage/local_storage.dart';
@@ -13,6 +14,11 @@ import 'src/ui/theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeLocalStorage();
+
+  // Opened once, here, and handed to the scope as an override. A provider
+  // that opened it lazily could open a second connection to the same file,
+  // and two connections in WAL mode see different snapshots.
+  final database = await bootstrapAppDatabase();
 
   // Sync is optional: a build with no Supabase defines skips this entirely
   // and the app runs local-only, exactly as it did before sync existed.
@@ -25,7 +31,12 @@ Future<void> main() async {
     );
   }
 
-  runApp(const ProviderScope(child: PrayerLockoutApp()));
+  runApp(
+    ProviderScope(
+      overrides: [appDatabaseProvider.overrideWithValue(database)],
+      child: const PrayerLockoutApp(),
+    ),
+  );
 }
 
 class PrayerLockoutApp extends ConsumerWidget {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/chat_session_providers.dart';
 import '../providers/focus_session_providers.dart';
 import '../providers/milo_providers.dart';
 import '../providers/study_providers.dart';
@@ -129,6 +130,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     // open the Study tab — the notification for that session has already
     // fired, and the log has to exist by the time they look for it.
     ref.watch(studyProvider);
+
+    // And the same again for the one-time move of the pre-threads
+    // transcript into a session: it has to happen whether or not the user
+    // ever opens the Milo panel, and a provider nothing watches never runs.
+    ref.watch(chatImportProvider);
 
     // Registering the App Intents needs the same treatment: iOS only shows
     // a shortcut it has been told about, and nothing else in the app reads

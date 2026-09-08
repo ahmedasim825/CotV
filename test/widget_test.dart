@@ -28,6 +28,8 @@ import 'package:cotv/src/providers/security_providers.dart';
 import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/security/security_service.dart';
 import 'package:cotv/src/services/notification_service.dart';
+import 'package:cotv/src/providers/chat_session_providers.dart';
+import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/tasks/task_list_view.dart';
@@ -69,7 +71,12 @@ class _FakeNotificationService extends NotificationService {
 void main() {
   late Directory tempDir;
 
+  late AppDatabase database;
+
   setUp(() async {
+    // The app opens this in main(); tests get an in-memory one with the
+    // same schema, so the chat tables exist without a file to clean up.
+    database = AppDatabase.openAt(':memory:');
     // The shell's schedule and task panes read Hive boxes on first build,
     // so they have to exist before the widget tree is pumped.
     tempDir = await Directory.systemTemp.createTemp('cotv_widget_test_');
@@ -92,6 +99,7 @@ void main() {
   });
 
   tearDown(() async {
+    database.dispose();
     await Hive.deleteFromDisk();
     await Hive.close();
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
@@ -116,6 +124,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appDatabaseProvider.overrideWithValue(database),
           securityServiceProvider.overrideWithValue(_FakeSecurityService()),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),

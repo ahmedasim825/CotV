@@ -30,7 +30,9 @@ import '../services/milo/milo_tools.dart';
 import '../services/milo/pc_remote_service.dart';
 import '../services/milo/voice_capture.dart';
 import '../services/milo/wake_word_listener.dart';
+import '../models/chat_session.dart';
 import '../storage/local_storage.dart';
+import 'chat_session_providers.dart';
 import 'prayer_window_providers.dart';
 import 'study_providers.dart';
 import 'user_settings_providers.dart';
@@ -196,8 +198,14 @@ final miloContextProvider = Provider.autoDispose<MiloContext>((ref) {
   final running =
       study.phase == StudyPhase.running ? study.session : null;
 
-  final recalled =
-      ref.watch(chatRepositoryProvider).recent(MiloContextBuilder.recallWindow);
+  // The active thread's tail, capped at 15 messages / ~2000 tokens by the
+  // repository. Scoped to the session rather than the whole history: two
+  // unrelated conversations sharing a context window is how a model starts
+  // answering the wrong one.
+  final sessionId = ref.watch(activeSessionProvider);
+  final recalled = sessionId == null
+      ? const <ChatMessage>[]
+      : ref.watch(chatSessionRepositoryProvider).contextWindow(sessionId);
 
   return MiloContext(
     now: prayers.now,
@@ -347,11 +355,73 @@ class MiloConversationNotifier extends Notifier<MiloConversation> {
     state = const MiloConversation();
   }
 
+  /// Starts a fresh thread.
+  ///
+  /// The teardown is [clear]'s — stop speaking, abandon the turn in flight,
+  /// drop the panel's messages — and then a new [ChatSession] becomes the
+  /// active one. The previous thread is not held anywhere: this notifier
+  /// keeps only the active window, and its messages come back off disk
+  /// through an auto-disposed provider if the user opens it again.
+  ///
+  /// Distinct from [forget], which erases what Milo knows. Starting a new
+  /// conversation and erasing the old ones are different intentions and
+  /// must not be the same button.
+  Future<ChatSession> newSession() async {
+    clear();
+    final session =
+        await ref.read(chatSessionRepositoryProvider).createSession();
+    ref.read(activeSessionProvider.notifier).select(session.id);
+    return session;
+  }
+
+  /// Switches to [sessionId] and loads its most recent page.
+  ///
+  /// Only that page: the notifier holds the active thread and nothing else,
+  /// which is what keeps a hundred threads in the drawer costing a hundred
+  /// rows rather than a hundred histories. Older messages stay on disk and
+  /// are still what the model recalls — [contextWindow] reads them there.
+  Future<void> openSession(String sessionId) async {
+    clear();
+    ref.read(activeSessionProvider.notifier).select(sessionId);
+
+    final stored = ref.read(chatSessionRepositoryProvider).messages(sessionId);
+    if (stored.isEmpty || _disposed) return;
+
+    state = MiloConversation(
+      messages: [
+        for (final message in stored)
+          MiloMessage(
+            id: message.id,
+            role: message.isUser ? MiloRole.user : MiloRole.assistant,
+            text: message.text,
+          ),
+      ],
+    );
+  }
+
+  /// The thread being written to, creating one on the first turn.
+  ///
+  /// Lazy because a launch that never sends anything should not leave an
+  /// empty thread in the drawer.
+  Future<String> _ensureSession(String firstPrompt) async {
+    final existing = ref.read(activeSessionProvider);
+    if (existing != null) return existing;
+
+    final repository = ref.read(chatSessionRepositoryProvider);
+    final session = await repository.createSession(
+      title: ChatSession.titleFrom(firstPrompt),
+    );
+    ref.read(activeSessionProvider.notifier).select(session.id);
+    return session.id;
+  }
+
   /// Erases the durable transcript and the long-term summary.
   Future<void> forget() async {
     clear();
     _summarizedAt = 0;
     await ref.read(chatRepositoryProvider).clear();
+    await ref.read(chatSessionRepositoryProvider).clear();
+    ref.read(activeSessionProvider.notifier).select(null);
     await ref
         .read(userSettingsControllerProvider.notifier)
         .setAiMemorySummary('');
@@ -405,12 +475,14 @@ class MiloConversationNotifier extends Notifier<MiloConversation> {
     final answer = reply?.text.trim() ?? '';
     if (answer.isEmpty) return;
 
-    final repository = ref.read(chatRepositoryProvider);
-    final now = DateTime.now();
+    final repository = ref.read(chatSessionRepositoryProvider);
+    final now = DateTime.now().toUtc();
     try {
+      final sessionId = await _ensureSession(prompt);
       await repository.append(
         ChatMessage(
           id: _uuid.v4(),
+          sessionId: sessionId,
           isUser: true,
           text: prompt,
           timestamp: now,
@@ -419,11 +491,13 @@ class MiloConversationNotifier extends Notifier<MiloConversation> {
       await repository.append(
         ChatMessage(
           id: replyId,
+          sessionId: sessionId,
           isUser: false,
           text: answer,
-          // A microsecond after the prompt, so sorting by timestamp can
-          // never put the answer before the question it answers.
-          timestamp: now.add(const Duration(microseconds: 1)),
+          // A millisecond after the prompt, so sorting by timestamp can
+          // never put the answer before the question it answers. A
+          // microsecond would not survive the column, which stores millis.
+          timestamp: now.add(const Duration(milliseconds: 1)),
         ),
       );
     } catch (_) {
@@ -445,9 +519,12 @@ class MiloConversationNotifier extends Notifier<MiloConversation> {
   Future<void> _summarizeIfDue() async {
     if (_summarizing || _disposed) return;
 
-    final repository = ref.read(chatRepositoryProvider);
+    final sessionId = ref.read(activeSessionProvider);
+    if (sessionId == null) return;
+
+    final repository = ref.read(chatSessionRepositoryProvider);
     final summarizer = ref.read(memorySummarizerProvider);
-    final count = repository.count;
+    final count = repository.messageCount(sessionId);
     if (!summarizer.shouldSummarize(
       messageCount: count,
       lastSummarizedAt: _summarizedAt,
@@ -463,7 +540,10 @@ class MiloConversationNotifier extends Notifier<MiloConversation> {
       final settings = ref.read(userSettingsControllerProvider).value;
       final summary = await summarizer.summarize(
         apiKey: key,
-        messages: repository.recent(summarizer.windowSize),
+        messages: repository.messages(
+          sessionId,
+          limit: summarizer.windowSize,
+        ),
         previous: settings?.aiMemorySummary,
       );
       if (_disposed || summary.isEmpty) return;

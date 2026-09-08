@@ -9,16 +9,16 @@ import 'milo_credentials.dart';
 /// Turns a recorded utterance into text using Faster-Whisper, running in
 /// the PC agent on the Windows machine.
 ///
-/// The recording is uploaded to the agent rather than to a provider, which
-/// is the point: on a machine the user owns, running a model the user
-/// pulled, over a token only they hold. There is no cloud speech path left
-/// — the Groq one was removed with the Groq engine — so when the agent is
-/// not reachable, voice input is unavailable and says so rather than
-/// falling back to somewhere the audio would be uploaded.
+/// Preferred over the cloud transcriber whenever the agent is reachable,
+/// and for one reason: the recording stays on a machine the user owns,
+/// running a model they pulled, behind a token only they hold. It is not
+/// the only path — [GroqTranscriptionClient] takes over when the agent is
+/// not running, and is the only path on iOS, which has no agent — so
+/// [MiloTranscriber] is what decides between them.
 class LocalTranscriptionClient {
   LocalTranscriptionClient({
     required http.Client httpClient,
-    this.model = whisperModelId,
+    this.model = localWhisperModelId,
     this.timeout = transcriptionTimeout,
   }) : _http = httpClient;
 

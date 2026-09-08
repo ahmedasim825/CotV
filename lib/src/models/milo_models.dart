@@ -1,29 +1,30 @@
 import 'pc_command.dart';
 
-/// The local brain, and the tag sent on the wire.
-///
-/// Qwen 2.5 3B Instruct, quantised to Q4_K_M — small enough to answer from
-/// RAM on a laptop, and one of the few models that size which still calls
-/// tools reliably. Pull it with `ollama pull qwen2.5:3b-instruct`.
-const String localModelId = 'qwen2.5:3b-instruct';
-
-/// Where Ollama listens by default.
-///
-/// Loopback, not the LAN: the local brain is the one part of Milo that is
-/// meant never to leave the machine, and binding it wider would undo that
-/// by accident.
-const String ollamaBaseUrl = 'http://127.0.0.1:11434';
+/// The fastest chat model this Groq account can reach, and the id sent on
+/// the wire. Measured at ~0.4s to a complete short answer, and the only
+/// candidate that replies in plain prose: the gpt-oss models return their
+/// text in a separate `reasoning` field, and the smaller qwen emits
+/// `<think>` blocks inline.
+const String groqModelId = 'qwen/qwen3.8-27b';
 
 /// Gemini's fast reasoning model, and the id sent on the wire.
 const String geminiModelId = 'gemini-2.5-flash';
 
-/// The Faster-Whisper checkpoint the PC agent loads.
+/// Groq's speech model, and the id sent on the wire.
+///
+/// The turbo variant is the latency-optimised Whisper: a spoken sentence
+/// measured 1.7s end to end against 1.1s for full `whisper-large-v3`, which
+/// is inside the noise for an utterance this short, so the tie goes to the
+/// model built for streaming-speed workloads.
+const String whisperModelId = 'whisper-large-v3-turbo';
+
+/// The Faster-Whisper checkpoint the PC agent loads when it is running.
 ///
 /// `base.en` rather than `tiny.en`: English-only either way, and base is
 /// the smallest one that hears "Maghrib" as a word rather than as three.
 /// The agent takes this as a request and reports what it actually loaded,
 /// so a machine short on memory can serve tiny.en without the app caring.
-const String whisperModelId = 'base.en';
+const String localWhisperModelId = 'base.en';
 
 /// Kokoro's voice profile, sent to the PC agent with every line.
 const String kokoroVoiceId = 'af_heart';
@@ -37,9 +38,10 @@ const List<String> preferredIosVoices = ['Ava', 'Zoe'];
 
 /// Sent on every engine request.
 ///
-/// Kept after Groq was dropped, even though the gateway that forced it is
-/// gone: naming the product is the honest thing to send, and the PC agent
-/// logs it to tell Milo's calls from anything else that finds the port.
+/// Not cosmetic: Groq sits behind Cloudflare, which answers a request
+/// carrying a default library User-Agent with `error code: 1010` and a 403
+/// before it ever reaches the API. Naming the product gets through, and is
+/// the honest thing to send anyway.
 const String miloUserAgent = 'PrayerLockout-Milo/1.0 (Flutter)';
 
 /// How long a reply may go without producing a byte before the turn is
@@ -61,19 +63,17 @@ const Duration miloStallTimeout = Duration(seconds: 75);
 
 /// Which model answered a turn.
 ///
-/// The two engines are not interchangeable — one runs on this machine and
-/// one runs in a datacentre — and the badge on every assistant turn names
-/// which one did. Nothing in the UI may claim an engine that did not, and
-/// the distinction is not cosmetic here: it is the difference between a
-/// prompt that stayed on the device and one that was uploaded.
+/// The two engines are not interchangeable: Groq is picked for latency and
+/// Gemini for reasoning depth, and the badge on every assistant turn names
+/// which one ran. Nothing in the UI may claim an engine that did not.
 enum MiloEngine {
-  /// Qwen 2.5 3B under Ollama, on the machine the app is running on.
-  /// Nothing leaves it, and there is no key and no bill.
-  local(model: localModelId, badge: 'Qwen Local'),
+  /// Groq — first token in a few hundred milliseconds, which is what makes
+  /// a spoken-style command feel instant.
+  groq(model: groqModelId, badge: 'Groq Instant'),
 
-  /// Gemini — the prompt leaves the device. Slower to start, but holds a
-  /// longer chain of reasoning, and is the only one asked medical
-  /// questions.
+  /// Gemini — slower to start, but holds a longer chain of reasoning
+  /// across the day's prayers, tasks and notes, and is the only one asked
+  /// medical questions.
   gemini(model: geminiModelId, badge: 'Gemini Deep');
 
   const MiloEngine({required this.model, required this.badge});
@@ -83,9 +83,6 @@ enum MiloEngine {
 
   /// What the routing rail calls this engine.
   final String badge;
-
-  /// Whether a turn on this engine leaves the machine.
-  bool get isRemote => this == MiloEngine.gemini;
 }
 
 /// The engine choice plus the rule that produced it.

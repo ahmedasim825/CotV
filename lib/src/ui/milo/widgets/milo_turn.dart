@@ -300,7 +300,7 @@ class RoutingRail extends StatelessWidget {
 
   static Color _hueOf(AppPalette palette, MiloEngine engine) {
     switch (engine) {
-      case MiloEngine.local:
+      case MiloEngine.groq:
         return palette.accentBright;
       case MiloEngine.gemini:
         return palette.secondary;
@@ -328,9 +328,9 @@ class RoutingRail extends StatelessWidget {
             children: [
               for (final engine in MiloEngine.values) ...[
                 _RailNode(
-                  // A house for the engine that answered without the prompt
-                  // leaving the machine, a brain for the one that did not.
-                  icon: engine.isRemote ? PhLight.brain : PhLight.house,
+                  icon: engine == MiloEngine.groq
+                      ? PhLight.lightning
+                      : PhLight.brain,
                   label: engine.badge.toUpperCase(),
                   hue: _hueOf(palette, engine),
                   isActive: engine == routing.engine,

@@ -22,39 +22,30 @@ wake word ("Milo", "Hey Milo"), and routes it:
 
 | Route | Model | When |
 |---|---|---|
-| Local | Qwen 2.5 3B Instruct `qwen2.5:3b-instruct`, via Ollama | everything, by default |
+| Instant | Groq `qwen/qwen3.8-27b` | short commands and lookups |
 | Deep | Gemini `gemini-2.5-flash` | medical questions, research, planning, anything long |
 | PC | the Windows agent | anything aimed at the laptop |
 
-The default is the machine you are on. Every routing rule is therefore a
-reason to *upload* a prompt rather than a reason to keep it, which is worth
-reading the rules as: a clinical term, a research phrase, a synthesis verb,
-or more than 22 words. Everything else is answered by a 3B model over
-loopback, with no key and no bill.
-
 Clinical terms are checked first and are not overridable by length — "is
-40mg amlodipine safe" is five words and is not a question to answer from a
-3B model on a laptop.
+40mg amlodipine safe" is five words and is not a question to answer from
+the model picked for speed. Everything else goes to Groq unless a synthesis
+verb, a research phrase, or more than 22 words says otherwise.
 
-If the local brain is not running, the turn goes to Gemini and the rail
-says so in the same sentence that gave the original reason. The check
-happens *before* the rail is drawn, so the badge never names an engine that
-did not run.
+Speech is an input path, not a second assistant. The transcript enters the
+same pipeline a typed message does — so a spoken "open Spotify on my PC" and
+a typed one cannot drift apart in behaviour, and the wake word is stripped
+the same way for both.
 
-**iOS has no local brain.** PocketPal is a separate app with no inference
-API, and putting llama.cpp in-process means shipping or downloading a
-multi-gigabyte GGUF. Until one exists, iOS routes every turn to Gemini and
-says so. The seam is `supportsLocalBrain` and `localBrainStatusProvider` in
-`lib/src/providers/milo_providers.dart` — a runtime plugs in there without
-touching the router.
+Two transcribers, and the choice between them is not a preference:
 
-Speech is an input path, not a second assistant. A recording goes to
-**Faster-Whisper** (`base.en`, CTranslate2, int8 on CPU) inside the PC
-agent, and the transcript enters the same pipeline a typed message does — so
-a spoken "open Spotify on my PC" and a typed one cannot drift apart in
-behaviour, and the wake word is stripped the same way for both. There is no
-cloud speech path: when the agent is not reachable, voice input says so
-rather than falling back to somewhere the audio would be uploaded.
+- **Faster-Whisper** (`base.en`, CTranslate2, int8) inside the PC agent,
+  whenever it is running. The recording stays on a machine you own.
+- **Groq** `whisper-large-v3-turbo` otherwise — and always on iOS, which has
+  no agent. Without it there would be no voice input on the phone at all.
+
+The agent is tried rather than probed: a reachability check before every
+recording would add a round trip to the path the user is waiting on, and
+would still be a guess by the time the real request went out.
 
 Replies are read aloud by **Kokoro 82M** (`af_heart`, ONNX) in the same
 agent on Windows, and by `AVSpeechSynthesizer` on iOS, which is what puts
@@ -62,7 +53,9 @@ Apple's neural voices (Ava, Zoe) within reach — nothing in that API
 distinguishes a neural voice from a compact one except its name. Kokoro
 synthesises and plays on the PC rather than streaming audio back: on
 Windows the app and the agent are the same machine. When Kokoro is not
-installed, the OS voice reads the line instead.
+installed the Windows OS voice reads the line instead, which sounds nothing
+like `af_heart` — that difference is the usual reason to think TTS is
+"broken" when it is merely unconfigured.
 
 ### Waking Milo
 
@@ -91,35 +84,31 @@ taps and is deleted as soon as its bytes have been uploaded.
 The routing rail on each answer shows which engine ran **and the rule that
 chose it**, so a bad route is distinguishable from a bad answer.
 
-Model ids go stale. `llama-3.1-8b-instant`, `gemini-2.0-flash` and the Groq
-`qwen/qwen3.8-27b` this stack replaced are all retired. To see what the key
-can reach today:
+Model ids go stale. Both of the originally specified ones,
+`llama-3.1-8b-instant` and `gemini-2.0-flash`, are retired. To see what a key
+can actually reach today, ask each provider:
+
+```bash
+curl -H "Authorization: Bearer $GROQ_KEY" https://api.groq.com/openai/v1/models
+```
 
 ```bash
 curl -H "x-goog-api-key: $GEMINI_KEY" https://generativelanguage.googleapis.com/v1beta/models
 ```
 
-### The local brain
-
-```bash
-winget install Ollama.Ollama
-ollama pull qwen2.5:3b-instruct
-```
-
-Ollama listens on `127.0.0.1:11434` — loopback, not the LAN, because the
-local brain is the one part of Milo meant never to leave the machine.
-Nothing authenticates to it and nothing should: a key on that request would
-mean the prompt was going somewhere that needs one.
-
-`dart run tool/live_check.dart` drives both engines against the real
-runtimes and reports which model each actually reached. It skips the local
-half with a reason rather than failing when Ollama is not running.
+`dart run tool/live_check.dart` drives both engines against the live APIs
+and reports which model each actually reached.
 
 ### Keys
 
-Milo needs one key: a [Gemini key](https://aistudio.google.com/apikey) from
-AI Studio, which starts `AIza`. A Vertex or OAuth token will not work — the
-REST endpoint takes an API key in `x-goog-api-key`, not a bearer token.
+Milo needs a [Groq key](https://console.groq.com/keys) and/or a
+[Gemini key](https://aistudio.google.com/apikey).
+
+The Gemini one must be an **AI Studio** key, which starts `AIza`. A Vertex
+or gcloud OAuth token will not work: the REST endpoint takes an API key in
+`x-goog-api-key`, not a bearer token, and refuses one with a 404 that reads
+like a missing model rather than a rejected credential.
+
 Two ways in, and stored values always win:
 
 1. **On device** — Milo → gear → Milo settings. Held in the iOS Keychain, or
@@ -128,6 +117,7 @@ Two ways in, and stored values always win:
 
    ```json
    {
+     "MILO_GROQ_API_KEY": "gsk_...",
      "MILO_GEMINI_API_KEY": "AIza...",
      "MILO_PC_HOST": "127.0.0.1:8765",
      "MILO_PC_TOKEN": "..."

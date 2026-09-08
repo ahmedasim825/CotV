@@ -1,21 +1,18 @@
-// One-off: drive the real OllamaClient and GeminiClient against the live
-// runtimes.
+// One-off: drive the real GroqClient and GeminiClient against the live APIs.
 //
 // The unit tests fake the transport, which proves the framing but not that
 // the model ids, headers and endpoints are right. This proves those.
 //
 //   dart run tool/live_check.dart
 //
-// Reads milo_keys.json, which is gitignored. The local half needs Ollama
-// running with the model pulled; it reports that rather than failing if
-// not, since the Gemini half is worth checking on its own.
+// Reads milo_keys.json, which is gitignored.
 
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:cotv/src/models/milo_models.dart';
 import 'package:cotv/src/services/milo/gemini_client.dart';
-import 'package:cotv/src/services/milo/ollama_client.dart';
+import 'package:cotv/src/services/milo/groq_client.dart';
 import 'package:cotv/src/services/milo/milo_tools.dart';
 import 'package:http/http.dart' as http;
 
@@ -70,26 +67,16 @@ Future<void> main() async {
     }
   }
 
-  final ollama = OllamaClient(httpClient: client);
-  final status = await ollama.probe();
-
-  stdout.writeln('=== Local ($localModelId via $ollamaBaseUrl) ===');
-  if (!status.isReady) {
-    stdout.writeln('local   SKIPPED');
-    stdout.writeln('  ${status.reason}');
-    if (status.installed.isNotEmpty) {
-      stdout.writeln('  installed   : ${status.installed.join(', ')}');
-    }
-  } else {
-    await run(
-      'local ',
-      ollama.streamReply(
-        systemPrompt: system,
-        history: const [],
-        prompt: prompt,
-      ),
-    );
-  }
+  stdout.writeln('=== Groq ($groqModelId) ===');
+  await run(
+    'groq  ',
+    GroqClient(httpClient: client).streamReply(
+      apiKey: keys['MILO_GROQ_API_KEY'] as String,
+      systemPrompt: system,
+      history: const [],
+      prompt: prompt,
+    ),
+  );
 
   stdout.writeln();
   stdout.writeln('=== Gemini ($geminiModelId) ===');
@@ -104,12 +91,7 @@ Future<void> main() async {
   );
 
   stdout.writeln();
-  if (status.isReady) {
-    await _toolRoundTrip(client);
-  } else {
-    stdout.writeln('=== Local tool calling ===');
-    stdout.writeln('tools   SKIPPED — ${status.reason}');
-  }
+  await _toolRoundTrip(client, keys['MILO_GROQ_API_KEY'] as String);
 
   client.close();
 }
@@ -121,12 +103,12 @@ Future<void> main() async {
 /// as malformed, and that the arguments reassemble into the values the app
 /// needs. The unit tests fake the frames, so they cannot tell a schema the
 /// provider rejects from one it accepts.
-Future<void> _toolRoundTrip(http.Client client) async {
-  stdout.writeln('=== Local tool calling ($localModelId) ===');
+Future<void> _toolRoundTrip(http.Client client, String apiKey) async {
+  stdout.writeln('=== Groq tool calling ($groqModelId) ===');
 
   final study = _StubStudy();
   final tools = MiloTools(study);
-  final ollama = OllamaClient(httpClient: client);
+  final groq = GroqClient(httpClient: client);
 
   const system = 'You are Milo, the assistant in a study app.\n'
       'CONTEXT\nSubjects: Physiology, Anatomy, Pharmacology\n'
@@ -137,19 +119,20 @@ Future<void> _toolRoundTrip(http.Client client) async {
   final calls = <MiloToolCall>[];
 
   try {
-    await for (final delta in ollama.streamTurn(
+    await for (final delta in groq.streamTurn(
+      apiKey: apiKey,
       systemPrompt: system,
       history: const [],
       prompt: prompt,
       tools: MiloTools.schemas,
     )) {
-      if (delta is LocalToolCalls) calls.addAll(delta.calls);
+      if (delta is GroqToolCalls) calls.addAll(delta.calls);
     }
 
     if (calls.isEmpty) {
       stdout.writeln('tools   FAILED');
       stdout.writeln('  The model answered in prose instead of calling a '
-          'tool. Check that $localModelId still supports tool calling.');
+          'tool. Check that $groqModelId still supports tool calling.');
       return;
     }
 
@@ -160,13 +143,14 @@ Future<void> _toolRoundTrip(http.Client client) async {
     stdout.writeln('  dispatched  : ${study.calls.join(', ')}');
 
     final answer = StringBuffer();
-    await for (final delta in ollama.streamTurn(
+    await for (final delta in groq.streamTurn(
+      apiKey: apiKey,
       systemPrompt: system,
       history: const [],
       prompt: prompt,
       exchange: MiloToolExchange(calls: calls, results: results),
     )) {
-      if (delta is LocalText) answer.write(delta.text);
+      if (delta is GroqText) answer.write(delta.text);
     }
 
     stdout.writeln('tools   OK');

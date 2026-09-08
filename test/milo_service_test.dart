@@ -1,6 +1,6 @@
 // End-to-end turns through MiloService with the HTTP transport faked.
 //
-// The fake is at the socket, not at the client: OllamaClient, GeminiClient
+// The fake is at the socket, not at the client: GroqClient, GeminiClient
 // and PcRemoteService all run for real, so these tests cover the request
 // bodies, the auth headers and the SSE parsing as well as the routing.
 
@@ -14,7 +14,7 @@ import 'package:http/testing.dart';
 import 'package:cotv/src/models/milo_models.dart';
 import 'package:cotv/src/models/pc_command.dart';
 import 'package:cotv/src/services/milo/gemini_client.dart';
-import 'package:cotv/src/services/milo/ollama_client.dart';
+import 'package:cotv/src/services/milo/groq_client.dart';
 import 'package:cotv/src/services/milo/milo_credentials.dart';
 import 'package:cotv/src/services/milo/milo_service.dart';
 import 'package:cotv/src/services/milo/milo_tools.dart';
@@ -31,6 +31,7 @@ final _context = MiloContext(
 );
 
 const _secrets = MiloSecrets(
+  groqApiKey: 'gsk_test',
   geminiApiKey: 'gemini_test',
   pcHost: '192.168.1.20:8765',
   pcToken: 'agent_test',
@@ -43,7 +44,7 @@ http.StreamedResponse _sse(List<String> frames) => http.StreamedResponse(
       headers: const {'content-type': 'text/event-stream'},
     );
 
-String _localFrame(String text) =>
+String _groqFrame(String text) =>
     'data: ${jsonEncode({
           'choices': [
             {
@@ -72,16 +73,16 @@ http.StreamedResponse _json(int status, Map<String, dynamic> body) =>
       headers: const {'content-type': 'application/json'},
     );
 
-/// Records every request and answers each host from [onLocal], [onGemini]
+/// Records every request and answers each host from [onGroq], [onGemini]
 /// and [onAgent].
 class _Transport {
   _Transport({
-    this.onLocal,
+    this.onGroq,
     this.onGemini,
     this.onAgent,
   });
 
-  final Future<http.StreamedResponse> Function()? onLocal;
+  final Future<http.StreamedResponse> Function()? onGroq;
   final Future<http.StreamedResponse> Function()? onGemini;
   final Future<http.StreamedResponse> Function()? onAgent;
 
@@ -100,13 +101,8 @@ class _Transport {
         bodies[request.url.toString()] = await bodyStream.bytesToString();
 
         final host = request.url.host;
+        if (host.contains('groq')) return onGroq!();
         if (host.contains('googleapis')) return onGemini!();
-        // Ollama and the PC agent are both plain IPs, so they are told
-        // apart by path rather than by host.
-        if (request.url.path.startsWith('/v1/') ||
-            request.url.path.startsWith('/api/')) {
-          return onLocal!();
-        }
         return onAgent!();
       });
 }
@@ -117,9 +113,9 @@ MiloService _serviceOn(
   MiloTools? tools,
 }) =>
     MiloService(
-      local: OllamaClient(
+      groq: GroqClient(
         httpClient: client,
-        stallTimeout: stall ?? localStallTimeout,
+        stallTimeout: stall ?? miloStallTimeout,
       ),
       gemini: GeminiClient(
         httpClient: client,
@@ -127,10 +123,6 @@ MiloService _serviceOn(
       ),
       pcRemote: PcRemoteService(httpClient: client),
       tools: tools,
-      // Ollama is not running under test, and probing it would make every
-      // local turn fall through to Gemini. Stated rather than discovered,
-      // so a test that means to exercise the local engine does.
-      localAvailability: () async => const LocalBrainStatus.ready(),
     );
 
 /// Records what the study tools were asked to do.
@@ -154,7 +146,7 @@ class _RecordingStudy implements StudyToolTarget {
 }
 
 /// A `tool_calls` frame naming one function and its whole argument string.
-String _localToolFrame(String id, String name, String arguments) =>
+String _groqToolFrame(String id, String name, String arguments) =>
     'data: ${jsonEncode({
           'choices': [
             {
@@ -192,12 +184,12 @@ String _textOf(List<MiloEvent> events) =>
     events.whereType<MiloTextDelta>().map((event) => event.text).join();
 
 void main() {
-  test('an everyday request stays on the local brain, with the app context '
-      'attached', () async {
+  test('an instant request goes to Groq with the app context attached',
+      () async {
     final transport = _Transport(
-      onLocal: () async => _sse([
-        _localFrame('Asr is at 16:12'),
-        _localFrame(', in 38 minutes.'),
+      onGroq: () async => _sse([
+        _groqFrame('Asr is at 16:12'),
+        _groqFrame(', in 38 minutes.'),
         'data: [DONE]\n\n',
       ]),
     );
@@ -208,12 +200,12 @@ void main() {
     );
 
     expect(events.whereType<MiloRouted>().single.decision.engine,
-        MiloEngine.local);
+        MiloEngine.groq);
     expect(_textOf(events), 'Asr is at 16:12, in 38 minutes.');
     expect(events.whereType<MiloPcExecuted>(), isEmpty);
 
-    final body = transport.bodyTo('11434');
-    expect(body['model'], localModelId);
+    final body = transport.bodyTo('groq');
+    expect(body['model'], groqModelId);
     expect(body['stream'], isTrue);
 
     final messages = (body['messages'] as List).cast<Map<String, dynamic>>();
@@ -223,14 +215,10 @@ void main() {
     // The wake word never reaches the model.
     expect(messages.last['content'], "what's my next prayer?");
 
-    // Nothing authenticates to the local brain, and nothing should: a key
-    // on this request would mean the prompt was going somewhere it needs
-    // one.
     expect(
-      transport.requestTo('11434').headers.containsKey('Authorization'),
-      isFalse,
+      transport.requestTo('groq').headers['Authorization'],
+      'Bearer gsk_test',
     );
-    expect(transport.requestTo('11434').url.host, '127.0.0.1');
   });
 
   test('a synthesis request goes to Gemini, with the key off the URL',
@@ -283,11 +271,10 @@ void main() {
     expect(contents.map((entry) => entry['role']), ['user', 'model', 'user']);
   });
 
-  test('a PC command runs on the agent, then the local brain reports the '
-      'outcome',
+  test('a PC command runs on the agent, then Groq reports the outcome',
       () async {
     final transport = _Transport(
-      onLocal: () async => _sse([_localFrame('Spotify is up on your laptop.')]),
+      onGroq: () async => _sse([_groqFrame('Spotify is up on your laptop.')]),
       onAgent: () async =>
           _json(200, {'ok': true, 'message': 'spotify is starting on your PC.'}),
     );
@@ -301,7 +288,7 @@ void main() {
     expect(events.first, isA<MiloRouted>());
     expect(
       (events.first as MiloRouted).decision.engine,
-      MiloEngine.local,
+      MiloEngine.groq,
     );
 
     final receipt = events.whereType<MiloPcExecuted>().single.result;
@@ -319,15 +306,15 @@ void main() {
     // The model is told what actually happened, so it cannot confirm an
     // action that did not run.
     final system =
-        (transport.bodyTo('11434')['messages'] as List).first as Map;
+        (transport.bodyTo('groq')['messages'] as List).first as Map;
     expect(system['content'], contains('PC ACTION'));
     expect(system['content'], contains('spotify is starting on your PC.'));
   });
 
   test('an unreachable agent fails the action but not the turn', () async {
     final transport = _Transport(
-      onLocal: () async =>
-          _sse([_localFrame('Your PC did not answer — is the agent running?')]),
+      onGroq: () async =>
+          _sse([_groqFrame('Your PC did not answer — is the agent running?')]),
       onAgent: () async => throw http.ClientException(
         'Connection refused',
         Uri.parse('http://192.168.1.20:8765/open-app'),
@@ -345,14 +332,14 @@ void main() {
     // The reply still arrives, and it was told about the failure.
     expect(_textOf(events), isNotEmpty);
     expect(
-      ((transport.bodyTo('11434')['messages'] as List).first as Map)['content'],
+      ((transport.bodyTo('groq')['messages'] as List).first as Map)['content'],
       contains('It failed'),
     );
   });
 
   test('an agent that refuses the target reports its own reason', () async {
     final transport = _Transport(
-      onLocal: () async => _sse([_localFrame('Not in the allowlist.')]),
+      onGroq: () async => _sse([_groqFrame('Not in the allowlist.')]),
       onAgent: () async =>
           _json(404, {'detail': '"steam" is not in the agent\'s app list.'}),
     );
@@ -370,13 +357,13 @@ void main() {
   test('a PC command with no agent configured says so instead of silently '
       'dropping', () async {
     final transport = _Transport(
-      onLocal: () async => _sse([_localFrame('No agent configured.')]),
+      onGroq: () async => _sse([_groqFrame('No agent configured.')]),
     );
 
     final events = await _run(
       _serviceOn(transport.client),
       'open Spotify on my pc',
-      secrets: const MiloSecrets(geminiApiKey: 'gemini_test'),
+      secrets: const MiloSecrets(groqApiKey: 'gsk_test'),
     );
 
     final receipt = events.whereType<MiloPcExecuted>().single.result;
@@ -384,7 +371,7 @@ void main() {
     expect(receipt.message, contains('No PC agent is configured'));
   });
 
-  test('a missing Gemini key names that engine', () async {
+  test('a missing key for the chosen engine names that engine', () async {
     final transport = _Transport(
       onGemini: () async => _sse([_geminiFrame('unreachable')]),
     );
@@ -393,7 +380,7 @@ void main() {
       _run(
         _serviceOn(transport.client),
         'summarize my week',
-        secrets: const MiloSecrets(),
+        secrets: const MiloSecrets(groqApiKey: 'gsk_test'),
       ),
       throwsA(
         isA<MiloException>().having(
@@ -407,10 +394,12 @@ void main() {
     expect(transport.requests, isEmpty);
   });
 
-  test('an un-pulled local model is reported with the command that fixes it',
+  test('a rejected key is reported as a key problem, not a raw status',
       () async {
     final transport = _Transport(
-      onLocal: () async => _json(404, {'error': 'model not found'}),
+      onGroq: () async => _json(401, {
+        'error': {'message': 'Invalid API Key'},
+      }),
     );
 
     await expectLater(
@@ -419,56 +408,9 @@ void main() {
         isA<MiloException>().having(
           (error) => error.message,
           'message',
-          contains('ollama pull $localModelId'),
+          contains('Groq rejected the API key'),
         ),
       ),
-    );
-  });
-
-  test('a local turn falls back to Gemini, and the rail says why', () async {
-    final transport = _Transport(
-      onGemini: () async => _sse([_geminiFrame('Isha is at 20:04.')]),
-    );
-
-    final service = MiloService(
-      local: OllamaClient(httpClient: transport.client),
-      gemini: GeminiClient(httpClient: transport.client),
-      pcRemote: PcRemoteService(httpClient: transport.client),
-      localAvailability: () async => const LocalBrainStatus.unreachable(),
-    );
-
-    final events = await _run(service, 'when is Isha');
-
-    // One decision, not two: the availability check happens before the rail
-    // is shown, so the badge never names an engine that did not run.
-    final routed = events.whereType<MiloRouted>().single.decision;
-    expect(routed.engine, MiloEngine.gemini);
-    expect(routed.reason, contains('the local brain is not running'));
-    expect(_textOf(events), 'Isha is at 20:04.');
-    // Nothing was even attempted against Ollama.
-    expect(
-      transport.requests.where((r) => r.url.port == 11434),
-      isEmpty,
-    );
-  });
-
-  test('an unsupported platform routes to Gemini without probing', () async {
-    final transport = _Transport(
-      onGemini: () async => _sse([_geminiFrame('Asr is at 16:12.')]),
-    );
-
-    final service = MiloService(
-      local: OllamaClient(httpClient: transport.client),
-      gemini: GeminiClient(httpClient: transport.client),
-      pcRemote: PcRemoteService(httpClient: transport.client),
-      localAvailability: () async => const LocalBrainStatus.unsupported(),
-    );
-
-    final events = await _run(service, 'when is Isha');
-
-    expect(
-      events.whereType<MiloRouted>().single.decision.reason,
-      contains('no local runtime'),
     );
   });
 
@@ -500,7 +442,7 @@ void main() {
     final stalled = StreamController<List<int>>();
     addTearDown(stalled.close);
     final transport = _Transport(
-      onLocal: () async => http.StreamedResponse(stalled.stream, 200,
+      onGroq: () async => http.StreamedResponse(stalled.stream, 200,
           headers: const {'content-type': 'text/event-stream'}),
     );
 
@@ -535,12 +477,12 @@ void main() {
       final study = _RecordingStudy();
       var call = 0;
       final transport = _Transport(
-        onLocal: () async {
+        onGroq: () async {
           call++;
           // First call asks for the tool; second answers with its result.
           return call == 1
               ? _sse([
-                  _localToolFrame(
+                  _groqToolFrame(
                     'call_a',
                     'start_study_timer',
                     '{"subject": "Physiology", "minutes": 45}',
@@ -548,7 +490,7 @@ void main() {
                   'data: [DONE]\n\n',
                 ])
               : _sse([
-                  _localFrame('Timer running on Physiology.'),
+                  _groqFrame('Timer running on Physiology.'),
                   'data: [DONE]\n\n',
                 ]);
         },
@@ -580,14 +522,14 @@ void main() {
       final bodies = <Map<String, dynamic>>[];
       var call = 0;
       final transport = _Transport(
-        onLocal: () async {
+        onGroq: () async {
           call++;
           return call == 1
               ? _sse([
-                  _localToolFrame('call_a', 'stop_study_timer', '{}'),
+                  _groqToolFrame('call_a', 'stop_study_timer', '{}'),
                   'data: [DONE]\n\n',
                 ])
-              : _sse([_localFrame('Stopped.'), 'data: [DONE]\n\n']);
+              : _sse([_groqFrame('Stopped.'), 'data: [DONE]\n\n']);
         },
       );
 
@@ -611,13 +553,13 @@ void main() {
 
     test('no tools are offered when the service has none', () async {
       final transport = _Transport(
-        onLocal: () async =>
-            _sse([_localFrame('Asr is at 16:12.'), 'data: [DONE]\n\n']),
+        onGroq: () async =>
+            _sse([_groqFrame('Asr is at 16:12.'), 'data: [DONE]\n\n']),
       );
 
       await _run(_serviceOn(transport.client), 'when is Asr');
 
-      final body = transport.bodyTo('11434');
+      final body = transport.bodyTo('groq');
       expect(body.containsKey('tools'), isFalse);
     });
 
@@ -627,11 +569,11 @@ void main() {
       final study = _RecordingStudy();
       var call = 0;
       final transport = _Transport(
-        onLocal: () async {
+        onGroq: () async {
           call++;
           return call == 1
               ? _sse([
-                  _localToolFrame(
+                  _groqToolFrame(
                     'call_a',
                     'start_study_timer',
                     '{"subject": "Anatomy"}',

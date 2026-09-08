@@ -31,6 +31,7 @@ class MiloKeysSheet extends ConsumerStatefulWidget {
 }
 
 class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
+  final _groq = TextEditingController();
   final _gemini = TextEditingController();
   final _host = TextEditingController();
   final _token = TextEditingController();
@@ -47,6 +48,7 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
 
   @override
   void dispose() {
+    _groq.dispose();
     _gemini.dispose();
     _host.dispose();
     _token.dispose();
@@ -58,6 +60,7 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
     await ref.read(miloCredentialsProvider).save(
           // Null leaves a stored value alone; only a field the user
           // actually typed in is written.
+          groqApiKey: _groq.text.isEmpty ? null : _groq.text,
           geminiApiKey: _gemini.text.isEmpty ? null : _gemini.text,
           pcHost: _host.text,
           pcToken: _token.text.isEmpty ? null : _token.text,
@@ -100,14 +103,23 @@ class _MiloKeysSheetState extends ConsumerState<MiloKeysSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SecretField(
+            controller: _groq,
+            icon: PhLight.lightning,
+            label: 'Groq API key',
+            hint: 'gsk_...',
+            isSet: secrets?.hasGroq ?? false,
+            help: 'Answers instant requests and PC commands, and transcribes '
+                'speech when the PC agent is not running.',
+          ),
+          const SizedBox(height: 22),
+          _SecretField(
             controller: _gemini,
             icon: PhLight.brain,
             label: 'Gemini API key',
             hint: 'AIza...',
             isSet: secrets?.hasGemini ?? false,
-            help: 'Answers medical questions, research and anything long. '
-                'Everything else is answered by Qwen on this machine, which '
-                'needs no key.',
+            help: 'Answers medical questions, research, planning and '
+                'anything long.',
           ),
           const SizedBox(height: 30),
           SectionHeader(

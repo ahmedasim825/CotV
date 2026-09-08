@@ -172,14 +172,20 @@ class GeminiClient {
       case 429:
         return 'Gemini is rate limiting this key. Try again shortly.';
       case 404:
-        // Two causes, and the app cannot tell them apart from here: the
-        // model really is gone, or the credential could not be resolved and
-        // the endpoint answered as though the model were not there. Naming
-        // both is honest; picking one is how an afternoon goes into
-        // renaming a model that worked.
-        return 'Gemini returned 404 for "$model". Either that model id is '
-            'retired, or the key was not accepted — this endpoint answers '
-            '404 for both.$_keySource';
+        // The server's own message is the useful part here and used to be
+        // discarded: asked for a retired model it replies "no longer
+        // available to new users. Please update your code to use
+        // models/gemini-3.6-flash" — the answer, by name. Leading with it
+        // beats any sentence this method could compose.
+        //
+        // Only when it says nothing does the ambiguity need spelling out:
+        // a credential this endpoint cannot resolve also 404s, so a bare
+        // 404 is not proof the model is the problem.
+        return detail != null
+            ? 'Gemini refused "$model": $detail'
+            : 'Gemini returned 404 for "$model". Either that model id is '
+                'retired, or the key was not accepted — this endpoint '
+                'answers 404 for both.$_keySource';
       default:
         return 'Gemini returned $status${detail == null ? '.' : ': $detail'}';
     }

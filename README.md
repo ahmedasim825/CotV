@@ -23,7 +23,7 @@ wake word ("Milo", "Hey Milo"), and routes it:
 | Route | Model | When |
 |---|---|---|
 | Instant | Groq `qwen/qwen3.8-27b` | short commands and lookups |
-| Deep | Gemini `gemini-2.5-flash` | medical questions, research, planning, anything long |
+| Deep | Gemini `gemini-3.6-flash` | medical questions, research, planning, anything long |
 | PC | the Windows agent | anything aimed at the laptop |
 
 Clinical terms are checked first and are not overridable by length — "is
@@ -84,9 +84,13 @@ taps and is deleted as soon as its bytes have been uploaded.
 The routing rail on each answer shows which engine ran **and the rule that
 chose it**, so a bad route is distinguishable from a bad answer.
 
-Model ids go stale. Both of the originally specified ones,
-`llama-3.1-8b-instant` and `gemini-2.0-flash`, are retired. To see what a key
-can actually reach today, ask each provider:
+Model ids go stale, and **listed is not the same as usable**. `gemini-2.5-flash`
+appears in ListModels and then answers a generate call with a 404 saying it
+is "no longer available to new users" — so a model that shows up in the
+catalogue can still be closed to your account. Only the generate call knows.
+`llama-3.1-8b-instant` and `gemini-2.0-flash` are retired outright.
+
+To see what a key can actually reach today, ask each provider:
 
 ```bash
 curl -H "Authorization: Bearer $GROQ_KEY" https://api.groq.com/openai/v1/models

@@ -8,7 +8,13 @@ import 'pc_command.dart';
 const String groqModelId = 'qwen/qwen3.8-27b';
 
 /// Gemini's fast reasoning model, and the id sent on the wire.
-const String geminiModelId = 'gemini-2.5-flash';
+///
+/// Back to 3.6 from 2.5. The spec named 2.5-flash, and it is listed by
+/// ListModels, which is what made it look available — but generating with
+/// it answers 404 and says why: "no longer available to new users. Please
+/// update your code to use models/gemini-3.6-flash". Listed and usable are
+/// not the same thing on this API, and only the generate call knows.
+const String geminiModelId = 'gemini-3.6-flash';
 
 /// Groq's speech model, and the id sent on the wire.
 ///

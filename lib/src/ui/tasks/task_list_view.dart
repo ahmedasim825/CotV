@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/reminder.dart';
 import '../../models/task.dart';
 import '../../models/task_view.dart';
 import '../../providers/clock_providers.dart';
+import '../../providers/reminder_providers.dart';
 import '../../providers/task_providers.dart';
 import '../../providers/task_view_providers.dart';
+import '../format/time_format.dart';
+import '../habits/habit_screen.dart';
+import '../home/widgets/home_card_note.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
@@ -13,20 +18,45 @@ import '../widgets/status_card.dart';
 import 'task_form_sheet.dart';
 import 'widgets/task_tile.dart';
 
-/// The task list: category tabs, a sort control, and the tasks themselves.
+/// Which of the three lists the segmented control is showing.
+enum _TaskSegment { tasks, reminders, habits }
+
+/// The Tasks destination: a segmented control over the task list, the
+/// reminder list, and the habit grid.
 ///
-/// Every mutation goes through [TaskListNotifier], which writes to Hive; the
-/// box's change stream feeds [visibleTasksProvider] straight back here, so
-/// nothing on this screen manages its own copy of the list.
-class TaskListView extends ConsumerWidget {
+/// Habits lives here rather than as its own sidebar destination because the
+/// sidebar has exactly five rows by design (see `AppDestinationX.navItems`);
+/// this segment is what makes [HabitScreen] reachable again. Tasks stays the
+/// default segment so `paneFor(AppDestination.tasks)` opens to the same
+/// screen it always has.
+///
+/// Segment selection is local UI state, not app state — nothing outside this
+/// widget cares which of the three is showing, and it resets on rebuild the
+/// way a `TabBar`'s selection would. That is why this is a
+/// [ConsumerStatefulWidget] rather than the [ConsumerWidget] it used to be:
+/// a `Notifier` would outlive the screen for no reason and give every other
+/// consumer a provider to ignore.
+class TaskListView extends ConsumerStatefulWidget {
   const TaskListView({super.key, this.showFab = true});
 
   /// The split view hosts a single shared FAB, so the pane suppresses its
-  /// own.
+  /// own. Only meaningful for the tasks and habits segments — each renders
+  /// its own FAB internally and reads this same flag.
   final bool showFab;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TaskListView> createState() => _TaskListViewState();
+}
+
+class _TaskListViewState extends ConsumerState<TaskListView> {
+  _TaskSegment _segment = _TaskSegment.tasks;
+
+  /// The task list exactly as it was before segments existed.
+  ///
+  /// Every mutation goes through [TaskListNotifier], which writes to Hive;
+  /// the box's change stream feeds [visibleTasksProvider] straight back
+  /// here, so nothing in this method manages its own copy of the list.
+  Widget _buildTaskList(BuildContext context) {
     return AdaptiveLayout(
       builder: (context, windowSize) {
         final tasksAsync = ref.watch(visibleTasksProvider);
@@ -72,7 +102,7 @@ class TaskListView extends ConsumerWidget {
                 ),
               ],
             ),
-            if (showFab)
+            if (widget.showFab)
               Positioned(
                 right: padding,
                 bottom: 20 + MediaQuery.paddingOf(context).bottom,
@@ -81,6 +111,36 @@ class TaskListView extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: SegmentedButton<_TaskSegment>(
+            segments: const [
+              ButtonSegment(value: _TaskSegment.tasks, label: Text('Tasks')),
+              ButtonSegment(
+                  value: _TaskSegment.reminders, label: Text('Reminders')),
+              ButtonSegment(value: _TaskSegment.habits, label: Text('Habits')),
+            ],
+            selected: {_segment},
+            showSelectedIcon: false,
+            onSelectionChanged: (next) =>
+                setState(() => _segment = next.first),
+          ),
+        ),
+        Expanded(
+          child: switch (_segment) {
+            _TaskSegment.tasks => _buildTaskList(context),
+            _TaskSegment.reminders => const _ReminderList(),
+            _TaskSegment.habits => HabitScreen(showFab: widget.showFab),
+          },
+        ),
+      ],
     );
   }
 }
@@ -132,6 +192,87 @@ class _TaskListHeader extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The reminder segment: one row per [Reminder] from [reminderListProvider].
+///
+/// A plain [ConsumerWidget] rather than a stateful one — there is no local
+/// interaction here yet (Task 8 adds the edit pencil), only a watch on the
+/// provider and a render.
+class _ReminderList extends ConsumerWidget {
+  const _ReminderList();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reminders = ref.watch(reminderListProvider);
+
+    if (reminders.isEmpty) {
+      return const Center(
+        child: HomeCardNote(icon: PhLight.bellSimple, message: 'No reminders'),
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        4,
+        20,
+        // Clears the home indicator; this segment has no FAB of its own.
+        20 + MediaQuery.paddingOf(context).bottom,
+      ),
+      itemCount: reminders.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) =>
+          _ReminderRow(reminder: reminders[index]),
+    );
+  }
+}
+
+class _ReminderRow extends StatelessWidget {
+  const _ReminderRow({required this.reminder});
+
+  final Reminder reminder;
+
+  @override
+  Widget build(BuildContext context) {
+    final overdue = reminder.isOverdue(DateTime.now());
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: context.palette.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.palette.hairline),
+      ),
+      child: Row(
+        children: [
+          Icon(PhLight.bellSimple, size: 16, color: context.palette.accent),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.typography.ui(size: 15, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formatReminderDueLabel(reminder.dueAt, DateTime.now()),
+                  style: context.typography.ui(
+                    size: 11.5,
+                    color: overdue ? context.palette.danger : context.palette.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

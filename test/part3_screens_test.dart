@@ -183,15 +183,28 @@ void main() {
       ProviderScope.containerOf(tester.element(find.byType(AppShell)));
 
   // Task 3 (the collapsible sidebar) dropped the Habits row from AppShell's
-  // navigation — HabitScreen has no route in from here until Task 7 restores
-  // it as a segment under Tasks. Skipped rather than deleted or rewired to a
-  // navigation path Task 7 will change again.
+  // navigation. Task 7 restored it as the third segment of the Tasks
+  // screen, so these now get there through the Tasks tab and the segmented
+  // control rather than a "Habits" tooltip of their own.
   group('habits', () {
+    /// [pumpApp] renders at an iPhone 14 Pro's logical size, which is
+    /// [WindowSize.compact] — [AppShell] shows the icon-only bottom bar
+    /// there, not the sidebar, so `Tasks` is still reachable by tooltip.
+    /// (The sidebar's Milo dock renders an orb whose breath controller
+    /// never settles; the bottom bar carries no such widget, so
+    /// `pumpAndSettle` is safe here the same way it is for the settings
+    /// group below.)
+    Future<void> openHabitsSegment(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('Tasks'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Habits'));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('opens the habit form sheet from the grid', (tester) async {
       await pumpApp(tester);
-
-      await tester.tap(find.byTooltip('Habits'));
-      await tester.pumpAndSettle();
+      await openHabitsSegment(tester);
 
       expect(
         find.text('No habits yet.\nAdd one and it starts counting from today.'),
@@ -216,9 +229,7 @@ void main() {
     testWidgets('a stored habit renders, and completing it updates the summary',
         (tester) async {
       await pumpApp(tester);
-
-      await tester.tap(find.byTooltip('Habits'));
-      await tester.pumpAndSettle();
+      await openHabitsSegment(tester);
 
       final habits = containerOf(tester).read(habitListProvider.notifier);
       final habit = Habit(id: 'habit-1', title: 'Dhikr');
@@ -248,10 +259,7 @@ void main() {
         findsOneWidget,
       );
     });
-  },
-    skip: 'HabitScreen is unreachable from AppShell until Task 7 restores it '
-        'as a Tasks segment (Task 3 dropped the Habits nav row).',
-  );
+  });
 
   group('settings', () {
     testWidgets('names the device mechanism in the app-lock row',

@@ -103,3 +103,18 @@ String formatDueLabel(DateTime due, DateTime today) {
   final day = relative ?? formatShortDate(due);
   return hasTimeOfDay ? '$day · ${formatClock(due)}' : day;
 }
+
+/// A reminder's due label, e.g. `Yesterday, 03:00` or `27/07/2026, 20:00`.
+///
+/// Neither [formatDueLabel] nor [formatShortDate] produce this shape, so it
+/// lives here as its own helper rather than being assembled inline in a
+/// widget. A reminder always carries a precise time — unlike a task's due
+/// date, there is no "no time of day" state to special-case — so the time is
+/// never dropped, and a numeric `dd/mm/yyyy` stands in for the weekday-name
+/// form once the date is more than a day away in either direction.
+String formatReminderDueLabel(DateTime due, DateTime today) {
+  final dueDay = DateTime(due.year, due.month, due.day);
+  final relative = relativeDayName(dueDay, DateTime(today.year, today.month, today.day));
+  final day = relative ?? '${_two(due.day)}/${_two(due.month)}/${due.year}';
+  return '$day, ${formatClock(due)}';
+}

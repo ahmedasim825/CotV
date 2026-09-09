@@ -1,6 +1,5 @@
 // Smoke test: verifies the app boots past the security gate into the
-// adaptive shell, renders the home dashboard with its lockout banner,
-// and can switch destinations.
+// adaptive shell, renders the home dashboard, and can switch destinations.
 //
 // The calendar/notification/biometric layers talk to native plugins that
 // aren't available under flutter_test, so this deliberately doesn't assert

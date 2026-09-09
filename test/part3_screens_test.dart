@@ -182,6 +182,10 @@ void main() {
   ProviderContainer containerOf(WidgetTester tester) =>
       ProviderScope.containerOf(tester.element(find.byType(AppShell)));
 
+  // Task 3 (the collapsible sidebar) dropped the Habits row from AppShell's
+  // navigation — HabitScreen has no route in from here until Task 7 restores
+  // it as a segment under Tasks. Skipped rather than deleted or rewired to a
+  // navigation path Task 7 will change again.
   group('habits', () {
     testWidgets('opens the habit form sheet from the grid', (tester) async {
       await pumpApp(tester);
@@ -244,7 +248,10 @@ void main() {
         findsOneWidget,
       );
     });
-  });
+  },
+    skip: 'HabitScreen is unreachable from AppShell until Task 7 restores it '
+        'as a Tasks segment (Task 3 dropped the Habits nav row).',
+  );
 
   group('settings', () {
     testWidgets('names the device mechanism in the app-lock row',

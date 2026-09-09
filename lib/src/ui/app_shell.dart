@@ -7,12 +7,12 @@ import '../providers/milo_providers.dart';
 import '../providers/study_providers.dart';
 import 'focus/focus_session_overlay.dart';
 import 'food/food_search_screen.dart';
-import 'habits/habit_screen.dart';
 import 'home/home_screen.dart';
 import 'milo/milo_assistant_screen.dart';
 import 'prayers/prayers_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'settings/settings_screen.dart';
+import 'shell/sidebar.dart';
 import 'study/study_screen.dart';
 import 'tasks/task_list_view.dart';
 import 'theme/app_theme.dart';
@@ -20,17 +20,25 @@ import 'widgets/ambient_background.dart';
 import 'widgets/ph_light_icons.dart';
 
 /// Top-level destinations.
-enum AppDestination { home, tasks, habits, study, food, prayers, settings }
+enum AppDestination { home, tasks, study, food, prayers, settings }
 
 extension AppDestinationX on AppDestination {
+  /// The five that appear as rows in the sidebar. Settings is reached from
+  /// the footer gear instead, which is where the design puts it.
+  static const List<AppDestination> navItems = [
+    AppDestination.home,
+    AppDestination.tasks,
+    AppDestination.study,
+    AppDestination.food,
+    AppDestination.prayers,
+  ];
+
   String get label {
     switch (this) {
       case AppDestination.home:
         return 'Home';
       case AppDestination.tasks:
         return 'Tasks';
-      case AppDestination.habits:
-        return 'Habits';
       case AppDestination.study:
         return 'Study';
       case AppDestination.food:
@@ -48,14 +56,12 @@ extension AppDestinationX on AppDestination {
         return PhLight.house;
       case AppDestination.tasks:
         return PhLight.listChecks;
-      case AppDestination.habits:
-        return PhLight.target;
       case AppDestination.study:
-        return PhLight.timer;
+        return PhLight.books;
       case AppDestination.food:
         return PhLight.bowlFood;
       case AppDestination.prayers:
-        return PhLight.mosque;
+        return PhLight.starAndCrescent;
       case AppDestination.settings:
         return PhLight.gear;
     }
@@ -69,8 +75,6 @@ Widget paneFor(AppDestination destination) {
       return const HomeScreen();
     case AppDestination.tasks:
       return const TaskListView();
-    case AppDestination.habits:
-      return const HabitScreen();
     case AppDestination.study:
       return const StudyScreen();
     case AppDestination.food:
@@ -102,12 +106,25 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   AppDestination _destination = AppDestination.home;
+  SidebarMode _sidebarMode = SidebarMode.expanded;
 
   void _select(AppDestination destination) {
     if (_destination != destination) {
       setState(() => _destination = destination);
     }
   }
+
+  void _toggleCollapse() => setState(() {
+        _sidebarMode = _sidebarMode == SidebarMode.expanded
+            ? SidebarMode.collapsed
+            : SidebarMode.expanded;
+      });
+
+  void _toggleHidden() => setState(() {
+        _sidebarMode = _sidebarMode == SidebarMode.hidden
+            ? SidebarMode.expanded
+            : SidebarMode.hidden;
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +182,48 @@ class _AppShellState extends ConsumerState<AppShell> {
               // quick action already provided. The end drawer below is
               // unchanged — only the pill that opened it is gone.
               child: windowSize.usesNavigationRail
-                  ? _RailLayout(destination: _destination, onSelect: _select)
+                  ? Stack(
+                      children: [
+                        Row(
+                          children: [
+                            if (_sidebarMode != SidebarMode.hidden)
+                              Sidebar(
+                                mode: _sidebarMode,
+                                destination: _destination,
+                                onSelect: _select,
+                                onToggleCollapse: _toggleCollapse,
+                                onToggleHidden: _toggleHidden,
+                              ),
+                            Expanded(child: paneFor(_destination)),
+                          ],
+                        ),
+                        // The only way back once the sidebar is hidden — it
+                        // has no other footprint to click on.
+                        if (_sidebarMode == SidebarMode.hidden)
+                          Positioned(
+                            left: 8,
+                            top: 8,
+                            child: Tooltip(
+                              message: 'Show sidebar',
+                              child: Material(
+                                color: context.palette.surfaceRaised,
+                                borderRadius: BorderRadius.circular(10),
+                                child: InkWell(
+                                  onTap: _toggleHidden,
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: SizedBox(
+                                    width: minTouchTarget,
+                                    height: minTouchTarget,
+                                    child: Icon(PhLight.sidebarSimple,
+                                        size: 20,
+                                        color: context.palette.textSecondary),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    )
                   : paneFor(_destination),
             ),
           ),
@@ -177,147 +235,6 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
         );
       },
-    );
-  }
-}
-
-/// Navigation rail plus the active pane.
-class _RailLayout extends StatelessWidget {
-  const _RailLayout({required this.destination, required this.onSelect});
-
-  final AppDestination destination;
-  final ValueChanged<AppDestination> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _NavigationSidebar(destination: destination, onSelect: onSelect),
-        VerticalDivider(
-          width: 1,
-          thickness: 1,
-          color: context.palette.hairline,
-        ),
-        Expanded(child: paneFor(destination)),
-      ],
-    );
-  }
-}
-
-/// The iPad sidebar.
-class _NavigationSidebar extends StatelessWidget {
-  const _NavigationSidebar({required this.destination, required this.onSelect});
-
-  static const double width = 92;
-
-  final AppDestination destination;
-  final ValueChanged<AppDestination> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Container(
-      width: width,
-      padding: EdgeInsets.only(
-        top: 20,
-        bottom: 20 + MediaQuery.paddingOf(context).bottom,
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: palette.accentBright,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(height: 28),
-          // Seven destinations fit a short iPad in landscape, but the
-          // rail still scrolls rather than overflowing if the list grows
-          // again.
-          // Labels stay here — the rail has the width for them, and it is
-          // the surface where a destination's name is worth the space.
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  for (final item in AppDestination.values) ...[
-                    _RailItem(
-                      destination: item,
-                      isSelected: item == destination,
-                      onTap: () => onSelect(item),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RailItem extends StatelessWidget {
-  const _RailItem({
-    required this.destination,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final AppDestination destination;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: destination.label,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: 72,
-          child: Column(
-            children: [
-              AnimatedContainer(
-                duration: context.motion.fast,
-                curve: AppMotion.spring,
-                width: 48,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSelected ? palette.accentSoft : Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  destination.icon,
-                  size: 20,
-                  color: isSelected ? palette.accentBright : palette.textMuted,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.typography.ui(
-                  size: 10.5,
-                  weight: FontWeight.w600,
-                  color: isSelected ? palette.textPrimary : palette.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

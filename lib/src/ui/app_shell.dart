@@ -157,25 +157,16 @@ class _AppShellState extends ConsumerState<AppShell> {
               // The bottom bar draws its own home-indicator padding, so the
               // body must not also reserve it.
               bottom: false,
-              child: Stack(
-                children: [
-                  windowSize.usesNavigationRail
-                      ? _RailLayout(
-                          destination: _destination,
-                          onSelect: _select,
-                        )
-                      : paneFor(_destination),
-                  Positioned(
-                    // Clears the rail when there is one, and sits opposite
-                    // each screen's own quick-add pill on the right.
-                    left: windowSize.usesNavigationRail
-                        ? _NavigationSidebar.width + windowSize.pagePadding
-                        : windowSize.pagePadding,
-                    bottom: 20 + MediaQuery.paddingOf(context).bottom,
-                    child: const MiloLauncher(),
-                  ),
-                ],
-              ),
+              // The pane owns the whole body. There used to be a Stack here
+              // with a floating Milo launcher pinned to the bottom-left
+              // corner of every screen; it obstructed the content behind it
+              // and forced each screen to reserve a strip of dead padding to
+              // clear it, for an entry point the dashboard's "Talk to Milo"
+              // quick action already provided. The end drawer below is
+              // unchanged — only the pill that opened it is gone.
+              child: windowSize.usesNavigationRail
+                  ? _RailLayout(destination: _destination, onSelect: _select)
+                  : paneFor(_destination),
             ),
           ),
           bottomNavigationBar: windowSize.usesNavigationRail
@@ -217,7 +208,6 @@ class _RailLayout extends StatelessWidget {
 class _NavigationSidebar extends StatelessWidget {
   const _NavigationSidebar({required this.destination, required this.onSelect});
 
-  /// Also the offset the Milo launcher clears in rail layouts.
   static const double width = 92;
 
   final AppDestination destination;

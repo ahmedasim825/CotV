@@ -36,12 +36,21 @@ class GlassShell extends StatelessWidget {
     final palette = context.palette;
     final innerRadius = outerRadius - shellPadding;
 
+    final fill = tint ?? palette.surface;
+
     final core = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: tint ?? palette.surface,
         borderRadius: BorderRadius.circular(innerRadius),
         border: Border.all(color: palette.hairline),
+        // The specular wash, folded into the fill rather than laid over the
+        // card so it lights the plate without lightening the text on it.
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color.alphaBlend(palette.glassSpecular, fill), fill],
+          stops: const [0.0, 0.45],
+        ),
         boxShadow: [
           BoxShadow(
             color: palette.shadow,

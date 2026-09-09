@@ -39,7 +39,7 @@ class NutritionCard extends ConsumerWidget {
       _Macro('Fats', totals.fat, targets.fat),
     ];
 
-    return CustomCard(
+    return GlassCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       onTap: () => pushFoodPage(context, const FoodSearchScreen()),
       semanticLabel: 'Nutrition, $eaten of ${targets.calories} kilocalories. '
@@ -70,7 +70,10 @@ class NutritionCard extends ConsumerWidget {
                 children: [
                   Text(
                     '$eaten',
-                    style: context.typography.display(size: 30),
+                    style: context.typography.display(
+                      size: 30,
+                      weight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -145,15 +148,7 @@ class _MacroBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 7),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: value,
-              minHeight: 5,
-              backgroundColor: palette.glassFill,
-              valueColor: AlwaysStoppedAnimation<Color>(palette.accent),
-            ),
-          ),
+          MeterBar(value: value, color: palette.accent),
         ],
       ),
     );

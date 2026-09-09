@@ -45,7 +45,7 @@ class StudyBreakdownCard extends ConsumerWidget {
       for (final subject in subjects) subject.id: subjectColor(subject.colorValue),
     };
 
-    return CustomCard(
+    return GlassCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,7 +71,10 @@ class StudyBreakdownCard extends ConsumerWidget {
                 children: [
                   Text(
                     formatStudyMinutes(total),
-                    style: context.typography.display(size: 30),
+                    style: context.typography.display(
+                      size: 30,
+                      weight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -158,15 +161,7 @@ class _SubjectRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 7),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: share,
-              minHeight: 5,
-              backgroundColor: palette.glassFill,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
+          MeterBar(value: share, color: color),
         ],
       ),
     );

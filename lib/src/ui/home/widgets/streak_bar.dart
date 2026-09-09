@@ -9,6 +9,7 @@ import '../../../providers/habit_providers.dart';
 import '../../../providers/nutrition_providers.dart';
 import '../../../providers/study_providers.dart';
 import '../../../providers/task_view_providers.dart';
+import '../../components/components.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 
@@ -47,23 +48,20 @@ class StreakBar extends ConsumerWidget {
         .where((task) => !task.isCompleted)
         .length;
 
-    final container = BoxDecoration(
-      color: palette.glassFill,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: palette.hairline),
-    );
-
     // Four zeros say less than one sentence does, and read as broken rather
     // than as a day that has not started yet.
     if (streak == 0 && studied == 0 && calories == 0 && tasksLeft == 0) {
-      return Container(
-        width: double.infinity,
-        decoration: container,
+      return GlassCard(
+        radius: 18,
+        elevated: false,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        child: Text(
-          'Nothing tracked yet today',
-          textAlign: TextAlign.center,
-          style: context.typography.ui(size: 13, color: palette.textMuted),
+        child: SizedBox(
+          width: double.infinity,
+          child: Text(
+            'Nothing tracked yet today',
+            textAlign: TextAlign.center,
+            style: context.typography.ui(size: 13, color: palette.textMuted),
+          ),
         ),
       );
     }
@@ -75,8 +73,12 @@ class StreakBar extends ConsumerWidget {
       _Metric(PhLight.listChecks, '$tasksLeft', 'tasks left'),
     ];
 
-    return Container(
-      decoration: container,
+    // Zero padding on the card so the strip can scroll edge to edge under
+    // the glass; the scroll view supplies its own inset instead.
+    return GlassCard(
+      radius: 18,
+      elevated: false,
+      padding: EdgeInsets.zero,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),

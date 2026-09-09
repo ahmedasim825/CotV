@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// The app's standard content surface: a themed fill, a hairline border and
-/// an inset top highlight, with optional press physics when it is tappable.
+/// The app's standard content surface: a themed fill, a hairline border, a
+/// specular top edge, and hover and press physics when it is tappable.
 ///
-/// This is the single-layer card. The nested "double bezel" treatment lives
-/// in `GlassShell` and is reserved for hero surfaces; everything else — a
-/// habit tile, a task row, a settings row — should use this so all of
-/// them share one radius, border and shadow language.
+/// This is the single-layer, *opaque* card, and the default for anything
+/// that is not a hero. Its two siblings: `GlassShell` carries the nested
+/// "double bezel" treatment for hero surfaces, and `GlassCard` is this card
+/// rendered in blurred glass, which the dashboard is built from. All three
+/// share one radius, border, shadow and motion language.
 class CustomCard extends StatefulWidget {
   const CustomCard({
     super.key,
@@ -53,6 +54,7 @@ class CustomCard extends StatefulWidget {
 
 class _CustomCardState extends State<CustomCard> {
   bool _pressed = false;
+  bool _hovered = false;
 
   bool get _interactive => widget.onTap != null;
 
@@ -60,10 +62,18 @@ class _CustomCardState extends State<CustomCard> {
     if (_pressed != value) setState(() => _pressed = value);
   }
 
+  /// Only a tappable card lifts: the lift is a promise that something
+  /// happens when it is clicked.
+  void _setHovered(bool value) {
+    if (!_interactive) return;
+    if (_hovered != value) setState(() => _hovered = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final accent = widget.accent;
+    final glow = accent ?? palette.accent;
 
     final Color fill;
     if (widget.tint != null) {
@@ -83,32 +93,66 @@ class _CustomCardState extends State<CustomCard> {
       borderColor = palette.hairline;
     }
 
-    final card = AnimatedContainer(
+    final radius = BorderRadius.circular(widget.radius);
+
+    // The top highlight is folded into the fill as a gradient rather than
+    // laid over the card, so it lights the plate without washing out the
+    // text sitting on it.
+    final plate = AnimatedContainer(
       duration: context.motion.fast,
       curve: AppMotion.spring,
       padding: widget.padding,
       decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(widget.radius),
+        borderRadius: radius,
         border: Border.all(
           color: borderColor,
           width: widget.selected ? 1.5 : 1,
         ),
-        boxShadow: widget.elevated
-            ? [
-                BoxShadow(
-                  color: palette.shadow,
-                  blurRadius: 22,
-                  offset: const Offset(0, 10),
-                ),
-              ]
-            : null,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color.alphaBlend(palette.glassSpecular, fill), fill],
+          stops: const [0.0, 0.45],
+        ),
       ),
       foregroundDecoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(widget.radius),
+        borderRadius: radius,
         border: Border(top: BorderSide(color: palette.innerHighlight)),
       ),
       child: widget.child,
+    );
+
+    // Shadows live out here rather than on the plate: the hover glow is
+    // negative-spread light coming off the card, and the lift is a
+    // transform, neither of which should animate on the same controller as
+    // the fill.
+    final card = MouseRegion(
+      cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      child: AnimatedContainer(
+        duration: context.motion.hover,
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            if (widget.elevated)
+              BoxShadow(
+                color: palette.shadow,
+                blurRadius: _hovered ? 30 : 22,
+                offset: Offset(0, _hovered ? 14 : 10),
+              ),
+            if (_hovered)
+              BoxShadow(
+                color: glow.withValues(alpha: 0.15),
+                blurRadius: 20,
+                spreadRadius: -2,
+              ),
+          ],
+        ),
+        child: plate,
+      ),
     );
 
     if (!_interactive) return card;
@@ -124,7 +168,7 @@ class _CustomCardState extends State<CustomCard> {
         onTapUp: (_) => _setPressed(false),
         behavior: HitTestBehavior.opaque,
         child: AnimatedScale(
-          scale: _pressed ? 0.98 : 1,
+          scale: _pressed ? 0.96 : 1,
           duration: context.motion.fast,
           curve: AppMotion.spring,
           child: card,

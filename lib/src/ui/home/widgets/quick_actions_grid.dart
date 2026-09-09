@@ -8,10 +8,14 @@ import '../../widgets/ph_light_icons.dart';
 
 /// The three shortcut pills under the dashboard.
 ///
-/// "Talk to Milo" opens the same end drawer the floating launcher does,
-/// "Add Task" the same sheet the Tasks screen's quick-add does, and
-/// "Log Food" the food logger. Each is the screen's own entry point rather
-/// than a second implementation of it.
+/// "Talk to Milo" opens the end drawer, "Add Task" the same sheet the Tasks
+/// screen's quick-add does, and "Log Food" the food logger. Each is the
+/// screen's own entry point rather than a second implementation of it.
+///
+/// Milo leads, filled rather than outlined: it used to share the job with a
+/// floating launcher pinned over the corner of every screen, and now that
+/// the launcher is gone this row is the way in. The other two stay outlined
+/// so the group still reads as one primary action and two shortcuts.
 class QuickActionsGrid extends StatelessWidget {
   const QuickActionsGrid({super.key});
 
@@ -26,6 +30,7 @@ class QuickActionsGrid extends StatelessWidget {
           _ActionPill(
             icon: PhLight.sparkle,
             label: 'Talk to Milo',
+            filled: true,
             onTap: () => Scaffold.of(context).openEndDrawer(),
           ),
           _ActionPill(
@@ -65,10 +70,19 @@ class QuickActionsGrid extends StatelessWidget {
 }
 
 class _ActionPill extends StatefulWidget {
-  const _ActionPill({required this.icon, required this.label, this.onTap});
+  const _ActionPill({
+    required this.icon,
+    required this.label,
+    this.filled = false,
+    this.onTap,
+  });
 
   final IconData icon;
   final String label;
+
+  /// Draws the pill as the group's primary action: an accent fill with
+  /// [AppPalette.onAccent] contents, rather than an accent-washed outline.
+  final bool filled;
 
   /// Null renders the pill dimmed and unresponsive — the honest state for
   /// an action that has no destination yet.
@@ -80,33 +94,72 @@ class _ActionPill extends StatefulWidget {
 
 class _ActionPillState extends State<_ActionPill> {
   bool _pressed = false;
+  bool _hovered = false;
 
   void _setPressed(bool value) {
     if (_pressed != value) setState(() => _pressed = value);
   }
 
+  void _setHovered(bool value) {
+    if (widget.onTap == null) return;
+    if (_hovered != value) setState(() => _hovered = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final motion = context.motion;
     final enabled = widget.onTap != null;
     final tint = enabled ? palette.accent : palette.textMuted;
+    final filled = widget.filled && enabled;
 
-    final pill = Container(
+    final Color background;
+    final Color foreground;
+    final Color border;
+    if (filled) {
+      // Brightening on hover rather than only glowing: on Titanium and
+      // Monochrome the glow barely separates from the surface, and the fill
+      // is the only thing there that can carry the state.
+      background = _hovered ? palette.accentBright : palette.accent;
+      foreground = palette.onAccent;
+      border = Colors.transparent;
+    } else {
+      background = Color.alphaBlend(
+        tint.withValues(alpha: enabled ? (_hovered ? 0.20 : 0.12) : 0.05),
+        palette.surface,
+      );
+      foreground = enabled ? palette.textPrimary : palette.textMuted;
+      border = tint.withValues(alpha: enabled ? (_hovered ? 0.45 : 0.28) : 0.14);
+    }
+
+    final pill = AnimatedContainer(
+      duration: motion.hover,
+      curve: Curves.easeOut,
       height: 52,
+      transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          tint.withValues(alpha: enabled ? 0.12 : 0.05),
-          palette.surface,
-        ),
+        color: background,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: tint.withValues(alpha: enabled ? 0.28 : 0.14)),
+        border: Border.all(color: border),
+        boxShadow: [
+          if (_hovered)
+            BoxShadow(
+              color: palette.accent.withValues(alpha: 0.15),
+              blurRadius: 20,
+              spreadRadius: -2,
+            ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(widget.icon, size: 17, color: tint),
+          Icon(
+            widget.icon,
+            size: 17,
+            color: filled ? palette.onAccent : tint,
+          ),
           const SizedBox(width: 10),
           Flexible(
             child: Text(
@@ -116,7 +169,7 @@ class _ActionPillState extends State<_ActionPill> {
               style: context.typography.ui(
                 size: 13.5,
                 weight: FontWeight.w600,
-                color: enabled ? palette.textPrimary : palette.textMuted,
+                color: foreground,
               ),
             ),
           ),
@@ -138,17 +191,22 @@ class _ActionPillState extends State<_ActionPill> {
       button: true,
       label: widget.label,
       excludeSemantics: true,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onTapDown: (_) => _setPressed(true),
-        onTapCancel: () => _setPressed(false),
-        onTapUp: (_) => _setPressed(false),
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedScale(
-          scale: _pressed ? 0.97 : 1,
-          duration: context.motion.fast,
-          curve: AppMotion.spring,
-          child: pill,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => _setHovered(true),
+        onExit: (_) => _setHovered(false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedScale(
+            scale: _pressed ? 0.96 : 1,
+            duration: motion.fast,
+            curve: AppMotion.spring,
+            child: pill,
+          ),
         ),
       ),
     );

@@ -68,6 +68,8 @@ class AppPalette {
     required this.surfaceRaised,
     required this.glassFill,
     required this.glassBorder,
+    required this.glassSurface,
+    required this.glassSpecular,
     required this.hairline,
     required this.innerHighlight,
     required this.accent,
@@ -106,6 +108,22 @@ class AppPalette {
 
   /// The outer glass shell's border.
   final Color glassBorder;
+
+  /// The fill a blurred glass card is painted in, alpha already applied —
+  /// the surface at ~65% on a dark theme, white at ~85% on a light one.
+  ///
+  /// A card must take its translucency from here rather than computing its
+  /// own alpha off [surface]: on Pearl the glass is white over a warm
+  /// ground, not the surface faded out, and no single multiplier gives both
+  /// readings.
+  final Color glassSurface;
+
+  /// The colour the specular top highlight fades from.
+  ///
+  /// Distinct from [innerHighlight], which is a one-pixel border: this one
+  /// is the start of a gradient washed down over the top of the card, so it
+  /// is set brighter and fades to nothing rather than stopping abruptly.
+  final Color glassSpecular;
 
   /// One-pixel dividers and card borders.
   final Color hairline;
@@ -148,6 +166,11 @@ class AppPalette {
   /// A tinted plate for an accent-colored icon chip.
   Color get accentSoft => accent.withValues(alpha: 0.16);
 
+  /// The unfilled part of a donut ring or a meter bar. Reads as `onSurface`
+  /// at 8%, which on this palette is [textPrimary] — dark enough to show
+  /// the gap on Pearl and light enough to show it on true black.
+  Color get meterTrack => textPrimary.withValues(alpha: 0.08);
+
   /// Tint for the hero card, which sits a shade off the default surface.
   Color get heroTint =>
       Color.alphaBlend(accent.withValues(alpha: isDark ? 0.07 : 0.05), surface);
@@ -163,6 +186,8 @@ class AppPalette {
     Color? surfaceRaised,
     Color? glassFill,
     Color? glassBorder,
+    Color? glassSurface,
+    Color? glassSpecular,
     Color? hairline,
     Color? innerHighlight,
     Color? accent,
@@ -189,6 +214,8 @@ class AppPalette {
       surfaceRaised: surfaceRaised ?? this.surfaceRaised,
       glassFill: glassFill ?? this.glassFill,
       glassBorder: glassBorder ?? this.glassBorder,
+      glassSurface: glassSurface ?? this.glassSurface,
+      glassSpecular: glassSpecular ?? this.glassSpecular,
       hairline: hairline ?? this.hairline,
       innerHighlight: innerHighlight ?? this.innerHighlight,
       accent: accent ?? this.accent,
@@ -221,6 +248,8 @@ class AppPalette {
       surfaceRaised: c(a.surfaceRaised, b.surfaceRaised),
       glassFill: c(a.glassFill, b.glassFill),
       glassBorder: c(a.glassBorder, b.glassBorder),
+      glassSurface: c(a.glassSurface, b.glassSurface),
+      glassSpecular: c(a.glassSpecular, b.glassSpecular),
       hairline: c(a.hairline, b.hairline),
       innerHighlight: c(a.innerHighlight, b.innerHighlight),
       accent: c(a.accent, b.accent),

@@ -204,6 +204,7 @@ class CountdownRing extends StatelessWidget {
     required this.accent,
     required this.child,
     this.diameter = 208,
+    this.strokeWidth = 10,
   });
 
   /// 0..1. Values outside that are clamped by the painter.
@@ -211,6 +212,10 @@ class CountdownRing extends StatelessWidget {
   final Color accent;
   final Widget child;
   final double diameter;
+
+  /// How thick the ring is drawn. The default is deliberately heavy: a
+  /// hairline ring reads as a loading spinner, and these are measurements.
+  final double strokeWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +234,8 @@ class CountdownRing extends StatelessWidget {
           painter: _RingPainter(
             progress: value,
             accent: accent,
-            track: palette.glassFill,
+            track: palette.meterTrack,
+            stroke: strokeWidth,
           ),
           child: Center(
             child: Padding(
@@ -248,23 +254,23 @@ class _RingPainter extends CustomPainter {
     required this.progress,
     required this.accent,
     required this.track,
+    required this.stroke,
   });
 
   final double progress;
   final Color accent;
   final Color track;
-
-  static const double _stroke = 8;
+  final double stroke;
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     final centre = rect.center;
-    final radius = (size.shortestSide - _stroke) / 2;
+    final radius = (size.shortestSide - stroke) / 2;
 
     final trackPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _stroke
+      ..strokeWidth = stroke
       ..color = track;
     canvas.drawCircle(centre, radius, trackPaint);
 
@@ -272,7 +278,7 @@ class _RingPainter extends CustomPainter {
 
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _stroke
+      ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
       ..color = accent;
 
@@ -289,7 +295,10 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RingPainter old) =>
-      old.progress != progress || old.accent != accent || old.track != track;
+      old.progress != progress ||
+      old.accent != accent ||
+      old.track != track ||
+      old.stroke != stroke;
 }
 
 /// The colour a session should draw in: the subject's own if it still

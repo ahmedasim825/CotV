@@ -31,8 +31,11 @@ class FocusTasksCard extends ConsumerWidget {
     final palette = context.palette;
     final tasks = ref.watch(todayFocusTasksProvider);
 
-    return CustomCard(
+    return GlassCard(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+      // The rows inside are each their own control, so the card lights up
+      // under a pointer even though the card itself does nothing.
+      hoverLift: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

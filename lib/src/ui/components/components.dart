@@ -7,6 +7,8 @@ library;
 export 'confirm_dialog.dart';
 export 'custom_card.dart';
 export 'form_fields.dart';
+export 'glass_card.dart';
+export 'meter_bar.dart';
 export 'primary_button.dart';
 export 'priority_badge.dart';
 export 'section_header.dart';

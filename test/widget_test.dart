@@ -228,6 +228,28 @@ void main() {
     expect(find.text('Journal'), findsNothing);
   });
 
+  testWidgets('no floating Milo pill is left on any destination',
+      (tester) async {
+    // The launcher used to be Positioned in the shell's Stack, so it sat
+    // over the bottom-left corner of every screen, not just Home. It is
+    // addressed by its "Milo" label — the type is gone, and the drawer it
+    // opened is still there, so neither is a witness that it was removed.
+    //
+    // Tall enough to build the whole dashboard, so the quick action that
+    // replaced it is on screen too. "Talk to Milo" is a different string,
+    // and must survive.
+    await pumpApp(tester, logicalSize: const Size(393, 2400));
+
+    expect(find.text('Milo'), findsNothing);
+    expect(find.text('Talk to Milo'), findsOneWidget);
+
+    // And on a destination that never had a quick action to replace it.
+    await tester.tap(find.byTooltip('Tasks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Milo'), findsNothing);
+  });
+
   testWidgets('renders the prayer lockout banner', (tester) async {
     await pumpApp(tester);
 

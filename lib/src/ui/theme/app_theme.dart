@@ -18,6 +18,12 @@ class AppMotion {
   const AppMotion._();
 
   static const Curve spring = Cubic(0.32, 0.72, 0.0, 1.0);
+
+  /// A pointer-hover lift. Shorter than [fast], and the one transition in
+  /// the app that eases out rather than springing: a hover that lags the
+  /// cursor reads as the app thinking rather than as the card answering.
+  static const Duration hover = Duration(milliseconds: 200);
+
   static const Duration fast = Duration(milliseconds: 320);
   static const Duration base = Duration(milliseconds: 700);
   static const Duration slow = Duration(milliseconds: 900);
@@ -40,6 +46,8 @@ class AppMotionScale {
 
   final bool isReduced;
 
+  Duration get hover => isReduced ? Duration.zero : AppMotion.hover;
+
   Duration get fast => isReduced ? Duration.zero : AppMotion.fast;
 
   Duration get base => isReduced ? Duration.zero : AppMotion.base;
@@ -54,21 +62,23 @@ class AppMotionScale {
 /// The house theme: deep slate, emerald accents, warm gold highlights.
 const AppPalette _sanctuary = AppPalette(
   brightness: Brightness.dark,
-  background: Color(0xFF080D0F),
-  surface: Color(0xFF101719),
-  surfaceRaised: Color(0xFF182124),
+  background: Color(0xFF0F172A),
+  surface: Color(0xFF18233A),
+  surfaceRaised: Color(0xFF22304A),
   glassFill: Color(0x14FFFFFF),
-  glassBorder: Color(0x1FFFFFFF),
+  glassBorder: Color(0x26FFFFFF),
+  glassSurface: Color(0xA618233A),
+  glassSpecular: Color(0x2EFFFFFF),
   hairline: Color(0x14FFFFFF),
   innerHighlight: Color(0x26FFFFFF),
   accent: Color(0xFF34D399),
   accentBright: Color(0xFF6EE7B7),
-  accentDeep: Color(0xFF0E5C46),
+  accentDeep: Color(0xFF065F46),
   onAccent: Color(0xFF04140E),
   secondary: Color(0xFFE5B769),
-  textPrimary: Color(0xFFEAF2F0),
-  textSecondary: Color(0xB3EAF2F0),
-  textMuted: Color(0x73EAF2F0),
+  textPrimary: Color(0xFFE8EEF7),
+  textSecondary: Color(0xB3E8EEF7),
+  textMuted: Color(0x73E8EEF7),
   danger: Color(0xFFEF8674),
   success: Color(0xFF34D399),
   priorityLow: Color(0xFF7FA3B8),
@@ -90,18 +100,22 @@ const AppPalette _sanctuary = AppPalette(
 /// selectable so the earlier look is not lost.
 const AppPalette _etherealAmber = AppPalette(
   brightness: Brightness.dark,
-  background: Color(0xFF07070A),
-  surface: Color(0xFF121016),
-  surfaceRaised: Color(0xFF1B1820),
+  background: Color(0xFF0A0A0C),
+  surface: Color(0xFF141318),
+  surfaceRaised: Color(0xFF1E1C24),
   glassFill: Color(0x14FFFFFF),
-  glassBorder: Color(0x1FFFFFFF),
+  glassBorder: Color(0x26FFFFFF),
+  glassSurface: Color(0xA6141318),
+  glassSpecular: Color(0x2EFFFFFF),
   hairline: Color(0x14FFFFFF),
   innerHighlight: Color(0x26FFFFFF),
-  accent: Color(0xFFD8A657),
-  accentBright: Color(0xFFF2C879),
-  accentDeep: Color(0xFF8A5A2A),
+  accent: Color(0xFFF59E0B),
+  accentBright: Color(0xFFFBBF24),
+  accentDeep: Color(0xFF92400E),
   onAccent: Color(0xFF1D1408),
-  secondary: Color(0xFFE0A183),
+  // Copper rather than a second amber: the two have to separate on a
+  // near-black ground, and a lighter amber would read as the accent again.
+  secondary: Color(0xFFC87941),
   textPrimary: Color(0xFFF6F3EC),
   textSecondary: Color(0xB3F6F3EC),
   textMuted: Color(0x73F6F3EC),
@@ -109,13 +123,13 @@ const AppPalette _etherealAmber = AppPalette(
   success: Color(0xFF8FBF9F),
   priorityLow: Color(0xFF7FA3B8),
   shadow: Color(0x40000000),
-  glowPrimary: Color(0x598A5A2A),
-  glowSecondary: Color(0x29D8A657),
+  glowPrimary: Color(0x5992400E),
+  glowSecondary: Color(0x29F59E0B),
   prayerHues: PrayerHues(
     fajr: Color(0xFF7B7BB5),
     sunrise: Color(0xFFE0A183),
     dhuhr: Color(0xFFE8C36B),
-    asr: Color(0xFFD8A657),
+    asr: Color(0xFFF59E0B),
     maghrib: Color(0xFFC97A55),
     isha: Color(0xFF5C6BA8),
   ),
@@ -129,11 +143,13 @@ const AppPalette _appleMinimal = AppPalette(
   surface: Color(0xFF1C1C1E),
   surfaceRaised: Color(0xFF2C2C2E),
   glassFill: Color(0x14FFFFFF),
-  glassBorder: Color(0x1FFFFFFF),
+  glassBorder: Color(0x26FFFFFF),
+  glassSurface: Color(0xA61C1C1E),
+  glassSpecular: Color(0x24FFFFFF),
   hairline: Color(0x1AFFFFFF),
   innerHighlight: Color(0x1FFFFFFF),
-  accent: Color(0xFF0A84FF),
-  accentBright: Color(0xFF4DA3FF),
+  accent: Color(0xFF007AFF),
+  accentBright: Color(0xFF409CFF),
   accentDeep: Color(0xFF0A4F99),
   onAccent: Color(0xFFFFFFFF),
   secondary: Color(0xFFFFD60A),
@@ -144,7 +160,7 @@ const AppPalette _appleMinimal = AppPalette(
   success: Color(0xFF30D158),
   priorityLow: Color(0xFF64D2FF),
   shadow: Color(0x66000000),
-  glowPrimary: Color(0x330A84FF),
+  glowPrimary: Color(0x33007AFF),
   glowSecondary: Color(0x1AFFD60A),
   prayerHues: PrayerHues(
     fajr: Color(0xFF5E5CE6),
@@ -152,7 +168,7 @@ const AppPalette _appleMinimal = AppPalette(
     dhuhr: Color(0xFFFFD60A),
     asr: Color(0xFFFFB340),
     maghrib: Color(0xFFFF6B4A),
-    isha: Color(0xFF0A84FF),
+    isha: Color(0xFF007AFF),
   ),
   typeface: AppTypeface.interInter,
 );
@@ -161,34 +177,39 @@ const AppPalette _appleMinimal = AppPalette(
 /// state is carried by brightness and contrast instead of hue.
 const AppPalette _titanium = AppPalette(
   brightness: Brightness.dark,
-  background: Color(0xFF090A0B),
-  surface: Color(0xFF141517),
-  surfaceRaised: Color(0xFF222427),
+  background: Color(0xFF18181B),
+  surface: Color(0xFF27272A),
+  surfaceRaised: Color(0xFF3F3F46),
   glassFill: Color(0x12FFFFFF),
-  glassBorder: Color(0x1FFFFFFF),
+  glassBorder: Color(0x26FFFFFF),
+  glassSurface: Color(0xA627272A),
+  glassSpecular: Color(0x2EFFFFFF),
   hairline: Color(0x14FFFFFF),
   innerHighlight: Color(0x24FFFFFF),
-  accent: Color(0xFFB8BCC3),
-  accentBright: Color(0xFFE7E7E9),
-  accentDeep: Color(0xFF4A4D52),
-  onAccent: Color(0xFF090A0B),
-  secondary: Color(0xFF8B8D91),
-  textPrimary: Color(0xFFE7E7E9),
-  textSecondary: Color(0xFFB8BCC3),
-  textMuted: Color(0xFF8B8D91),
+  accent: Color(0xFFD4D4D8),
+  accentBright: Color(0xFFFAFAFA),
+  accentDeep: Color(0xFF52525B),
+  onAccent: Color(0xFF18181B),
+  secondary: Color(0xFFA1A1AA),
+  textPrimary: Color(0xFFFAFAFA),
+  textSecondary: Color(0xFFD4D4D8),
+  textMuted: Color(0xFFA1A1AA),
+  // The two exceptions to "no chromatic colour": a destructive action and
+  // a completed one still have to read as themselves at a glance, so both
+  // are pulled almost — but not all the way — to grey.
   danger: Color(0xFFD98878),
   success: Color(0xFF9FC0A8),
-  priorityLow: Color(0xFF7F868E),
+  priorityLow: Color(0xFF71717A),
   shadow: Color(0x73000000),
-  glowPrimary: Color(0x1FB8BCC3),
-  glowSecondary: Color(0x14E7E7E9),
+  glowPrimary: Color(0x1FD4D4D8),
+  glowSecondary: Color(0x14FAFAFA),
   prayerHues: PrayerHues(
-    fajr: Color(0xFF6E7378),
-    sunrise: Color(0xFFA9AEB4),
-    dhuhr: Color(0xFFC8CCD1),
-    asr: Color(0xFFB8BCC3),
-    maghrib: Color(0xFF8E9297),
-    isha: Color(0xFF5D6166),
+    fajr: Color(0xFF52525B),
+    sunrise: Color(0xFFA1A1AA),
+    dhuhr: Color(0xFFE4E4E7),
+    asr: Color(0xFFD4D4D8),
+    maghrib: Color(0xFF71717A),
+    isha: Color(0xFF3F3F46),
   ),
   typeface: AppTypeface.spaceGroteskInter,
 );
@@ -201,7 +222,9 @@ const AppPalette _monochrome = AppPalette(
   surface: Color(0xFF141414),
   surfaceRaised: Color(0xFF202020),
   glassFill: Color(0x12FFFFFF),
-  glassBorder: Color(0x1FFFFFFF),
+  glassBorder: Color(0x26FFFFFF),
+  glassSurface: Color(0xA6141414),
+  glassSpecular: Color(0x2EFFFFFF),
   hairline: Color(0x14FFFFFF),
   innerHighlight: Color(0x24FFFFFF),
   accent: Color(0xFFF1F1F1),
@@ -238,20 +261,23 @@ const AppPalette _pearl = AppPalette(
   background: Color(0xFFFAF9F6),
   surface: Color(0xFFFFFFFF),
   surfaceRaised: Color(0xFFF0EFEB),
-  // On a light ground the glass tokens invert: a dark wash and dark
-  // hairlines, with white as the inset highlight.
+  // On a light ground the glass tokens invert: a dark wash, a warm stone
+  // border rather than a translucent black one, and white glass over the
+  // warm canvas instead of a faded surface.
   glassFill: Color(0x0A000000),
-  glassBorder: Color(0x14000000),
-  hairline: Color(0x14000000),
+  glassBorder: Color(0xFFE7E5E4),
+  glassSurface: Color(0xD9FFFFFF),
+  glassSpecular: Color(0xCCFFFFFF),
+  hairline: Color(0xFFE7E5E4),
   innerHighlight: Color(0xCCFFFFFF),
   accent: Color(0xFF8C9EFF),
   accentBright: Color(0xFFA9B6FF),
   accentDeep: Color(0xFF5566D6),
   onAccent: Color(0xFFFFFFFF),
   secondary: Color(0xFFE0A96D),
-  textPrimary: Color(0xFF1D1D1F),
-  textSecondary: Color(0xFF5A5A5C),
-  textMuted: Color(0xFF858585),
+  textPrimary: Color(0xFF1C1917),
+  textSecondary: Color(0xFF57534E),
+  textMuted: Color(0xFF78716C),
   danger: Color(0xFFD9544D),
   success: Color(0xFF3F9E6B),
   priorityLow: Color(0xFF6E8CA8),
@@ -408,6 +434,10 @@ ThemeData buildAppTheme(AppThemeVariant variant) {
       secondary: palette.secondary,
       surface: palette.surface,
       onSurface: palette.textPrimary,
+      // Mapped so a widget reaching through Material rather than
+      // `context.palette` — a Flutter-supplied border, a package's card —
+      // lands on the same hairline everything else is drawn with.
+      outline: palette.hairline,
       error: palette.danger,
     ),
     // Text that names no color of its own inherits from here, which is

@@ -1,5 +1,5 @@
-// The Milo panel end to end: launcher, empty state, and a turn streaming
-// into the routing rail.
+// The Milo panel end to end: the quick action that opens it, the empty
+// state, and a turn streaming into the routing rail.
 //
 // Same harness as the other widget tests — real Hive in a temp directory,
 // plugin-backed services faked — plus two Milo-specific overrides: the
@@ -126,7 +126,11 @@ void main() {
   });
 
   Future<void> pumpApp(WidgetTester tester, http.Client client) async {
-    tester.view.physicalSize = const Size(1179, 2556);
+    // 393pt wide, so this is still the compact phone layout — but tall
+    // enough to build the whole dashboard column in one pass. The only way
+    // into the panel is now the "Talk to Milo" quick action at the bottom
+    // of it, and a ListView only builds what it can show.
+    tester.view.physicalSize = const Size(1179, 7200);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -168,11 +172,11 @@ void main() {
     fail('Condition still unmet after $maxFrames frames.');
   }
 
-  /// Taps the launcher and waits for the drawer to finish sliding in — it
-  /// is findable from the first frame of the slide, when it is still off
+  /// Taps the quick action and waits for the drawer to finish sliding in —
+  /// it is findable from the first frame of the slide, when it is still off
   /// the right edge and nothing inside it can be tapped.
   Future<void> openPanel(WidgetTester tester) async {
-    await tester.tap(find.text('Milo'));
+    await tester.tap(find.text('Talk to Milo'));
     await pumpUntil(
       tester,
       () => find.byType(MiloAssistantScreen).evaluate().isNotEmpty,
@@ -180,12 +184,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
   }
 
-  testWidgets('the launcher opens the panel on its empty state',
+  testWidgets('the quick action opens the panel on its empty state',
       (tester) async {
     await pumpApp(tester, MockClient((request) async => http.Response('', 500)));
 
-    // The launcher sits opposite each screen's own quick-add pill.
-    expect(find.text('Milo'), findsOneWidget);
+    // The dashboard's quick action is the way in. The floating launcher
+    // that used to sit over the bottom-left corner of every screen is gone,
+    // so its bare "Milo" label must not still be somewhere on the page.
+    expect(find.text('Talk to Milo'), findsOneWidget);
+    expect(find.text('Milo'), findsNothing);
 
     await openPanel(tester);
 

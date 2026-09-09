@@ -33,6 +33,8 @@ class PhLight {
       IconData(0xe0d2, fontFamily: _family, fontPackage: _package);
   static const IconData bookOpen =
       IconData(0xe0e6, fontFamily: _family, fontPackage: _package);
+  static const IconData books =
+      IconData(0xe758, fontFamily: _family, fontPackage: _package);
   static const IconData bowlFood =
       IconData(0xeaa4, fontFamily: _family, fontPackage: _package);
   static const IconData brain =
@@ -63,6 +65,20 @@ class PhLight {
       IconData(0xe19a, fontFamily: _family, fontPackage: _package);
   static const IconData clockCountdown =
       IconData(0xed2c, fontFamily: _family, fontPackage: _package);
+  static const IconData clockCounterClockwise =
+      IconData(0xe1a0, fontFamily: _family, fontPackage: _package);
+  static const IconData cloud =
+      IconData(0xe1aa, fontFamily: _family, fontPackage: _package);
+  static const IconData cloudFog =
+      IconData(0xe53c, fontFamily: _family, fontPackage: _package);
+  static const IconData cloudLightning =
+      IconData(0xe1b2, fontFamily: _family, fontPackage: _package);
+  static const IconData cloudMoon =
+      IconData(0xe53e, fontFamily: _family, fontPackage: _package);
+  static const IconData cloudRain =
+      IconData(0xe1b4, fontFamily: _family, fontPackage: _package);
+  static const IconData cloudSnow =
+      IconData(0xe1b8, fontFamily: _family, fontPackage: _package);
   static const IconData cloudSun =
       IconData(0xe540, fontFamily: _family, fontPackage: _package);
   static const IconData code =
@@ -107,6 +123,8 @@ class PhLight {
       IconData(0xe2de, fontFamily: _family, fontPackage: _package);
   static const IconData link =
       IconData(0xe2e2, fontFamily: _family, fontPackage: _package);
+  static const IconData list =
+      IconData(0xe2f0, fontFamily: _family, fontPackage: _package);
   static const IconData listBullets =
       IconData(0xe2f2, fontFamily: _family, fontPackage: _package);
   static const IconData listChecks =
@@ -131,6 +149,8 @@ class PhLight {
       IconData(0xe330, fontFamily: _family, fontPackage: _package);
   static const IconData moonStars =
       IconData(0xe58e, fontFamily: _family, fontPackage: _package);
+  static const IconData musicNotes =
+      IconData(0xe340, fontFamily: _family, fontPackage: _package);
   static const IconData mosque =
       IconData(0xecee, fontFamily: _family, fontPackage: _package);
   static const IconData notePencil =
@@ -139,10 +159,14 @@ class PhLight {
       IconData(0xe6c8, fontFamily: _family, fontPackage: _package);
   static const IconData paperPlaneRight =
       IconData(0xe396, fontFamily: _family, fontPackage: _package);
+  static const IconData pause =
+      IconData(0xe39e, fontFamily: _family, fontPackage: _package);
   static const IconData pauseCircle =
       IconData(0xe3a0, fontFamily: _family, fontPackage: _package);
   static const IconData pencilSimple =
       IconData(0xe3b4, fontFamily: _family, fontPackage: _package);
+  static const IconData play =
+      IconData(0xe3d0, fontFamily: _family, fontPackage: _package);
   static const IconData playCircle =
       IconData(0xe3d2, fontFamily: _family, fontPackage: _package);
   static const IconData plugsConnected =
@@ -159,6 +183,12 @@ class PhLight {
       IconData(0xebb6, fontFamily: _family, fontPackage: _package);
   static const IconData shieldCheck =
       IconData(0xe40c, fontFamily: _family, fontPackage: _package);
+  static const IconData sidebarSimple =
+      IconData(0xec24, fontFamily: _family, fontPackage: _package);
+  static const IconData skipBack =
+      IconData(0xe5a4, fontFamily: _family, fontPackage: _package);
+  static const IconData skipForward =
+      IconData(0xe5a6, fontFamily: _family, fontPackage: _package);
   static const IconData smiley =
       IconData(0xe436, fontFamily: _family, fontPackage: _package);
   static const IconData smileyMeh =
@@ -175,8 +205,14 @@ class PhLight {
       IconData(0xe6a2, fontFamily: _family, fontPackage: _package);
   static const IconData speakerHigh =
       IconData(0xe44a, fontFamily: _family, fontPackage: _package);
+  static const IconData speakerLow =
+      IconData(0xe44c, fontFamily: _family, fontPackage: _package);
+  static const IconData speakerNone =
+      IconData(0xe44e, fontFamily: _family, fontPackage: _package);
   static const IconData speakerSlash =
       IconData(0xe45a, fontFamily: _family, fontPackage: _package);
+  static const IconData starAndCrescent =
+      IconData(0xecf4, fontFamily: _family, fontPackage: _package);
   static const IconData stopCircle =
       IconData(0xe46e, fontFamily: _family, fontPackage: _package);
   static const IconData sun =

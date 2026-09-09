@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// The deep-black canvas with two soft, out-of-focus amber glow orbs —
-/// painted once as a static backdrop (never inside scrolling content, and
-/// never re-blurred per frame) so it stays essentially free at runtime.
+/// The app's ground: a flat slate fill under a soft white wash falling from
+/// the top-left corner.
+///
+/// The wash is an overlay rather than the light end of a background ramp: a
+/// literal `#FFFFFF`-to-`#1B252E` gradient across the window would leave the
+/// upper half near-white, which is not the design.
 class AmbientBackground extends StatelessWidget {
   const AmbientBackground({super.key, required this.child});
 
@@ -12,44 +15,23 @@ class AmbientBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ColoredBox(color: context.palette.background),
-        Positioned(
-          top: -140,
-          right: -100,
-          child: _Glow(diameter: 360, color: context.palette.accentDeep.withValues(alpha: 0.35)),
-        ),
-        Positioned(
-          bottom: -160,
-          left: -120,
-          child: _Glow(diameter: 320, color: context.palette.accent.withValues(alpha: 0.16)),
-        ),
-        child,
-      ],
-    );
-  }
-}
+    final palette = context.palette;
 
-class _Glow extends StatelessWidget {
-  const _Glow({required this.diameter, required this.color});
-
-  final double diameter;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: diameter,
-        height: diameter,
+    return DecoratedBox(
+      decoration: BoxDecoration(color: palette.background),
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color, color.withValues(alpha: 0)],
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.12),
+              Colors.white.withValues(alpha: 0.0),
+            ],
+            stops: const [0.0, 0.40],
           ),
         ),
+        child: child,
       ),
     );
   }

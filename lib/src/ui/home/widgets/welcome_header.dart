@@ -41,9 +41,9 @@ class WelcomeHeader extends ConsumerWidget {
               size: 42,
               weight: FontWeight.w700,
               letterSpacing: -1.4,
-              // srcIn replaces this, but a null colour would inherit and the
-              // mask needs opaque pixels to keep.
-              color: const Color(0xFFFFFFFF),
+              // srcIn discards the colour but uses the alpha channel; an opaque
+              // colour is needed so the shader shows through completely.
+              color: palette.textPrimary,
             ),
           ),
         ),

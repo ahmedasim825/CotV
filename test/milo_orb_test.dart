@@ -1,7 +1,8 @@
 // Tests for the dashboard's Milo avatar: that it renders the state it is
 // given rather than owning one, that listening animates and resting does
-// not, and that the panel gesture is the platform's own — double tap on
-// Windows, long press on iOS, neither anywhere else.
+// not, that the orb draws no eyes, and that the panel gesture is the
+// platform's own — double tap on Windows, long press on iOS, neither
+// anywhere else.
 //
 // Nothing here may `pumpAndSettle` over a moving orb: the breathing
 // controller repeats for as long as the widget is alive, so settling would
@@ -32,11 +33,11 @@ Widget _host({
 
 void main() {
   testWidgets('renders every state', (tester) async {
-    for (final state in MiloEyeState.values) {
+    for (final state in MiloOrbState.values) {
       await tester.pumpWidget(_host(
         child: MiloOrbWidget(
           state: state,
-          isListening: state == MiloEyeState.eyesOpen,
+          isListening: state == MiloOrbState.listening,
         ),
       ));
       await tester.pump(const Duration(milliseconds: 100));
@@ -46,16 +47,37 @@ void main() {
     }
   });
 
-  testWidgets('a state change blinks rather than cutting', (tester) async {
+  testWidgets('the orb paints no eyes', (tester) async {
+    await tester.pumpWidget(_host(
+      child: const MiloOrbWidget(state: MiloOrbState.idle),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Scoped to the orb's own subtree rather than the whole tree: the
+    // Material chrome around it (Scaffold, its ink features) paints with a
+    // CustomPaint of its own, and that is not what this test is about. The
+    // point is that no eye geometry is drawn inside the orb.
+    expect(
+      find.descendant(
+        of: find.byType(MiloOrbWidget),
+        matching: find.byType(CustomPaint),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a state change does not throw', (tester) async {
+    // There is no face left to morph between shapes — the state only
+    // changes what the Semantics label says now — but a change still has to
+    // rebuild cleanly rather than throw.
     await tester.pumpWidget(
-      _host(child: const MiloOrbWidget(state: MiloEyeState.eyesClosed)),
+      _host(child: const MiloOrbWidget(state: MiloOrbState.idle)),
     );
 
     await tester.pumpWidget(
-      _host(child: const MiloOrbWidget(state: MiloEyeState.thinking)),
+      _host(child: const MiloOrbWidget(state: MiloOrbState.thinking)),
     );
-    // Mid-morph: the painter is interpolating between the two shapes, so
-    // the frame after the change is neither of them.
     await tester.pump(const Duration(milliseconds: 80));
 
     expect(tester.takeException(), isNull);
@@ -67,7 +89,7 @@ void main() {
     await tester.pumpWidget(
       _host(
         child: const MiloOrbWidget(
-          state: MiloEyeState.eyesOpen,
+          state: MiloOrbState.listening,
           isListening: true,
         ),
       ),
@@ -92,7 +114,7 @@ void main() {
       _host(
         reducedMotion: true,
         child: const MiloOrbWidget(
-          state: MiloEyeState.eyesOpen,
+          state: MiloOrbState.listening,
           isListening: true,
         ),
       ),

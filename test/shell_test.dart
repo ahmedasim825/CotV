@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cotv/src/models/milo_models.dart';
+import 'package:cotv/src/providers/milo_providers.dart';
 import 'package:cotv/src/ui/app_shell.dart';
+import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
+import 'package:cotv/src/ui/shell/milo_dock.dart';
 import 'package:cotv/src/ui/shell/sidebar.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 
@@ -8,6 +13,30 @@ Widget _host(Widget child) => MaterialApp(
       theme: buildAppTheme(),
       home: Scaffold(body: child),
     );
+
+/// A stand-in for [MiloConversationNotifier] that never touches
+/// [chatRepositoryProvider], hence never touches Hive.
+///
+/// The real notifier's `build()` does not reach Hive either — it only
+/// returns an empty [MiloConversation] — but the dock is exercised here as a
+/// bare widget test with no Hive box ever opened, so pinning the state this
+/// way keeps the test from depending on that being true forever.
+class _FakeMiloConversationNotifier extends MiloConversationNotifier {
+  @override
+  MiloConversation build() => const MiloConversation(
+        messages: [
+          MiloMessage(
+            id: 'm1',
+            role: MiloRole.assistant,
+            text: 'Asr is at 4:12.',
+          ),
+        ],
+      );
+}
+
+final _dockOverrides = [
+  miloConversationProvider.overrideWith(_FakeMiloConversationNotifier.new),
+];
 
 void main() {
   testWidgets('expanded shows five labels and hides Settings from the list',
@@ -79,5 +108,31 @@ void main() {
 
     await tester.tap(find.text('Food'));
     expect(taps, [AppDestination.food]);
+  });
+
+  testWidgets('the dock shows the title, a Chat button and the orb',
+      (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: _dockOverrides,
+      child: _host(const MiloDock(showLabels: true)),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Milo'), findsOneWidget);
+    expect(find.text('Chat >'), findsOneWidget);
+    expect(find.byType(MiloOrbWidget), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('collapsed, the dock is the orb alone', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: _dockOverrides,
+      child: _host(const MiloDock(showLabels: false)),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Milo'), findsNothing);
+    expect(find.text('Chat >'), findsNothing);
+    expect(find.byType(MiloOrbWidget), findsOneWidget);
   });
 }

@@ -12,6 +12,7 @@ import 'milo/milo_assistant_screen.dart';
 import 'prayers/prayers_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'settings/settings_screen.dart';
+import 'shell/milo_dock.dart';
 import 'shell/sidebar.dart';
 import 'study/study_screen.dart';
 import 'tasks/task_list_view.dart';
@@ -193,6 +194,8 @@ class _AppShellState extends ConsumerState<AppShell> {
                                 onSelect: _select,
                                 onToggleCollapse: _toggleCollapse,
                                 onToggleHidden: _toggleHidden,
+                                dock: MiloDock(
+                                    showLabels: _sidebarMode.showsLabels),
                               ),
                             Expanded(child: paneFor(_destination)),
                           ],

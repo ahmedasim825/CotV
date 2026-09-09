@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,27 +5,28 @@ import '../../../models/milo_models.dart';
 import '../../../providers/milo_providers.dart';
 import '../../theme/app_theme.dart';
 
-/// What Milo's face is doing.
-enum MiloEyeState {
-  /// Curved downward arcs — `◡ ◡`. Milo at rest, which is where it sits
-  /// whenever nothing has been asked of it.
-  eyesClosed,
+/// What Milo is doing, which the orb shows through its aura rather than
+/// through a face.
+enum MiloOrbState {
+  /// Milo at rest, which is where it sits whenever nothing has been asked
+  /// of it.
+  idle,
 
-  /// Dual vertical ovals — `• •`. Milo listening.
-  eyesOpen,
+  /// Milo listening.
+  listening,
 
-  /// Asymmetric, slightly tilted ovals. Milo working on something.
+  /// Milo working on something.
   thinking;
 
   /// Announced by [MiloOrbWidget]'s [Semantics] so the state is not carried
   /// by the drawing alone.
   String get description {
     switch (this) {
-      case MiloEyeState.eyesClosed:
+      case MiloOrbState.idle:
         return 'resting';
-      case MiloEyeState.eyesOpen:
+      case MiloOrbState.listening:
         return 'listening';
-      case MiloEyeState.thinking:
+      case MiloOrbState.thinking:
         return 'thinking';
     }
   }
@@ -40,8 +39,8 @@ enum MiloEyeState {
 /// providers so it can be rendered and tested on its own.
 ///
 ///   * a turn in flight, or a recording being transcribed → thinking
-///   * the microphone open → open eyes, pulsing
-///   * anything else, including no keys configured → resting
+///   * the microphone open → listening, pulsing
+///   * anything else, including no keys configured → idle
 class MiloOrb extends ConsumerWidget {
   const MiloOrb({super.key, this.diameter = 128});
 
@@ -64,13 +63,13 @@ class MiloOrb extends ConsumerWidget {
       }
     });
 
-    final MiloEyeState state;
+    final MiloOrbState state;
     if (isBusy || voice.phase == MiloVoicePhase.transcribing) {
-      state = MiloEyeState.thinking;
+      state = MiloOrbState.thinking;
     } else if (voice.phase == MiloVoicePhase.listening) {
-      state = MiloEyeState.eyesOpen;
+      state = MiloOrbState.listening;
     } else {
-      state = MiloEyeState.eyesClosed;
+      state = MiloOrbState.idle;
     }
 
     return MiloOrbWidget(
@@ -83,19 +82,20 @@ class MiloOrb extends ConsumerWidget {
   }
 }
 
-/// Milo's avatar: a breathing radial aura with a painted pair of eyes.
+/// Milo's avatar: a breathing radial aura around a plain lit sphere — no
+/// face. What Milo is doing is read off the aura (gated brighter while
+/// listening) rather than off a pair of eyes.
 ///
 /// The aura is built entirely from [AppPalette] tokens rather than a
-/// per-theme `switch`, so all six themes are covered by the same code and a
-/// seventh would be too. `accent` carries the core, `secondary` the warm rim
-/// and `glowPrimary` the falloff, which is exactly the emerald/gold,
-/// lamplight-amber, system-blue, brushed-grey, white and pastel readings the
-/// themes are each built around.
+/// per-theme `switch`, so it is one gradient rather than a table of them —
+/// there is exactly one palette now, and this was already written that way
+/// before the collapse.
 ///
-/// [state] is set by the caller rather than owned here, and a change to it
-/// blinks across rather than cutting. [isListening] layers a faster, deeper
-/// pulse on the resting breath, which is what separates an open microphone
-/// from an orb that merely has its eyes open.
+/// [state] is set by the caller rather than owned here — it only feeds the
+/// [Semantics] label now that there is no face to draw it on. [isListening]
+/// layers a faster, deeper pulse on the resting breath, and also drives the
+/// aura to full strength; at rest it sits dimmer, which is what makes
+/// "active" a visible state rather than a permanent one.
 ///
 /// [onTap] is the microphone. [onTextMilo] opens the text panel, on the
 /// gesture the platform expects: double tap on Windows, long press on iOS,
@@ -105,14 +105,14 @@ class MiloOrbWidget extends StatefulWidget {
   const MiloOrbWidget({
     super.key,
     this.diameter = 128,
-    this.state = MiloEyeState.eyesClosed,
+    this.state = MiloOrbState.idle,
     this.isListening = false,
     this.onTap,
     this.onTextMilo,
   });
 
   final double diameter;
-  final MiloEyeState state;
+  final MiloOrbState state;
 
   /// Whether the microphone is open right now.
   final bool isListening;
@@ -132,15 +132,9 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
   /// should `pumpAndSettle` over this widget.
   late final AnimationController _breath;
 
-  /// Drives the shape interpolation between two eye states, so a change
-  /// blinks rather than cuts.
-  late final AnimationController _morph;
-
   /// The listening pulse. Runs only while [MiloOrbWidget.isListening], so a
   /// resting orb costs no frames beyond the breath.
   late final AnimationController _pulse;
-
-  late MiloEyeState _previous = widget.state;
 
   @override
   void initState() {
@@ -148,11 +142,6 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
     _breath = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
-    );
-    _morph = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 240),
-      value: 1,
     );
     _pulse = AnimationController(
       vsync: this,
@@ -172,21 +161,12 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
   @override
   void didUpdateWidget(MiloOrbWidget old) {
     super.didUpdateWidget(old);
-    if (old.state != widget.state) {
-      _previous = old.state;
-      if (context.motion.isReduced) {
-        _morph.value = 1;
-      } else {
-        _morph.forward(from: 0);
-      }
-    }
     if (old.isListening != widget.isListening) _syncMotion();
   }
 
   @override
   void dispose() {
     _breath.dispose();
-    _morph.dispose();
     _pulse.dispose();
     super.dispose();
   }
@@ -264,7 +244,7 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
           height: size * 1.6,
           child: Center(
             child: AnimatedBuilder(
-              animation: Listenable.merge([_breath, _morph, _pulse]),
+              animation: Listenable.merge([_breath, _pulse]),
               builder: (context, _) {
                 final breath = Curves.easeInOut.transform(_breath.value);
                 final pulse = Curves.easeInOut.transform(_pulse.value);
@@ -284,15 +264,10 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
                         // Titanium the accent barely separates from the
                         // surface, and scale alone would not read there.
                         intensity: intensity * (1 + pulse * 0.55),
+                        isListening: widget.isListening,
                       ),
                     ),
-                    _Core(
-                      diameter: size,
-                      palette: palette,
-                      state: widget.state,
-                      previous: _previous,
-                      morph: Curves.easeOutCubic.transform(_morph.value),
-                    ),
+                    _Core(diameter: size, palette: palette),
                   ],
                 );
               },
@@ -310,6 +285,7 @@ class _Aura extends StatelessWidget {
     required this.diameter,
     required this.palette,
     required this.intensity,
+    required this.isListening,
   });
 
   final double diameter;
@@ -320,7 +296,18 @@ class _Aura extends StatelessWidget {
   /// past 1 and the brightest theme is already close to it.
   final double intensity;
 
-  double _alpha(double base) => (base * intensity).clamp(0.0, 1.0);
+  /// Whether the microphone is open right now.
+  final bool isListening;
+
+  /// The aura is the "active" signal, so it has to be visibly weaker at
+  /// rest than while Milo is listening — painting it at full strength
+  /// always would make "active" mean nothing. The rise to full strength
+  /// while listening is carried by [intensity] (driven by `_pulse`); this
+  /// is the floor it rises from.
+  double get _auraOpacity => isListening ? 1.0 : 0.45;
+
+  double _alpha(double base) =>
+      (base * intensity * _auraOpacity).clamp(0.0, 1.0);
 
   @override
   Widget build(BuildContext context) {
@@ -336,7 +323,11 @@ class _Aura extends StatelessWidget {
               palette.glowPrimary.withValues(
                 alpha: _alpha(palette.glowPrimary.a * 0.9),
               ),
-              palette.secondary.withValues(alpha: _alpha(0.10)),
+              // `accentDeep`, not `secondary`: `secondary` is cyan, reserved
+              // for data visualisation, and ramping the aura through it read
+              // on screen as a blue halo around a purple sphere. This keeps
+              // the whole glow inside the accent family.
+              palette.accentDeep.withValues(alpha: _alpha(0.10)),
               palette.accent.withValues(alpha: 0),
             ],
             stops: const [0.0, 0.36, 0.62, 1.0],
@@ -348,7 +339,7 @@ class _Aura extends StatelessWidget {
               spreadRadius: diameter * 0.02,
             ),
             BoxShadow(
-              color: palette.secondary.withValues(alpha: _alpha(0.12)),
+              color: palette.accentDeep.withValues(alpha: _alpha(0.12)),
               blurRadius: diameter * 0.30,
             ),
           ],
@@ -358,21 +349,14 @@ class _Aura extends StatelessWidget {
   }
 }
 
-/// The orb body, with the eyes painted on it.
+/// The orb body: a sphere lit from above-left so it reads as a sphere
+/// rather than a flat disc. No face — what Milo is doing is read off the
+/// aura around it, not off a pair of eyes.
 class _Core extends StatelessWidget {
-  const _Core({
-    required this.diameter,
-    required this.palette,
-    required this.state,
-    required this.previous,
-    required this.morph,
-  });
+  const _Core({required this.diameter, required this.palette});
 
   final double diameter;
   final AppPalette palette;
-  final MiloEyeState state;
-  final MiloEyeState previous;
-  final double morph;
 
   @override
   Widget build(BuildContext context) {
@@ -382,8 +366,6 @@ class _Core extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
-          // Lit from above-left, so the sphere reads as a sphere rather
-          // than a flat disc.
           center: const Alignment(-0.3, -0.4),
           radius: 1.05,
           colors: [
@@ -399,201 +381,6 @@ class _Core extends StatelessWidget {
           width: 1.2,
         ),
       ),
-      child: CustomPaint(
-        painter: _EyesPainter(
-          state: state,
-          previous: previous,
-          morph: morph,
-          color: palette.accentBright,
-        ),
-      ),
-    );
-  }
-}
-
-/// The three eye shapes, and the interpolation between whichever two a tap
-/// moved across.
-///
-/// Every shape is described by the same four numbers — height, width, tilt
-/// and vertical offset, per eye — so a transition is a plain lerp of those
-/// rather than a special case per pair.
-class _EyesPainter extends CustomPainter {
-  const _EyesPainter({
-    required this.state,
-    required this.previous,
-    required this.morph,
-    required this.color,
-  });
-
-  final MiloEyeState state;
-  final MiloEyeState previous;
-
-  /// 0 at [previous], 1 at [state].
-  final double morph;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final from = _EyeGeometry.of(previous);
-    final to = _EyeGeometry.of(state);
-    final g = _EyeGeometry.lerp(from, to, morph.clamp(0.0, 1.0));
-
-    final gap = size.width * 0.22;
-    final centreY = size.height * 0.5;
-    final left = Offset(size.width * 0.5 - gap, centreY + g.leftOffsetY * size.height);
-    final right = Offset(size.width * 0.5 + gap, centreY + g.rightOffsetY * size.height);
-
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.075
-      ..strokeCap = StrokeCap.round;
-
-    _drawEye(canvas, size, left, paint, g.width, g.leftHeight, g.leftTilt, g.closedness);
-    _drawEye(canvas, size, right, paint, g.width, g.rightHeight, g.rightTilt, g.closedness);
-  }
-
-  /// One eye, blended between a downward arc (`closedness` 1) and a filled
-  /// vertical oval (`closedness` 0).
-  void _drawEye(
-    Canvas canvas,
-    Size size,
-    Offset centre,
-    Paint stroke,
-    double widthFactor,
-    double heightFactor,
-    double tilt,
-    double closedness,
-  ) {
-    final w = size.width * widthFactor;
-    final h = size.height * heightFactor;
-
-    canvas.save();
-    canvas.translate(centre.dx, centre.dy);
-    if (tilt != 0) canvas.rotate(tilt);
-
-    if (closedness > 0.02) {
-      // The closed arc: a shallow smile drawn across the eye's box. Its own
-      // opacity carries it out as the oval comes in, so the two never both
-      // read at full strength mid-blink.
-      final arc = Rect.fromCenter(center: Offset.zero, width: w * 1.6, height: h * 1.9);
-      canvas.drawArc(
-        arc,
-        math.pi * 0.15,
-        math.pi * 0.7,
-        false,
-        Paint()
-          ..color = stroke.color.withValues(alpha: closedness)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = stroke.strokeWidth
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    if (closedness < 0.98) {
-      final oval = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset.zero, width: w, height: h),
-        Radius.circular(w / 2),
-      );
-      canvas.drawRRect(
-        oval,
-        Paint()
-          ..color = stroke.color.withValues(alpha: 1 - closedness)
-          ..style = PaintingStyle.fill,
-      );
-    }
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_EyesPainter old) =>
-      old.state != state ||
-      old.previous != previous ||
-      old.morph != morph ||
-      old.color != color;
-}
-
-/// The numbers behind one eye state, as fractions of the orb's box.
-@immutable
-class _EyeGeometry {
-  const _EyeGeometry({
-    required this.width,
-    required this.leftHeight,
-    required this.rightHeight,
-    required this.leftTilt,
-    required this.rightTilt,
-    required this.leftOffsetY,
-    required this.rightOffsetY,
-    required this.closedness,
-  });
-
-  final double width;
-  final double leftHeight;
-  final double rightHeight;
-
-  /// Radians. Positive tilts the top of the eye to the right.
-  final double leftTilt;
-  final double rightTilt;
-
-  /// Fraction of the orb height each eye sits off centre.
-  final double leftOffsetY;
-  final double rightOffsetY;
-
-  /// 1 draws the closed arc, 0 the open oval.
-  final double closedness;
-
-  static _EyeGeometry of(MiloEyeState state) {
-    switch (state) {
-      case MiloEyeState.eyesClosed:
-        return const _EyeGeometry(
-          width: 0.13,
-          leftHeight: 0.05,
-          rightHeight: 0.05,
-          leftTilt: 0,
-          rightTilt: 0,
-          leftOffsetY: 0,
-          rightOffsetY: 0,
-          closedness: 1,
-        );
-      case MiloEyeState.eyesOpen:
-        return const _EyeGeometry(
-          width: 0.115,
-          leftHeight: 0.30,
-          rightHeight: 0.30,
-          leftTilt: 0,
-          rightTilt: 0,
-          leftOffsetY: 0,
-          rightOffsetY: 0,
-          closedness: 0,
-        );
-      case MiloEyeState.thinking:
-        // Asymmetric and tilted: the right eye narrows and rides up, which
-        // is what reads as "considering" rather than "staring".
-        return const _EyeGeometry(
-          width: 0.11,
-          leftHeight: 0.30,
-          rightHeight: 0.21,
-          leftTilt: -0.16,
-          rightTilt: 0.22,
-          leftOffsetY: 0.015,
-          rightOffsetY: -0.035,
-          closedness: 0,
-        );
-    }
-  }
-
-  static _EyeGeometry lerp(_EyeGeometry a, _EyeGeometry b, double t) {
-    double l(double x, double y) => x + (y - x) * t;
-    return _EyeGeometry(
-      width: l(a.width, b.width),
-      leftHeight: l(a.leftHeight, b.leftHeight),
-      rightHeight: l(a.rightHeight, b.rightHeight),
-      leftTilt: l(a.leftTilt, b.leftTilt),
-      rightTilt: l(a.rightTilt, b.rightTilt),
-      leftOffsetY: l(a.leftOffsetY, b.leftOffsetY),
-      rightOffsetY: l(a.rightOffsetY, b.rightOffsetY),
-      closedness: l(a.closedness, b.closedness),
     );
   }
 }

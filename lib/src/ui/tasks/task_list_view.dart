@@ -199,14 +199,21 @@ class _TaskListHeader extends ConsumerWidget {
 /// The reminder segment: one row per [Reminder] from [reminderListProvider].
 ///
 /// A plain [ConsumerWidget] rather than a stateful one — there is no local
-/// interaction here yet (Task 8 adds the edit pencil), only a watch on the
-/// provider and a render.
+/// interaction here yet (Task 8 adds the edit pencil), only watches on the
+/// provider and the clock provider, and a render.
 class _ReminderList extends ConsumerWidget {
   const _ReminderList();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reminders = ref.watch(reminderListProvider);
+    // Watch the clock provider so the list updates when a reminder crosses
+    // its due instant while this segment stays mounted. Without this, a row
+    // would show stale `isOverdue()` and due-label colors until an unrelated
+    // rebuild triggered (a segment switch, or an add/update/remove). We watch
+    // currentMinuteProvider rather than reading DateTime.now() inline so the
+    // update is driven by the provider instead of the wall clock.
+    final now = ref.watch(currentMinuteProvider);
 
     if (reminders.isEmpty) {
       return const Center(
@@ -225,19 +232,20 @@ class _ReminderList extends ConsumerWidget {
       itemCount: reminders.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) =>
-          _ReminderRow(reminder: reminders[index]),
+          _ReminderRow(reminder: reminders[index], now: now),
     );
   }
 }
 
 class _ReminderRow extends StatelessWidget {
-  const _ReminderRow({required this.reminder});
+  const _ReminderRow({required this.reminder, required this.now});
 
   final Reminder reminder;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
-    final overdue = reminder.isOverdue(DateTime.now());
+    final overdue = reminder.isOverdue(now);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -262,7 +270,7 @@ class _ReminderRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  formatReminderDueLabel(reminder.dueAt, DateTime.now()),
+                  formatReminderDueLabel(reminder.dueAt, now),
                   style: context.typography.ui(
                     size: 11.5,
                     color: overdue ? context.palette.danger : context.palette.textMuted,

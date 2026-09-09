@@ -4,7 +4,6 @@ import '../components/components.dart';
 import '../responsive/breakpoints.dart';
 import '../widgets/prayer_lockout_banner.dart';
 import '../widgets/reveal_on_entrance.dart';
-import 'widgets/dashboard_header.dart';
 import 'widgets/focus_tasks_card.dart';
 import 'widgets/next_prayer_card.dart';
 import 'widgets/nutrition_card.dart';
@@ -51,12 +50,6 @@ class HomeScreen extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(padding, 16, padding, 32),
             children: [
               const PrayerLockoutBanner(),
-              const SizedBox(height: 12),
-              RevealOnEntrance(
-                child: DashboardHeader(
-                  orbDiameter: windowSize.isCompact ? 124 : 148,
-                ),
-              ),
               const SizedBox(height: 28),
               const RevealOnEntrance(
                 delay: Duration(milliseconds: 60),

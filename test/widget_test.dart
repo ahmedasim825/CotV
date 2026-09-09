@@ -177,8 +177,14 @@ void main() {
     // enough height to build all of them at once — a ListView only builds
     // what it can show, and dragging one leaves a ballistic scroll timer
     // that never settles against the orb's endless breathing animation.
-    expect(find.byType(MiloOrbWidget), findsOneWidget);
-    expect(find.textContaining('Ahmed'), findsOneWidget);
+    //
+    // DashboardHeader — the block this used to assert on, with the orb and
+    // the "Ahmed" greeting — is gone: the orb now lives in the sidebar
+    // dock, which only mounts past the navigation-rail breakpoint and so is
+    // absent at this compact width, and its replacement, WelcomeHeader, is
+    // built but not yet wired into this screen. Both land here once the
+    // redesign's content pane is assembled.
+    expect(find.byType(MiloOrbWidget), findsNothing);
     expect(find.text('NEXT PRAYER'), findsOneWidget);
   });
 

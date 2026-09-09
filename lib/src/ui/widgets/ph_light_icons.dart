@@ -149,10 +149,10 @@ class PhLight {
       IconData(0xe330, fontFamily: _family, fontPackage: _package);
   static const IconData moonStars =
       IconData(0xe58e, fontFamily: _family, fontPackage: _package);
-  static const IconData musicNotes =
-      IconData(0xe340, fontFamily: _family, fontPackage: _package);
   static const IconData mosque =
       IconData(0xecee, fontFamily: _family, fontPackage: _package);
+  static const IconData musicNotes =
+      IconData(0xe340, fontFamily: _family, fontPackage: _package);
   static const IconData notePencil =
       IconData(0xe34c, fontFamily: _family, fontPackage: _package);
   static const IconData palette =

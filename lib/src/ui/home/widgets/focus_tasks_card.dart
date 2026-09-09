@@ -7,6 +7,7 @@ import '../../../providers/task_providers.dart';
 import '../../../providers/task_view_providers.dart';
 import '../../components/components.dart';
 import '../../format/time_format.dart';
+import '../../tasks/task_form_sheet.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 import 'home_card_note.dart';
@@ -28,29 +29,18 @@ class FocusTasksCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
     final tasks = ref.watch(todayFocusTasksProvider);
 
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-      // The rows inside are each their own control, so the card lights up
-      // under a pointer even though the card itself does nothing.
-      hoverLift: true,
+    return HomeCardFrame(
+      title: 'Tasks',
+      onEdit: () => showTaskFormSheet(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(PhLight.listChecks, size: 18, color: palette.accent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  "Today's focus",
-                  style: context.typography.ui(size: 15, weight: FontWeight.w600),
-                ),
-              ),
-              _RemainingLabel(tasks: tasks),
-            ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: _RemainingLabel(tasks: tasks),
           ),
           const SizedBox(height: 6),
           tasks.when(

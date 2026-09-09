@@ -195,8 +195,8 @@ void main() {
     await pumpApp(tester, logicalSize: const Size(393, 2400));
 
     expect(find.text('NEXT PRAYER'), findsOneWidget);
-    expect(find.text("Today's focus"), findsOneWidget);
-    expect(find.text('Study today'), findsOneWidget);
+    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Study time'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);
     expect(find.text('Quick actions'), findsOneWidget);
 
@@ -224,7 +224,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(IntrinsicHeight), findsOneWidget);
-    expect(find.text('Study today'), findsOneWidget);
+    expect(find.text('Study time'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);
 
     // The rail shows labels the icon-only phone bar does not.

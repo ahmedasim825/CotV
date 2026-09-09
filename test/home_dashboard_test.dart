@@ -19,12 +19,16 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// `Override` is not in flutter_riverpod.dart's own show-list in 3.4.x — it
+// only comes through this leaf import.
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/src/models/food_models.dart';
 import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -32,15 +36,18 @@ import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/clock_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/nutrition_providers.dart';
+import 'package:cotv/src/providers/reminder_providers.dart';
 import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/repositories/task_repository.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/home/widgets/focus_tasks_card.dart';
 import 'package:cotv/src/ui/home/widgets/nutrition_card.dart';
+import 'package:cotv/src/ui/home/widgets/reminders_card.dart';
 import 'package:cotv/src/ui/home/widgets/streak_bar.dart';
 import 'package:cotv/src/ui/home/widgets/study_breakdown_card.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
+import 'package:cotv/src/ui/widgets/ph_light_icons.dart';
 
 /// Ticking a task reconciles its reminder through a platform channel that
 /// never answers under `flutter_test`, so the write would never resolve.
@@ -172,19 +179,26 @@ void main() {
 
   /// Pumps [child] with the clock pinned, so nothing here depends on the
   /// wall clock and no one-second ticker is left running at teardown.
+  ///
+  /// [now] overrides the pinned instant itself, for the rare test that
+  /// needs a different one — Riverpod asserts if `currentMinuteProvider`
+  /// were overridden twice, so this can't just be folded into [overrides].
   Future<void> pumpCard(
     WidgetTester tester,
     Widget child, {
     TaskRepository? repository,
+    DateTime? now,
+    List<Override> overrides = const [],
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          currentMinuteProvider.overrideWithValue(_now),
+          currentMinuteProvider.overrideWithValue(now ?? _now),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),
           if (repository != null)
             taskRepositoryProvider.overrideWithValue(repository),
+          ...overrides,
         ],
         child: MaterialApp(
           theme: buildAppTheme(),
@@ -379,4 +393,73 @@ void main() {
       expect(find.text('380'), findsOneWidget);
     });
   });
+
+  group('reminders', () {
+    testWidgets('the reminders card lists titles with their due labels',
+        (tester) async {
+      await pumpCard(tester, const RemindersCard());
+
+      expect(find.text('Reminders'), findsOneWidget);
+      expect(find.text('Workout'), findsOneWidget);
+      expect(find.text("Watch Dr.Bassant's Lecture"), findsOneWidget);
+    });
+
+    testWidgets('an overdue reminder is coloured danger', (tester) async {
+      // The dashboard's shared `_now` (17 March) predates both sample
+      // reminders, which are seeded in late July — against it neither would
+      // ever be overdue and this test would pass for the wrong reason. Pin
+      // the clock to the same instant `test/reminders_test.dart` uses to
+      // exercise `Reminder.isOverdue`, which sits after the "Workout"
+      // sample's due time and before "Watch Dr.Bassant's Lecture"'s.
+      await pumpCard(
+        tester,
+        const RemindersCard(),
+        now: DateTime(2026, 7, 28, 12, 0),
+      );
+
+      // The sample "Workout" is dated in the past.
+      final due =
+          tester.widget<Text>(find.byKey(const ValueKey('due-sample-1')));
+      expect(due.style?.color, kPalette.danger);
+    });
+
+    testWidgets('an empty reminder list says so', (tester) async {
+      await pumpCard(
+        tester,
+        const RemindersCard(),
+        overrides: [reminderListProvider.overrideWith(_EmptyReminders.new)],
+      );
+
+      expect(find.text('No reminders'), findsOneWidget);
+    });
+  });
+
+  group('bento card frame', () {
+    testWidgets('both Tasks and Reminders carry an edit pencil',
+        (tester) async {
+      for (final card in [const FocusTasksCard(), const RemindersCard()]) {
+        await pumpCard(tester, card);
+        expect(find.byIcon(PhLight.pencilSimple), findsOneWidget,
+            reason: '${card.runtimeType} is missing its pencil');
+      }
+    });
+
+    testWidgets('every bento card carries a title', (tester) async {
+      for (final entry in {
+        const FocusTasksCard(): 'Tasks',
+        const RemindersCard(): 'Reminders',
+        const StudyBreakdownCard(): 'Study time',
+        const NutritionCard(): 'Nutrition',
+      }.entries) {
+        await pumpCard(tester, entry.key);
+        expect(find.text(entry.value), findsOneWidget,
+            reason: '${entry.key.runtimeType} lost its title');
+      }
+    });
+  });
+}
+
+class _EmptyReminders extends ReminderListController {
+  @override
+  List<Reminder> build() => const [];
 }

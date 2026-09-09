@@ -45,22 +45,12 @@ class StudyBreakdownCard extends ConsumerWidget {
       for (final subject in subjects) subject.id: subjectColor(subject.colorValue),
     };
 
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+    return HomeCardFrame(
+      title: 'Study time',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(PhLight.brain, size: 18, color: palette.accent),
-              const SizedBox(width: 10),
-              Text(
-                'Study today',
-                style: context.typography.ui(size: 15, weight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
           Center(
             child: CountdownRing(
               progress: total / _dailyTargetMinutes,
@@ -72,15 +62,15 @@ class StudyBreakdownCard extends ConsumerWidget {
                   Text(
                     formatStudyMinutes(total),
                     style: context.typography.display(
-                      size: 30,
-                      weight: FontWeight.w600,
+                      size: 22,
+                      weight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'of ${formatStudyMinutes(_dailyTargetMinutes)}',
+                    'of ${_dailyTargetMinutes ~/ 60}h',
                     style: context.typography.ui(
-                      size: 11,
+                      size: 10.5,
                       color: palette.textMuted,
                     ),
                   ),

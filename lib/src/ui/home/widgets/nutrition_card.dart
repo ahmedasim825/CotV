@@ -7,7 +7,7 @@ import '../../food/food_route.dart';
 import '../../food/food_search_screen.dart';
 import '../../study/widgets/study_timer_card.dart' show CountdownRing;
 import '../../theme/app_theme.dart';
-import '../../widgets/ph_light_icons.dart';
+import 'home_card_note.dart';
 
 /// One macro's progress against its target.
 class _Macro {
@@ -35,31 +35,17 @@ class NutritionCard extends ConsumerWidget {
     final eaten = totals.calories.round();
     final macros = [
       _Macro('Protein', totals.protein, targets.protein),
-      _Macro('Carbs', totals.carbs, targets.carbs),
+      _Macro('Carbohydrates', totals.carbs, targets.carbs),
       _Macro('Fats', totals.fat, targets.fat),
     ];
 
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+    return HomeCardFrame(
+      title: 'Nutrition',
       onTap: () => pushFoodPage(context, const FoodSearchScreen()),
-      semanticLabel: 'Nutrition, $eaten of ${targets.calories} kilocalories. '
-          'Open the food logger.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(PhLight.forkKnife, size: 18, color: palette.secondary),
-              const SizedBox(width: 10),
-              Text(
-                'Nutrition',
-                style: context.typography.ui(size: 15, weight: FontWeight.w600),
-              ),
-              const Spacer(),
-              Icon(PhLight.plusCircle, size: 18, color: palette.textMuted),
-            ],
-          ),
-          const SizedBox(height: 18),
           Center(
             child: CountdownRing(
               progress: eaten / targets.calories,

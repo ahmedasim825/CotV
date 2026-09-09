@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/providers/chat_session_providers.dart';
-import 'src/providers/theme_providers.dart';
 import 'src/services/supabase_config.dart';
 import 'src/storage/local_storage.dart';
 import 'src/ui/app_shell.dart';
@@ -44,14 +43,10 @@ class PrayerLockoutApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final variant = ref.watch(themeVariantProvider);
-
     return MaterialApp(
       title: 'Milo',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(variant),
-      // Switching themes cross-fades every color in the tree rather than
-      // cutting, since the palette travels as a lerp-able ThemeExtension.
+      theme: buildAppTheme(),
       themeAnimationDuration: WidgetsBinding
               .instance.platformDispatcher.accessibilityFeatures.disableAnimations
           ? Duration.zero
@@ -59,9 +54,8 @@ class PrayerLockoutApp extends ConsumerWidget {
       themeAnimationCurve: AppMotion.spring,
       builder: (context, child) {
         return AnnotatedRegion<SystemUiOverlayStyle>(
-          // The one light theme needs dark status-bar glyphs; every other
-          // variant needs light ones.
-          value: variant.palette.isDark
+          // kPalette is dark, so the status bar gets light glyphs.
+          value: kPalette.isDark
               ? SystemUiOverlayStyle.light
               : SystemUiOverlayStyle.dark,
           child: child ?? const SizedBox.shrink(),

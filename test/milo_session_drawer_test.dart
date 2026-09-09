@@ -36,7 +36,7 @@ void main() {
       ProviderScope(
         overrides: [appDatabaseProvider.overrideWithValue(database)],
         child: MaterialApp(
-          theme: buildAppTheme(AppThemeVariant.sanctuary),
+          theme: buildAppTheme(),
           home: const Scaffold(
             body: SingleChildScrollView(child: SessionDrawer()),
           ),

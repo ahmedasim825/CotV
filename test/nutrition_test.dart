@@ -776,7 +776,7 @@ void _openViewport(WidgetTester tester) {
 /// The minimum a food screen needs: a themed [MaterialApp] over a scope.
 Widget _harness(Widget child) => ProviderScope(
       child: MaterialApp(
-        theme: buildAppTheme(AppThemeVariant.sanctuary),
+        theme: buildAppTheme(),
         home: Scaffold(body: child),
       ),
     );

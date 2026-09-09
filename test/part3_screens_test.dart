@@ -1,5 +1,5 @@
 // Smoke tests for the Part 3 screens: the habit grid, and the settings
-// screen's theme picker and app-lock section.
+// screen's app-lock section.
 //
 // Follows the same harness as `widget_test.dart`: real Hive backed by a
 // temp directory, with the plugin-backed services faked out because
@@ -33,8 +33,6 @@ import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/habit_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
-import 'package:cotv/src/providers/theme_providers.dart';
-import 'package:cotv/src/providers/user_settings_providers.dart';
 import 'package:cotv/src/security/security_service.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/providers/chat_session_providers.dart';
@@ -43,7 +41,6 @@ import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
 import 'package:cotv/src/ui/habits/habit_form_sheet.dart';
 import 'package:cotv/src/ui/habits/widgets/habit_tile.dart';
-import 'package:cotv/src/ui/theme/app_theme.dart';
 
 /// Stands in for every `local_auth` / `flutter_secure_storage` call the
 /// security screen makes, reporting a Face ID device with app lock off —
@@ -250,57 +247,6 @@ void main() {
   });
 
   group('settings', () {
-    testWidgets('offers every theme and applies the stored choice',
-        (tester) async {
-      await pumpApp(tester);
-
-      await tester.tap(find.byTooltip('Settings'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Theme'), findsOneWidget);
-      for (final variant in AppThemeVariant.values) {
-        expect(find.text(variant.label), findsOneWidget);
-      }
-
-      final container = containerOf(tester);
-      expect(container.read(themeVariantProvider), AppThemeVariant.sanctuary);
-
-      await tester.runAsync(
-        () => container
-            .read(userSettingsControllerProvider.notifier)
-            .setThemeId(AppThemeVariant.titanium.id),
-      );
-      AppSkin? skinInTree() =>
-          Theme.of(tester.element(find.byType(AppShell))).extension<AppSkin>();
-
-      // Waits on the tree rather than the provider: MaterialApp cross-fades
-      // between themes, so the widgets below it still carry the old palette
-      // for the frames the animation is running.
-      await pumpUntil(
-        tester,
-        () => skinInTree()?.variant == AppThemeVariant.titanium,
-      );
-
-      // Persisted, so it survives a relaunch...
-      expect(
-        container.read(themeVariantProvider),
-        AppThemeVariant.titanium,
-      );
-      expect(
-        container.read(userSettingsRepositoryProvider).get().themeId,
-        'titanium',
-      );
-      // ...and it reached the widget tree, not just the provider. The
-      // variant flips at the cross-fade's halfway point while the colours
-      // keep interpolating, so the palette is only exact once it settles.
-      expect(skinInTree()?.variant, AppThemeVariant.titanium);
-      await tester.pumpAndSettle();
-      expect(
-        skinInTree()?.palette.background,
-        AppThemeVariant.titanium.palette.background,
-      );
-    });
-
     testWidgets('names the device mechanism in the app-lock row',
         (tester) async {
       await pumpApp(tester);

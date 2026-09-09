@@ -187,7 +187,7 @@ void main() {
             taskRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp(
-          theme: buildAppTheme(AppThemeVariant.sanctuary),
+          theme: buildAppTheme(),
           home: Scaffold(
             body: SingleChildScrollView(child: child),
           ),

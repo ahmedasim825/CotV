@@ -22,7 +22,6 @@ import 'location_sheet.dart';
 import 'nutrition_targets_sheet.dart';
 import 'option_picker_sheet.dart';
 import 'widgets/settings_row.dart';
-import 'widgets/theme_picker.dart';
 
 /// Appearance, security, location and prayer-calculation preferences.
 ///
@@ -50,15 +49,6 @@ class SettingsScreen extends ConsumerWidget {
           children: [
             const SectionHeader(eyebrow: 'PREFERENCES', title: 'Settings'),
             const SizedBox(height: 32),
-            const SectionHeader(
-              eyebrow: 'APPEARANCE',
-              title: 'Theme',
-              titleSize: 22,
-              subtitle: 'Changes every surface in the app immediately.',
-            ),
-            const SizedBox(height: 16),
-            ThemePicker(columns: windowSize.isCompact ? 2 : 3),
-            const SizedBox(height: 36),
             const SectionHeader(
               eyebrow: 'NUTRITION',
               title: 'Daily targets',

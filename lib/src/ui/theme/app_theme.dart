@@ -59,32 +59,32 @@ class AppMotionScale {
 // Theme definitions
 // ---------------------------------------------------------------------------
 
-/// The house theme: deep slate, emerald accents, warm gold highlights.
-const AppPalette _sanctuary = AppPalette(
+/// The app's one palette: deep violet on a slate ground.
+const AppPalette kPalette = AppPalette(
   brightness: Brightness.dark,
-  background: Color(0xFF0F172A),
-  surface: Color(0xFF18233A),
-  surfaceRaised: Color(0xFF22304A),
+  background: Color(0xFF1B252E),
+  surface: Color(0xFF212C36),
+  surfaceRaised: Color(0xFF2A3644),
   glassFill: Color(0x14FFFFFF),
-  glassBorder: Color(0x26FFFFFF),
-  glassSurface: Color(0xA618233A),
+  glassBorder: Color(0x2EFFFFFF),
+  glassSurface: Color(0xA6212C36),
   glassSpecular: Color(0x2EFFFFFF),
-  hairline: Color(0x14FFFFFF),
+  hairline: Color(0x1AFFFFFF),
   innerHighlight: Color(0x26FFFFFF),
-  accent: Color(0xFF34D399),
-  accentBright: Color(0xFF6EE7B7),
-  accentDeep: Color(0xFF065F46),
-  onAccent: Color(0xFF04140E),
-  secondary: Color(0xFFE5B769),
-  textPrimary: Color(0xFFE8EEF7),
-  textSecondary: Color(0xB3E8EEF7),
-  textMuted: Color(0x73E8EEF7),
-  danger: Color(0xFFEF8674),
-  success: Color(0xFF34D399),
+  accent: Color(0xFF7005BB),
+  accentBright: Color(0xFFA855F7),
+  accentDeep: Color(0xFF4A0378),
+  onAccent: Color(0xFFFFFFFF),
+  secondary: Color(0xFF22D3EE),
+  textPrimary: Color(0xFFFFFFFF),
+  textSecondary: Color(0xB3FFFFFF),
+  textMuted: Color(0x73FFFFFF),
+  danger: Color(0xFFEF4444),
+  success: Color(0xFF22C55E),
   priorityLow: Color(0xFF7FA3B8),
-  shadow: Color(0x59000000),
-  glowPrimary: Color(0x4D107054),
-  glowSecondary: Color(0x26E5B769),
+  shadow: Color(0x66000000),
+  glowPrimary: Color(0x4D7005BB),
+  glowSecondary: Color(0x2622D3EE),
   prayerHues: PrayerHues(
     fajr: Color(0xFF7B8FCB),
     sunrise: Color(0xFFE9B08C),
@@ -93,334 +93,28 @@ const AppPalette _sanctuary = AppPalette(
     maghrib: Color(0xFFC97A55),
     isha: Color(0xFF5C6BA8),
   ),
-  typeface: AppTypeface.frauncesJakarta,
 );
 
-/// The "Ethereal Glass" lamplight theme Parts 1 and 2 were built in, kept
-/// selectable so the earlier look is not lost.
-const AppPalette _etherealAmber = AppPalette(
-  brightness: Brightness.dark,
-  background: Color(0xFF0A0A0C),
-  surface: Color(0xFF141318),
-  surfaceRaised: Color(0xFF1E1C24),
-  glassFill: Color(0x14FFFFFF),
-  glassBorder: Color(0x26FFFFFF),
-  glassSurface: Color(0xA6141318),
-  glassSpecular: Color(0x2EFFFFFF),
-  hairline: Color(0x14FFFFFF),
-  innerHighlight: Color(0x26FFFFFF),
-  accent: Color(0xFFF59E0B),
-  accentBright: Color(0xFFFBBF24),
-  accentDeep: Color(0xFF92400E),
-  onAccent: Color(0xFF1D1408),
-  // Copper rather than a second amber: the two have to separate on a
-  // near-black ground, and a lighter amber would read as the accent again.
-  secondary: Color(0xFFC87941),
-  textPrimary: Color(0xFFF6F3EC),
-  textSecondary: Color(0xB3F6F3EC),
-  textMuted: Color(0x73F6F3EC),
-  danger: Color(0xFFE2836B),
-  success: Color(0xFF8FBF9F),
-  priorityLow: Color(0xFF7FA3B8),
-  shadow: Color(0x40000000),
-  glowPrimary: Color(0x5992400E),
-  glowSecondary: Color(0x29F59E0B),
-  prayerHues: PrayerHues(
-    fajr: Color(0xFF7B7BB5),
-    sunrise: Color(0xFFE0A183),
-    dhuhr: Color(0xFFE8C36B),
-    asr: Color(0xFFF59E0B),
-    maghrib: Color(0xFFC97A55),
-    isha: Color(0xFF5C6BA8),
-  ),
-  typeface: AppTypeface.frauncesJakarta,
-);
-
-/// True black with iOS system colors — the reference "Apple Minimal" board.
-const AppPalette _appleMinimal = AppPalette(
-  brightness: Brightness.dark,
-  background: Color(0xFF000000),
-  surface: Color(0xFF1C1C1E),
-  surfaceRaised: Color(0xFF2C2C2E),
-  glassFill: Color(0x14FFFFFF),
-  glassBorder: Color(0x26FFFFFF),
-  glassSurface: Color(0xA61C1C1E),
-  glassSpecular: Color(0x24FFFFFF),
-  hairline: Color(0x1AFFFFFF),
-  innerHighlight: Color(0x1FFFFFFF),
-  accent: Color(0xFF007AFF),
-  accentBright: Color(0xFF409CFF),
-  accentDeep: Color(0xFF0A4F99),
-  onAccent: Color(0xFFFFFFFF),
-  secondary: Color(0xFFFFD60A),
-  textPrimary: Color(0xFFF5F5F7),
-  textSecondary: Color(0xFFAEAEB2),
-  textMuted: Color(0xFF98989D),
-  danger: Color(0xFFFF453A),
-  success: Color(0xFF30D158),
-  priorityLow: Color(0xFF64D2FF),
-  shadow: Color(0x66000000),
-  glowPrimary: Color(0x33007AFF),
-  glowSecondary: Color(0x1AFFD60A),
-  prayerHues: PrayerHues(
-    fajr: Color(0xFF5E5CE6),
-    sunrise: Color(0xFFFF9F0A),
-    dhuhr: Color(0xFFFFD60A),
-    asr: Color(0xFFFFB340),
-    maghrib: Color(0xFFFF6B4A),
-    isha: Color(0xFF007AFF),
-  ),
-  typeface: AppTypeface.interInter,
-);
-
-/// Brushed near-black greys with a cool cast and no chromatic accent —
-/// state is carried by brightness and contrast instead of hue.
-const AppPalette _titanium = AppPalette(
-  brightness: Brightness.dark,
-  background: Color(0xFF18181B),
-  surface: Color(0xFF27272A),
-  surfaceRaised: Color(0xFF3F3F46),
-  glassFill: Color(0x12FFFFFF),
-  glassBorder: Color(0x26FFFFFF),
-  glassSurface: Color(0xA627272A),
-  glassSpecular: Color(0x2EFFFFFF),
-  hairline: Color(0x14FFFFFF),
-  innerHighlight: Color(0x24FFFFFF),
-  accent: Color(0xFFD4D4D8),
-  accentBright: Color(0xFFFAFAFA),
-  accentDeep: Color(0xFF52525B),
-  onAccent: Color(0xFF18181B),
-  secondary: Color(0xFFA1A1AA),
-  textPrimary: Color(0xFFFAFAFA),
-  textSecondary: Color(0xFFD4D4D8),
-  textMuted: Color(0xFFA1A1AA),
-  // The two exceptions to "no chromatic colour": a destructive action and
-  // a completed one still have to read as themselves at a glance, so both
-  // are pulled almost — but not all the way — to grey.
-  danger: Color(0xFFD98878),
-  success: Color(0xFF9FC0A8),
-  priorityLow: Color(0xFF71717A),
-  shadow: Color(0x73000000),
-  glowPrimary: Color(0x1FD4D4D8),
-  glowSecondary: Color(0x14FAFAFA),
-  prayerHues: PrayerHues(
-    fajr: Color(0xFF52525B),
-    sunrise: Color(0xFFA1A1AA),
-    dhuhr: Color(0xFFE4E4E7),
-    asr: Color(0xFFD4D4D8),
-    maghrib: Color(0xFF71717A),
-    isha: Color(0xFF3F3F46),
-  ),
-  typeface: AppTypeface.spaceGroteskInter,
-);
-
-/// Almost zero color: pure neutral steps, state read through brightness,
-/// blur and typography.
-const AppPalette _monochrome = AppPalette(
-  brightness: Brightness.dark,
-  background: Color(0xFF080808),
-  surface: Color(0xFF141414),
-  surfaceRaised: Color(0xFF202020),
-  glassFill: Color(0x12FFFFFF),
-  glassBorder: Color(0x26FFFFFF),
-  glassSurface: Color(0xA6141414),
-  glassSpecular: Color(0x2EFFFFFF),
-  hairline: Color(0x14FFFFFF),
-  innerHighlight: Color(0x24FFFFFF),
-  accent: Color(0xFFF1F1F1),
-  accentBright: Color(0xFFFFFFFF),
-  accentDeep: Color(0xFF3A3A3A),
-  onAccent: Color(0xFF080808),
-  secondary: Color(0xFFC5C5C5),
-  textPrimary: Color(0xFFF1F1F1),
-  textSecondary: Color(0xFFC5C5C5),
-  textMuted: Color(0xFF8A8A8A),
-  // Kept barely chromatic rather than pure grey: a destructive action still
-  // has to read as one at a glance.
-  danger: Color(0xFFC08C82),
-  success: Color(0xFF8FA894),
-  priorityLow: Color(0xFF6E6E6E),
-  shadow: Color(0x73000000),
-  glowPrimary: Color(0x1AFFFFFF),
-  glowSecondary: Color(0x0FFFFFFF),
-  prayerHues: PrayerHues(
-    fajr: Color(0xFF5A5A5A),
-    sunrise: Color(0xFF9A9A9A),
-    dhuhr: Color(0xFFE0E0E0),
-    asr: Color(0xFFC5C5C5),
-    maghrib: Color(0xFF8A8A8A),
-    isha: Color(0xFF6E6E6E),
-  ),
-  typeface: AppTypeface.interInter,
-);
-
-/// The one light theme: a slightly warm white rather than a clinical one,
-/// with a periwinkle accent.
-const AppPalette _pearl = AppPalette(
-  brightness: Brightness.light,
-  background: Color(0xFFFAF9F6),
-  surface: Color(0xFFFFFFFF),
-  surfaceRaised: Color(0xFFF0EFEB),
-  // On a light ground the glass tokens invert: a dark wash, a warm stone
-  // border rather than a translucent black one, and white glass over the
-  // warm canvas instead of a faded surface.
-  glassFill: Color(0x0A000000),
-  glassBorder: Color(0xFFE7E5E4),
-  glassSurface: Color(0xD9FFFFFF),
-  glassSpecular: Color(0xCCFFFFFF),
-  hairline: Color(0xFFE7E5E4),
-  innerHighlight: Color(0xCCFFFFFF),
-  accent: Color(0xFF8C9EFF),
-  accentBright: Color(0xFFA9B6FF),
-  accentDeep: Color(0xFF5566D6),
-  onAccent: Color(0xFFFFFFFF),
-  secondary: Color(0xFFE0A96D),
-  textPrimary: Color(0xFF1C1917),
-  textSecondary: Color(0xFF57534E),
-  textMuted: Color(0xFF78716C),
-  danger: Color(0xFFD9544D),
-  success: Color(0xFF3F9E6B),
-  priorityLow: Color(0xFF6E8CA8),
-  shadow: Color(0x14000000),
-  glowPrimary: Color(0x2E8C9EFF),
-  glowSecondary: Color(0x1FE0A96D),
-  prayerHues: PrayerHues(
-    fajr: Color(0xFF7C86D6),
-    sunrise: Color(0xFFE2A06E),
-    dhuhr: Color(0xFFD9A441),
-    asr: Color(0xFFC98F4A),
-    maghrib: Color(0xFFC4715A),
-    isha: Color(0xFF5E6BB5),
-  ),
-  typeface: AppTypeface.frauncesDmSans,
-);
-
-/// Every theme the picker offers.
-///
-/// [id] is what gets persisted — a stable string rather than an enum index,
-/// so reordering or removing a variant can never silently repoint a saved
-/// preference at a different theme.
-enum AppThemeVariant {
-  sanctuary(
-    id: 'sanctuary',
-    label: 'Sanctuary',
-    tagline: 'Deep slate, emerald, warm gold',
-    palette: _sanctuary,
-  ),
-  etherealAmber(
-    id: 'ethereal_amber',
-    label: 'Ethereal',
-    tagline: 'Lamplight amber on near-black',
-    palette: _etherealAmber,
-  ),
-  appleMinimal(
-    id: 'apple_minimal',
-    label: 'Apple Minimal',
-    tagline: 'True black, iOS system blue',
-    palette: _appleMinimal,
-  ),
-  titanium(
-    id: 'titanium',
-    label: 'Titanium',
-    tagline: 'Brushed grey, no strong accent',
-    palette: _titanium,
-  ),
-  monochrome(
-    id: 'monochrome',
-    label: 'Monochrome',
-    tagline: 'Almost zero color',
-    palette: _monochrome,
-  ),
-  pearl(
-    id: 'pearl',
-    label: 'Pearl',
-    tagline: 'Warm white, calm and clean',
-    palette: _pearl,
-  );
-
-  const AppThemeVariant({
-    required this.id,
-    required this.label,
-    required this.tagline,
-    required this.palette,
-  });
-
-  final String id;
-  final String label;
-  final String tagline;
-  final AppPalette palette;
-
-  AppSkin get skin => AppSkin(variant: this, palette: palette);
-
-  /// Used whenever nothing has been chosen yet, and whenever a persisted
-  /// [id] no longer matches a known theme.
-  static const AppThemeVariant fallback = AppThemeVariant.sanctuary;
-
-  static AppThemeVariant fromId(String? id) {
-    for (final variant in values) {
-      if (variant.id == id) return variant;
-    }
-    return fallback;
-  }
-}
+const AppTypography kTypography = AppTypography();
 
 // ---------------------------------------------------------------------------
 // Theme plumbing
 // ---------------------------------------------------------------------------
 
-/// Carries the active [AppPalette] (and the typography that goes with it)
-/// down the tree as a [ThemeExtension].
-///
-/// Going through the theme rather than a Riverpod provider means every
-/// plain [StatelessWidget] can read the palette from its [BuildContext],
-/// and Flutter animates the switch between two themes for free.
-@immutable
-class AppSkin extends ThemeExtension<AppSkin> {
-  const AppSkin({required this.variant, required this.palette});
-
-  final AppThemeVariant variant;
-  final AppPalette palette;
-
-  AppTypography get typography => AppTypography(palette.typeface);
-
-  @override
-  AppSkin copyWith({AppThemeVariant? variant, AppPalette? palette}) {
-    return AppSkin(
-      variant: variant ?? this.variant,
-      palette: palette ?? this.palette,
-    );
-  }
-
-  @override
-  AppSkin lerp(covariant ThemeExtension<AppSkin>? other, double t) {
-    if (other is! AppSkin) return this;
-    return AppSkin(
-      variant: t < 0.5 ? variant : other.variant,
-      palette: AppPalette.lerp(palette, other.palette, t),
-    );
-  }
-}
-
 /// `context.palette` / `context.typography` — the way every widget in the
 /// app reaches its design tokens.
 extension AppSkinContext on BuildContext {
-  AppSkin get skin =>
-      Theme.of(this).extension<AppSkin>() ?? AppThemeVariant.fallback.skin;
+  AppPalette get palette => kPalette;
 
-  AppPalette get palette => skin.palette;
+  AppTypography get typography => kTypography;
 
-  AppTypography get typography => skin.typography;
-
-  AppMotionScale get motion => AppMotionScale(
-        isReduced: MediaQuery.maybeDisableAnimationsOf(this) ?? false,
-      );
+  AppMotionScale get motion =>
+      AppMotionScale(isReduced: MediaQuery.maybeDisableAnimationsOf(this) ?? false);
 }
 
-/// Builds the [ThemeData] for [variant], with the palette attached as an
-/// [AppSkin] extension.
-ThemeData buildAppTheme(AppThemeVariant variant) {
-  final palette = variant.palette;
-  final typography = AppTypography(palette.typeface);
+/// Builds the app's [ThemeData], carrying [kPalette] and [kTypography].
+ThemeData buildAppTheme() {
+  const palette = kPalette;
   final base = palette.isDark
       ? ThemeData.dark(useMaterial3: true)
       : ThemeData.light(useMaterial3: true);
@@ -442,15 +136,12 @@ ThemeData buildAppTheme(AppThemeVariant variant) {
     ),
     // Text that names no color of its own inherits from here, which is
     // what lets a theme switch re-color the whole app.
-    textTheme: typography.textTheme(base.textTheme).apply(
+    textTheme: kTypography.textTheme(base.textTheme).apply(
           bodyColor: palette.textPrimary,
           displayColor: palette.textPrimary,
         ),
     splashFactory: NoSplash.splashFactory,
     highlightColor: Colors.transparent,
     hoverColor: Colors.transparent,
-    extensions: <ThemeExtension<dynamic>>[
-      AppSkin(variant: variant, palette: palette),
-    ],
   );
 }

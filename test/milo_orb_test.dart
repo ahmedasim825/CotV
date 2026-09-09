@@ -18,12 +18,11 @@ import 'package:cotv/src/ui/theme/app_theme.dart';
 
 Widget _host({
   required Widget child,
-  AppThemeVariant variant = AppThemeVariant.sanctuary,
   bool reducedMotion = false,
   TargetPlatform platform = TargetPlatform.android,
 }) {
   return MaterialApp(
-    theme: buildAppTheme(variant).copyWith(platform: platform),
+    theme: buildAppTheme().copyWith(platform: platform),
     home: MediaQuery(
       data: MediaQueryData(disableAnimations: reducedMotion),
       child: Scaffold(body: Center(child: child)),
@@ -32,27 +31,18 @@ Widget _host({
 }
 
 void main() {
-  testWidgets('renders every state under every theme', (tester) async {
-    for (final variant in AppThemeVariant.values) {
-      for (final state in MiloEyeState.values) {
-        await tester.pumpWidget(
-          _host(
-            variant: variant,
-            child: MiloOrbWidget(
-              state: state,
-              isListening: state == MiloEyeState.eyesOpen,
-            ),
-          ),
-        );
-        await tester.pump(const Duration(milliseconds: 100));
-
-        expect(
-          find.byType(MiloOrbWidget),
-          findsOneWidget,
-          reason: 'orb failed to render $state under ${variant.label}',
-        );
-        expect(tester.takeException(), isNull);
-      }
+  testWidgets('renders every state', (tester) async {
+    for (final state in MiloEyeState.values) {
+      await tester.pumpWidget(_host(
+        child: MiloOrbWidget(
+          state: state,
+          isListening: state == MiloEyeState.eyesOpen,
+        ),
+      ));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(MiloOrbWidget), findsOneWidget,
+          reason: 'orb failed to render $state');
+      expect(tester.takeException(), isNull);
     }
   });
 

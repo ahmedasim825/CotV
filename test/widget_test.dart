@@ -178,14 +178,14 @@ void main() {
     // what it can show, and dragging one leaves a ballistic scroll timer
     // that never settles against the orb's endless breathing animation.
     //
-    // DashboardHeader — the block this used to assert on, with the orb and
-    // the "Ahmed" greeting — is gone: the orb now lives in the sidebar
-    // dock, which only mounts past the navigation-rail breakpoint and so is
-    // absent at this compact width, and its replacement, WelcomeHeader, is
-    // built but not yet wired into this screen. Both land here once the
-    // redesign's content pane is assembled.
+    // The orb itself lives in the sidebar dock, which only mounts past the
+    // navigation-rail breakpoint and so is absent at this compact width.
+    // The greeting is a different story: WelcomeHeader is wired into every
+    // layout HomeScreen renders, compact included, so it has to be on
+    // screen here too. This is the assertion DashboardHeader carried before
+    // Task 5 deleted it, restored now against the widget that replaced it.
     expect(find.byType(MiloOrbWidget), findsNothing);
-    expect(find.text('NEXT PRAYER'), findsOneWidget);
+    expect(find.text('Welcome, Ahmed'), findsOneWidget);
   });
 
   testWidgets('the dashboard renders every card', (tester) async {
@@ -194,36 +194,32 @@ void main() {
     // layout rather than the two-up one.
     await pumpApp(tester, logicalSize: const Size(393, 2400));
 
-    expect(find.text('NEXT PRAYER'), findsOneWidget);
+    expect(find.text('Welcome, Ahmed'), findsOneWidget);
     expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Reminders'), findsOneWidget);
     expect(find.text('Study time'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);
-    expect(find.text('Quick actions'), findsOneWidget);
 
     // Nothing has been logged in this fresh profile, so every card that
     // counts something renders its neutral line rather than a number it
-    // cannot back. Four zeros in the strip, or four invented values, would
-    // both pass a looser assertion than this one.
-    expect(find.text('Nothing tracked yet today'), findsOneWidget);
+    // cannot back. A logged value here, or an invented one, would both pass
+    // a looser assertion than this one.
     expect(find.text('No tasks today'), findsOneWidget);
     expect(find.text('Nothing logged today'), findsOneWidget);
     expect(find.text('Nothing logged yet'), findsOneWidget);
-    expect(find.text('Talk to Milo'), findsOneWidget);
-
-    // The removed quick action must not have survived anywhere.
-    expect(find.textContaining('Journal'), findsNothing);
   });
 
   testWidgets('the dashboard reflows to two columns when wide', (tester) async {
     // Past the 600pt medium breakpoint, so the rail replaces the bottom bar
-    // and the study and nutrition cards pair up. The pairing puts a
-    // stretch-aligned Row inside a ListView, where height is unbounded — it
-    // throws without the IntrinsicHeight around it, so this asserts the
-    // layout actually builds rather than only that the text is present.
+    // and the bento pairs up into its 2x2: Tasks with Reminders, Study time
+    // with Nutrition. Each pairing puts a stretch-aligned Row inside a
+    // ListView, where height is unbounded — it throws without the
+    // IntrinsicHeight around it, so this asserts the layout actually builds
+    // rather than only that the text is present.
     await pumpApp(tester, logicalSize: const Size(1100, 2000));
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(IntrinsicHeight), findsOneWidget);
+    expect(find.byType(IntrinsicHeight), findsNWidgets(2));
     expect(find.text('Study time'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);
 
@@ -238,32 +234,26 @@ void main() {
       (tester) async {
     // The launcher used to be Positioned in the shell's Stack, so it sat
     // over the bottom-left corner of every screen, not just Home. It is
-    // addressed by its "Milo" label — the type is gone, and the drawer it
-    // opened is still there, so neither is a witness that it was removed.
+    // addressed by its bare "Milo" label — the type is gone, and the
+    // drawer it opened is still there, so neither is a witness that it was
+    // removed. At this compact width the sidebar dock that legitimately
+    // carries that label today has not mounted either, so the absence here
+    // still means what it always has.
     //
-    // Tall enough to build the whole dashboard, so the quick action that
-    // replaced it is on screen too. "Talk to Milo" is a different string,
-    // and must survive.
+    // Tall enough to build the whole dashboard, so this also covers the
+    // quick-action pill that used to replace the launcher — it is gone too,
+    // superseded by the sidebar's Milo dock, and left nothing bearing the
+    // bare label behind.
     await pumpApp(tester, logicalSize: const Size(393, 2400));
 
     expect(find.text('Milo'), findsNothing);
-    expect(find.text('Talk to Milo'), findsOneWidget);
 
-    // And on a destination that never had a quick action to replace it.
+    // And on a destination that never had a launcher or a quick action to
+    // replace it.
     await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
 
     expect(find.text('Milo'), findsNothing);
-  });
-
-  testWidgets('renders the prayer lockout banner', (tester) async {
-    await pumpApp(tester);
-
-    // Either state of the banner names a prayer and offers a focus action.
-    expect(
-      find.textContaining(RegExp(r'Focus until adhan|Start prayer focus')),
-      findsOneWidget,
-    );
   });
 
   testWidgets('switches to the task list and opens the form sheet',

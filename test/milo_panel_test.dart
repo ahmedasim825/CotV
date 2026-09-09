@@ -126,12 +126,14 @@ void main() {
   });
 
   Future<void> pumpApp(WidgetTester tester, http.Client client) async {
-    // 393pt wide, so this is still the compact phone layout — but tall
-    // enough to build the whole dashboard column in one pass. The only way
-    // into the panel is now the "Talk to Milo" quick action at the bottom
-    // of it, and a ListView only builds what it can show.
-    tester.view.physicalSize = const Size(1179, 7200);
-    tester.view.devicePixelRatio = 3.0;
+    // 1024pt wide, past the 1000pt expanded breakpoint, so the sidebar's
+    // Milo dock is what mounts rather than the phone's bottom bar. The
+    // dashboard's "Talk to Milo" quick action used to be the only way into
+    // the panel; the dock's "Chat >" link is now, since the quick-action
+    // grid it lived in was deleted along with the floating launcher it once
+    // replaced.
+    tester.view.physicalSize = const Size(1024, 900);
+    tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -172,11 +174,11 @@ void main() {
     fail('Condition still unmet after $maxFrames frames.');
   }
 
-  /// Taps the quick action and waits for the drawer to finish sliding in —
-  /// it is findable from the first frame of the slide, when it is still off
-  /// the right edge and nothing inside it can be tapped.
+  /// Taps the dock's "Chat >" link and waits for the drawer to finish
+  /// sliding in — it is findable from the first frame of the slide, when it
+  /// is still off the right edge and nothing inside it can be tapped.
   Future<void> openPanel(WidgetTester tester) async {
-    await tester.tap(find.text('Talk to Milo'));
+    await tester.tap(find.text('Chat >'));
     await pumpUntil(
       tester,
       () => find.byType(MiloAssistantScreen).evaluate().isNotEmpty,
@@ -184,15 +186,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
   }
 
-  testWidgets('the quick action opens the panel on its empty state',
+  testWidgets("the dock's Chat action opens the panel on its empty state",
       (tester) async {
     await pumpApp(tester, MockClient((request) async => http.Response('', 500)));
 
-    // The dashboard's quick action is the way in. The floating launcher
-    // that used to sit over the bottom-left corner of every screen is gone,
-    // so its bare "Milo" label must not still be somewhere on the page.
-    expect(find.text('Talk to Milo'), findsOneWidget);
-    expect(find.text('Milo'), findsNothing);
+    // The sidebar dock is the way in now. It carries the "Milo" label
+    // itself — as the dock's own header, not as a stray floating pill — so
+    // that label is expected here rather than a regression to guard
+    // against.
+    expect(find.text('Chat >'), findsOneWidget);
 
     await openPanel(tester);
 
@@ -241,9 +243,18 @@ void main() {
     );
 
     // The prompt is echoed as the user's turn, and the reply carries the
-    // badge of the engine that actually ran.
+    // badge of the engine that actually ran. The reply text is scoped to
+    // the panel rather than asserted globally: the sidebar dock behind it
+    // also shows the last thing Milo said, at this width, so the same
+    // string legitimately renders twice on screen at once.
     expect(find.text("What's my next prayer?"), findsOneWidget);
-    expect(find.text('Asr, at 16:12.'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(MiloAssistantScreen),
+        matching: find.text('Asr, at 16:12.'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('GROQ INSTANT'), findsOneWidget);
     // The engine that did not run stays an unlabelled ring.
     expect(find.text('GEMINI DEEP'), findsNothing);

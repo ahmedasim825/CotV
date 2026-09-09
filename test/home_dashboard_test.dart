@@ -41,11 +41,15 @@ import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/repositories/task_repository.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/storage/local_storage.dart';
+import 'package:cotv/src/ui/components/glass_card.dart';
+import 'package:cotv/src/ui/home/home_screen.dart';
 import 'package:cotv/src/ui/home/widgets/focus_tasks_card.dart';
+import 'package:cotv/src/ui/home/widgets/home_search_bar.dart';
+import 'package:cotv/src/ui/home/widgets/music_widget.dart';
 import 'package:cotv/src/ui/home/widgets/nutrition_card.dart';
 import 'package:cotv/src/ui/home/widgets/reminders_card.dart';
-import 'package:cotv/src/ui/home/widgets/streak_bar.dart';
 import 'package:cotv/src/ui/home/widgets/study_breakdown_card.dart';
+import 'package:cotv/src/ui/home/widgets/welcome_header.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 import 'package:cotv/src/ui/widgets/ph_light_icons.dart';
 
@@ -183,6 +187,15 @@ void main() {
   /// [now] overrides the pinned instant itself, for the rare test that
   /// needs a different one — Riverpod asserts if `currentMinuteProvider`
   /// were overridden twice, so this can't just be folded into [overrides].
+  ///
+  /// A bare card gets wrapped in a [SingleChildScrollView] so a card taller
+  /// than the test surface overflows into a scroll rather than a render
+  /// exception. [HomeScreen] cannot take that wrapper: it is a [ListView]
+  /// of its own, and a viewport nested inside another scrollable's unbounded
+  /// height throws "Vertical viewport was given unbounded height" before a
+  /// frame is even drawn. It goes straight into the Scaffold body instead,
+  /// where the bounded constraints a ListView needs are exactly what a
+  /// Scaffold already hands its body.
   Future<void> pumpCard(
     WidgetTester tester,
     Widget child, {
@@ -203,7 +216,9 @@ void main() {
         child: MaterialApp(
           theme: buildAppTheme(),
           home: Scaffold(
-            body: SingleChildScrollView(child: child),
+            body: child is HomeScreen
+                ? child
+                : SingleChildScrollView(child: child),
           ),
         ),
       ),
@@ -211,6 +226,12 @@ void main() {
     // The repository streams yield their first value on a microtask.
     await tester.pump();
     await tester.pump();
+    // HomeScreen stages its children behind RevealOnEntrance, each on its
+    // own `Future.delayed` (up to 140ms). Left unfired, that Timer is still
+    // pending when the test tears down and flutter_test fails the test over
+    // it regardless of what the test itself asserted — 200ms clears every
+    // delay HomeScreen schedules today with room to spare.
+    await tester.pump(const Duration(milliseconds: 200));
   }
 
   group('focus tasks', () {
@@ -322,37 +343,6 @@ void main() {
     });
   });
 
-  group('streak strip', () {
-    testWidgets('four zeros collapse into one line', (tester) async {
-      await pumpCard(tester, const StreakBar());
-
-      expect(find.text('Nothing tracked yet today'), findsOneWidget);
-      expect(find.text('day streak'), findsNothing);
-    });
-
-    testWidgets('one real number brings the cells back', (tester) async {
-      await tester.runAsync(
-        () => studyLogs.put(
-          'l1',
-          StudyLog(
-            id: 'l1',
-            subjectId: 's1',
-            subjectName: 'Anatomy',
-            durationMinutes: 45,
-            timestamp: _now,
-          ),
-        ),
-      );
-      await pumpCard(tester, const StreakBar());
-
-      expect(find.text('Nothing tracked yet today'), findsNothing);
-      expect(find.text('45m'), findsOneWidget);
-      expect(find.text('studied'), findsOneWidget);
-      // The water cell is gone, not blanked.
-      expect(find.text('water'), findsNothing);
-    });
-  });
-
   group('nutrition', () {
     testWidgets('an unlogged day says so under the ring', (tester) async {
       await pumpCard(tester, const NutritionCard());
@@ -456,6 +446,74 @@ void main() {
             reason: '${entry.key.runtimeType} lost its title');
       }
     });
+
+    // Task 8's reframe onto HomeCardFrame silently dropped three things the
+    // pre-reframe cards had: FocusTasksCard's hoverLift (its rows are each
+    // their own control, so the card itself should still light up under a
+    // pointer), NutritionCard's semanticLabel (a screen reader tapping the
+    // card used to hear the calorie total and the affordance) and the
+    // trailing divider under the last reminder. The three tests below pin
+    // each of those back onto HomeCardFrame's passthrough.
+
+    testWidgets(
+        "FocusTasksCard's hoverLift survives the HomeCardFrame passthrough",
+        (tester) async {
+      await pumpCard(tester, const FocusTasksCard());
+
+      final glassCard = tester.widget<GlassCard>(find.byType(GlassCard));
+      expect(glassCard.hoverLift, isTrue,
+          reason: 'the rows are individually interactive, so the card '
+              'itself should still light up under a pointer');
+    });
+
+    testWidgets(
+        "NutritionCard's semanticLabel survives the HomeCardFrame passthrough",
+        (tester) async {
+      await pumpCard(tester, const NutritionCard());
+
+      final glassCard = tester.widget<GlassCard>(find.byType(GlassCard));
+      expect(
+        glassCard.semanticLabel,
+        'Nutrition, 0 of 2000 kilocalories. Open the food logger.',
+      );
+    });
+
+    testWidgets('no divider renders under the last reminder', (tester) async {
+      await pumpCard(tester, const RemindersCard());
+
+      // Two sample reminders, seeded by ReminderListController.build(): one
+      // separator between them, and none trailing the last row.
+      expect(find.byType(Divider), findsOneWidget);
+    });
+  });
+
+  testWidgets('the homepage assembles header, search, music and four cards',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpCard(tester, const HomeScreen());
+
+    expect(find.byType(WelcomeHeader), findsOneWidget);
+    expect(find.byType(HomeSearchBar), findsOneWidget);
+    expect(find.byType(MusicWidget), findsOneWidget);
+    expect(find.byType(FocusTasksCard), findsOneWidget);
+    expect(find.byType(RemindersCard), findsOneWidget);
+    expect(find.byType(StudyBreakdownCard), findsOneWidget);
+    expect(find.byType(NutritionCard), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a narrow window stacks the cards without overflowing',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpCard(tester, const HomeScreen());
+
+    expect(tester.takeException(), isNull);
   });
 }
 

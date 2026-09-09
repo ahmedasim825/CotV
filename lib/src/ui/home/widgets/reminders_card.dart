@@ -24,6 +24,7 @@ class RemindersCard extends ConsumerWidget {
     final now = ref.watch(currentMinuteProvider);
     final reminders = [...ref.watch(reminderListProvider)]
       ..sort((a, b) => a.dueAt.compareTo(b.dueAt));
+    final shown = reminders.take(_shortlistLength).toList(growable: false);
 
     return HomeCardFrame(
       title: 'Reminders',
@@ -37,8 +38,7 @@ class RemindersCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final reminder
-                    in reminders.take(_shortlistLength)) ...[
+                for (var i = 0; i < shown.length; i++) ...[
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -53,7 +53,7 @@ class RemindersCard extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              reminder.title,
+                              shown[i].title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: context.typography.ui(
@@ -68,12 +68,12 @@ class RemindersCard extends ConsumerWidget {
                               // `formatDueLabel`: it's the one that produces
                               // the `Yesterday, 03:00` / `27/07/2026, 20:00`
                               // shape a reminder's always-present time needs.
-                              formatReminderDueLabel(reminder.dueAt, now),
-                              key: ValueKey('due-${reminder.id}'),
+                              formatReminderDueLabel(shown[i].dueAt, now),
+                              key: ValueKey('due-${shown[i].id}'),
                               style: context.typography.ui(
                                 size: 11,
                                 weight: FontWeight.w600,
-                                color: reminder.isOverdue(now)
+                                color: shown[i].isOverdue(now)
                                     ? palette.danger
                                     : palette.textMuted,
                               ),
@@ -83,7 +83,10 @@ class RemindersCard extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  Divider(color: palette.hairline, height: 20),
+                  // Only between rows, not under the last one: Study time
+                  // and Nutrition gate their separators the same way.
+                  if (i < shown.length - 1)
+                    Divider(color: palette.hairline, height: 20),
                 ],
               ],
             ),

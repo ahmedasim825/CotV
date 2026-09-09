@@ -42,6 +42,8 @@ class NutritionCard extends ConsumerWidget {
     return HomeCardFrame(
       title: 'Nutrition',
       onTap: () => pushFoodPage(context, const FoodSearchScreen()),
+      semanticLabel: 'Nutrition, $eaten of ${targets.calories} kilocalories. '
+          'Open the food logger.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

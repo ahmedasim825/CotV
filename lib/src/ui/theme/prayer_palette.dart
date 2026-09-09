@@ -38,10 +38,6 @@ extension PrayerPaletteX on AppPalette {
   Color prayerBandEdge(PrayerLabel prayer) =>
       prayerHue(prayer).withValues(alpha: 0.45);
 
-  /// Surface tint for a solid prayer lockout block.
-  Color prayerLockoutFill(PrayerLabel prayer) =>
-      Color.alphaBlend(prayerHue(prayer).withValues(alpha: 0.16), surface);
-
   /// The accent a task carries wherever it appears — list tile, timeline
   /// block, form sheet or badge. High reads as a warning without being an
   /// error state; low stays deliberately quiet.

@@ -34,6 +34,9 @@ class FocusTasksCard extends ConsumerWidget {
     return HomeCardFrame(
       title: 'Tasks',
       onEdit: () => showTaskFormSheet(context),
+      // The rows inside are each their own control, so the card lights up
+      // under a pointer even though the card itself does nothing.
+      hoverLift: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

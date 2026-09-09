@@ -1,110 +1,125 @@
 import 'package:flutter/material.dart';
 
-import '../components/components.dart';
 import '../responsive/breakpoints.dart';
-import '../widgets/prayer_lockout_banner.dart';
 import '../widgets/reveal_on_entrance.dart';
 import 'widgets/focus_tasks_card.dart';
-import 'widgets/next_prayer_card.dart';
+import 'widgets/home_search_bar.dart';
+import 'widgets/music_widget.dart';
 import 'widgets/nutrition_card.dart';
-import 'widgets/quick_actions_grid.dart';
-import 'widgets/streak_bar.dart';
+import 'widgets/reminders_card.dart';
 import 'widgets/study_breakdown_card.dart';
+import 'widgets/welcome_header.dart';
 
-/// The Home tab: Milo, the day's headline numbers, and the shortcuts into
-/// the rest of the app.
+/// The Home pane: a top strip over a 2x2 bento.
 ///
-/// Every card reads its own providers, so this file is layout and nothing
-/// else. Each of them also renders a neutral line when it has nothing to
-/// show — a dashboard whose only honest answer is "nothing yet" has to be
-/// able to say so, which is the state it is in on a fresh install.
+/// Layout and nothing else — every card reads its own providers, and each
+/// renders a neutral line when it has nothing to show, which is the state a
+/// fresh install is in.
 ///
-/// No [Scaffold] here on purpose: [AppShell] already supplies one, along
-/// with the ambient background and the Milo end drawer. Nesting a second
-/// Scaffold would make [QuickActionsGrid]'s `Scaffold.of(context)` resolve
-/// to a drawerless one and throw when "Talk to Milo" is tapped — which is
-/// now the only way into Milo from this screen, since the floating launcher
-/// that used to sit over the bottom-left corner has been removed.
+/// No [Scaffold] here: [AppShell] supplies one, along with the background and
+/// the Milo end drawer. Nesting a second would make the drawer unreachable
+/// from anything calling `Scaffold.of(context)`.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  static const double _gap = 20;
 
   @override
   Widget build(BuildContext context) {
     return AdaptiveLayout(
       builder: (context, windowSize) {
         final padding = windowSize.pagePadding;
-        // Two columns once the pane can give each one a readable width; the
-        // rings and macro bars start to crowd below roughly 340pt a side.
         final twoUp = !windowSize.isCompact;
 
-        // Every glass card below samples the same backdrop — the ambient
-        // canvas behind the pane — so they are grouped and it is sampled
-        // once for the screen rather than once per card. Without this the
-        // column of them costs a blur each.
+        // One sampled backdrop for the whole screen instead of one per glass
+        // card.
         return BackdropGroup(
           child: ListView(
-            // 32 at the bottom, not the 96 this used to reserve: the
-            // floating Milo launcher that strip was clearing is gone, so the
-            // content runs to the bottom bar with an ordinary margin under
-            // it.
             padding: EdgeInsets.fromLTRB(padding, 16, padding, 32),
             children: [
-              const PrayerLockoutBanner(),
-              const SizedBox(height: 28),
-              const RevealOnEntrance(
-                delay: Duration(milliseconds: 60),
-                child: StreakBar(),
-              ),
-              const SizedBox(height: 20),
-              const RevealOnEntrance(
-                delay: Duration(milliseconds: 100),
-                child: NextPrayerCard(),
-              ),
-              const SizedBox(height: 16),
-              const RevealOnEntrance(
-                delay: Duration(milliseconds: 140),
-                child: FocusTasksCard(),
-              ),
-              const SizedBox(height: 16),
               RevealOnEntrance(
-                delay: const Duration(milliseconds: 180),
                 child: twoUp
-                    ? const IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(child: StudyBreakdownCard()),
-                            SizedBox(width: 16),
-                            Expanded(child: NutritionCard()),
-                          ],
-                        ),
+                    ? const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: WelcomeHeader()),
+                          SizedBox(width: _gap),
+                          SizedBox(width: 280, child: MusicWidget()),
+                        ],
                       )
                     : const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          StudyBreakdownCard(),
-                          SizedBox(height: 16),
-                          NutritionCard(),
+                          WelcomeHeader(),
+                          SizedBox(height: _gap),
+                          MusicWidget(),
                         ],
                       ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: _gap),
               const RevealOnEntrance(
-                delay: Duration(milliseconds: 220),
-                child: SectionHeader(
-                  eyebrow: 'SHORTCUTS',
-                  title: 'Quick actions',
-                  titleSize: 22,
+                delay: Duration(milliseconds: 60),
+                child: HomeSearchBar(),
+              ),
+              const SizedBox(height: 28),
+              RevealOnEntrance(
+                delay: const Duration(milliseconds: 100),
+                child: _CardRow(
+                  twoUp: twoUp,
+                  left: const FocusTasksCard(),
+                  right: const RemindersCard(),
                 ),
               ),
-              const SizedBox(height: 14),
-              const RevealOnEntrance(
-                delay: Duration(milliseconds: 260),
-                child: QuickActionsGrid(),
+              const SizedBox(height: _gap),
+              RevealOnEntrance(
+                delay: const Duration(milliseconds: 140),
+                child: _CardRow(
+                  twoUp: twoUp,
+                  left: const StudyBreakdownCard(),
+                  right: const NutritionCard(),
+                ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Two cards side by side, or stacked when the pane is too narrow to give
+/// each one a readable width.
+class _CardRow extends StatelessWidget {
+  const _CardRow({
+    required this.twoUp,
+    required this.left,
+    required this.right,
+  });
+
+  final bool twoUp;
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!twoUp) {
+      return Column(
+        children: [
+          left,
+          const SizedBox(height: HomeScreen._gap),
+          right,
+        ],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: HomeScreen._gap),
+          Expanded(child: right),
+        ],
+      ),
     );
   }
 }

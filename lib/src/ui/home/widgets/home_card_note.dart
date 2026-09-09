@@ -70,6 +70,8 @@ class HomeCardFrame extends StatelessWidget {
     required this.child,
     this.onEdit,
     this.onTap,
+    this.hoverLift,
+    this.semanticLabel,
   });
 
   final String title;
@@ -80,6 +82,17 @@ class HomeCardFrame extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onTap;
 
+  /// Passed straight through to the underlying [GlassCard]. A card whose
+  /// content is interactive row by row — Tasks, where each row toggles on
+  /// its own tap — still wants the whole card to light up under a pointer,
+  /// even though the card itself carries no [onTap].
+  final bool? hoverLift;
+
+  /// Passed straight through to the underlying [GlassCard]: announced in
+  /// place of the card's contents when the whole card is one control. Only
+  /// meaningful alongside [onTap].
+  final String? semanticLabel;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -87,6 +100,8 @@ class HomeCardFrame extends StatelessWidget {
     return GlassCard(
       radius: 18,
       onTap: onTap,
+      hoverLift: hoverLift,
+      semanticLabel: semanticLabel,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

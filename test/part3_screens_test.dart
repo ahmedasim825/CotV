@@ -44,6 +44,7 @@ import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
 import 'package:cotv/src/ui/habits/habit_form_sheet.dart';
 import 'package:cotv/src/ui/habits/widgets/habit_tile.dart';
+import 'package:cotv/src/ui/theme/app_theme.dart';
 
 /// Stands in for every `local_auth` / `flutter_secure_storage` call the
 /// security screen makes, reporting a Face ID device with app lock off —
@@ -268,10 +269,14 @@ void main() {
     testWidgets(
       'reminder due label reacts to currentMinuteProvider clock, not wall clock',
       (tester) async {
-        // A reminder due at 3pm on July 27, 2026.
-        final dueTime = DateTime(2026, 7, 27, 15, 0);
+        // A reminder due at 3pm on March 15, 2027 — a date in the future
+        // relative to the real wall clock (this suite runs around
+        // 2026-09-09). That gap matters for the second half below: it is
+        // what makes a reverted `isOverdue(DateTime.now())` disagree with
+        // the pinned-clock implementation instead of accidentally agreeing.
+        final dueTime = DateTime(2027, 3, 15, 15, 0);
 
-        // First pump: app with clock at before-due time (12pm).
+        // First pump: app with clock at before-due time (12pm, same day).
         tester.view.physicalSize = const Size(1179, 2556);
         tester.view.devicePixelRatio = 3.0;
         addTearDown(tester.view.resetPhysicalSize);
@@ -286,7 +291,7 @@ void main() {
                   .overrideWithValue(_FakeNotificationService()),
               // Before due time: 12pm.
               currentMinuteProvider
-                  .overrideWithValue(DateTime(2026, 7, 27, 12, 0)),
+                  .overrideWithValue(DateTime(2027, 3, 15, 12, 0)),
             ],
             child: const PrayerLockoutApp(),
           ),
@@ -312,14 +317,19 @@ void main() {
         await tester.pumpAndSettle();
 
         // At 12pm, the reminder due at 3pm is NOT yet overdue.
-        // Both times are on July 27, so the label format is "Today, 15:00".
+        // Both times are on March 15, so the label format is "Today, 15:00",
+        // and the due label renders in the muted (non-overdue) color.
         expect(find.text('Test Reminder'), findsOneWidget);
         expect(find.text('Today, 15:00'), findsOneWidget);
+        final beforeLabel = tester.widget<Text>(find.text('Today, 15:00'));
+        expect(beforeLabel.style?.color, kPalette.textMuted);
 
-        // Second pump: app with clock at after-due time (4pm).
-        // This is the critical test: the _ReminderRow widget is watching
+        // Second pump: app with clock at after-due time (4pm, same day).
+        // This is the critical half: the _ReminderRow widget watches
         // currentMinuteProvider, so when it changes, the row should rebuild
-        // with the new time value and recompute its overdue state.
+        // with the new time value and recompute both `isOverdue()` and the
+        // due label's color from it — not from the real wall clock, which
+        // (being in 2026) would still call this reminder not-yet-due.
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
@@ -329,7 +339,7 @@ void main() {
                   .overrideWithValue(_FakeNotificationService()),
               // After due time: 4pm.
               currentMinuteProvider
-                  .overrideWithValue(DateTime(2026, 7, 27, 16, 0)),
+                  .overrideWithValue(DateTime(2027, 3, 15, 16, 0)),
             ],
             child: const PrayerLockoutApp(),
           ),
@@ -342,12 +352,15 @@ void main() {
         await tester.tap(find.text('Reminders'));
         await tester.pumpAndSettle();
 
-        // At 4pm, the reminder due at 3pm is now overdue. The row should
-        // have rebuilt and updated its color (checked via the model's
-        // isOverdue() method). We verify the reminder still renders
-        // correctly, confirming the watch-based reactivity worked.
+        // At 4pm, the reminder due at 3pm is now overdue per the pinned
+        // clock. Assert the due label switched to the danger color — the
+        // actual signal the row exists to give the user — rather than only
+        // re-checking the label text, which stays "Today, 15:00" in both
+        // halves and would not by itself catch a clock regression here.
         expect(find.text('Test Reminder'), findsOneWidget);
         expect(find.text('Today, 15:00'), findsOneWidget);
+        final afterLabel = tester.widget<Text>(find.text('Today, 15:00'));
+        expect(afterLabel.style?.color, kPalette.danger);
       },
     );
   });

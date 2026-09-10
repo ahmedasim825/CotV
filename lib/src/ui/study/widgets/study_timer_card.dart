@@ -16,8 +16,8 @@ import '../subject_colors.dart';
 /// The session in flight, or the one that just finished.
 ///
 /// Reads the time left off [nowTickerProvider] and the session's stored end
-/// instant, the same way [FocusSessionOverlay] does — nothing here counts
-/// down, so backgrounding the app costs exactly the time it took.
+/// instant — nothing here counts down, so backgrounding the app costs
+/// exactly the time it took.
 class StudyTimerCard extends ConsumerWidget {
   const StudyTimerCard({super.key, required this.accent});
 

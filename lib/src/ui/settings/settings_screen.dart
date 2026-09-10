@@ -26,10 +26,10 @@ import 'widgets/settings_row.dart';
 /// Appearance, security, location and prayer-calculation preferences.
 ///
 /// Appearance and security are fully live. Location persists to
-/// [UserSettings] and feeds the live calculation; the calculation method,
-/// madhab and lockout window drive the in-memory providers now and gain
-/// their own persistence in Part 4, which is stated on the screen rather
-/// than left for the user to discover.
+/// [UserSettings] and feeds the live calculation; the calculation method
+/// and madhab drive the in-memory providers now and gain their own
+/// persistence in Part 4, which is stated on the screen rather than left
+/// for the user to discover.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -511,7 +511,6 @@ class _LocationSection extends ConsumerWidget {
 class _CalculationSection extends ConsumerWidget {
   const _CalculationSection();
 
-  static const List<int> _lockoutMinutes = [10, 15, 20, 30, 45, 60];
   static const List<int> _preAdhanMinutes = [0, 5, 10, 15, 20, 30];
 
   String _minutesLabel(int minutes) =>
@@ -522,7 +521,6 @@ class _CalculationSection extends ConsumerWidget {
     final palette = context.palette;
     final method = ref.watch(calculationMethodProvider);
     final madhab = ref.watch(madhabProvider);
-    final lockout = ref.watch(lockoutDurationProvider);
     final settings = ref.watch(userSettingsControllerProvider).value;
     final preAdhan = settings?.preAdhanNotificationMinutes ?? 15;
 
@@ -579,34 +577,6 @@ class _CalculationSection extends ConsumerWidget {
                 );
                 if (picked != null) {
                   ref.read(madhabProvider.notifier).set(picked);
-                }
-              },
-            ),
-            SettingsValueRow(
-              icon: PhLight.timer,
-              title: 'Lockout window',
-              subtitle: 'How long each prayer stays blocked out after the '
-                  'Adhan.',
-              value: '${lockout.inMinutes} minutes',
-              onTap: () async {
-                final picked = await showOptionPicker<int>(
-                  context,
-                  title: 'Lockout window',
-                  subtitle: 'Applies to every prayer except Fajr, which '
-                      'runs to sunrise.',
-                  selected: lockout.inMinutes,
-                  options: [
-                    for (final minutes in _lockoutMinutes)
-                      PickerOption(
-                        value: minutes,
-                        label: '$minutes minutes',
-                      ),
-                  ],
-                );
-                if (picked != null) {
-                  ref
-                      .read(lockoutDurationProvider.notifier)
-                      .set(Duration(minutes: picked));
                 }
               },
             ),

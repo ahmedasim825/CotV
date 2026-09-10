@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/chat_session_providers.dart';
-import '../providers/focus_session_providers.dart';
 import '../providers/milo_providers.dart';
 import '../providers/study_providers.dart';
-import 'focus/focus_session_overlay.dart';
 import 'food/food_search_screen.dart';
 import 'home/home_screen.dart';
 import 'milo/milo_assistant_screen.dart';
@@ -129,13 +127,6 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    // A running focus session replaces the whole shell — that is the point
-    // of it.
-    final session = ref.watch(focusSessionProvider);
-    if (session != null) {
-      return FocusSessionOverlay(session: session);
-    }
-
     // Watched here, and only here, because a Riverpod notifier that nothing
     // listens to is never constructed — so its build() never runs and the
     // microphone is never armed. The shell outlives the Milo panel, which

@@ -384,14 +384,16 @@ class _MiloLauncherButton extends StatelessWidget {
                 child: Icon(
                   PhLight.sparkle,
                   size: 21,
-                  // accentBright, not textMuted: this button is the sole
-                  // compact-width path to Milo, and reading it as an
-                  // always-available action rather than a sixth nav item
-                  // (which would imply it is sometimes "selected") keeps it
-                  // discoverable. Not palette.accent — at this size, on this
-                  // ground, that token is under WCAG AA and is reserved for
-                  // the sidebar's own selection state.
-                  color: palette.accentBright,
+                  // textMuted, matching an unselected _BottomNavItem — not
+                  // accentBright. accentBright is _BottomNavItem's signal for
+                  // "this is where you are"; this button is an action, not a
+                  // destination, and must not borrow the colour that means
+                  // nav state. Settings sits immediately to this button's
+                  // left, so if this read accentBright, selecting Settings
+                  // would put two accentBright icons side by side — exactly
+                  // the ambiguity to avoid. Not palette.accent either — at
+                  // this size, on this ground, that token is under WCAG AA.
+                  color: palette.textMuted,
                 ),
               ),
             ),

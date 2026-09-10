@@ -66,6 +66,29 @@ void main() {
     );
   });
 
+  testWidgets(
+      'a large text scale at compact width does not overflow the prayer row',
+      (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_host(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: const WelcomeHeader(),
+      ),
+      overrides: [
+        weatherProvider.overrideWithValue(
+          const WeatherReading(celsius: 38, condition: WeatherCondition.cloudy),
+        ),
+      ],
+    ));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the search bar carries the placeholder and the mode',
       (tester) async {
     await tester.pumpWidget(_host(const HomeSearchBar()));

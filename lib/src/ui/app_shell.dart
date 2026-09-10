@@ -272,6 +272,7 @@ class _BottomNavBar extends StatelessWidget {
               isSelected: item == destination,
               onTap: () => onSelect(item),
             ),
+          const _MiloLauncherButton(),
         ],
       ),
     );
@@ -337,6 +338,60 @@ class _BottomNavItem extends StatelessWidget {
                     color:
                         isSelected ? palette.accentBright : palette.textMuted,
                   ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The phone bar's way into Milo.
+///
+/// This is an *action*, not a destination: it has no selected/unselected
+/// state, never carries the pill or underline treatment [_BottomNavItem]
+/// uses for the active row, and doesn't join [AppDestination] — tapping it
+/// opens the end drawer in place, it doesn't navigate anywhere. It exists
+/// because [MiloDock] (the sidebar's own entry point) mounts only past the
+/// navigation-rail breakpoint; below that, this button is the only way to
+/// reach Milo at all, the same job the deleted `QuickActionsGrid`'s
+/// "Talk to Milo" pill used to do — same glyph, so it reads as the same
+/// affordance moved rather than a new one invented.
+///
+/// Same 48pt touch target and [Expanded] footprint as [_BottomNavItem], so
+/// the row stays even with it in the mix.
+class _MiloLauncherButton extends StatelessWidget {
+  const _MiloLauncherButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: 'Milo',
+        child: Tooltip(
+          message: 'Milo',
+          child: GestureDetector(
+            onTap: () => Scaffold.of(context).openEndDrawer(),
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              height: 48,
+              child: Center(
+                child: Icon(
+                  PhLight.sparkle,
+                  size: 21,
+                  // accentBright, not textMuted: this button is the sole
+                  // compact-width path to Milo, and reading it as an
+                  // always-available action rather than a sixth nav item
+                  // (which would imply it is sometimes "selected") keeps it
+                  // discoverable. Not palette.accent — at this size, on this
+                  // ground, that token is under WCAG AA and is reserved for
+                  // the sidebar's own selection state.
+                  color: palette.accentBright,
                 ),
               ),
             ),

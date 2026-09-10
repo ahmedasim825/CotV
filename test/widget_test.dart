@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
@@ -22,15 +23,18 @@ import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
+import 'package:cotv/src/providers/milo_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
 import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/security/security_service.dart';
+import 'package:cotv/src/services/milo/milo_credentials.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/providers/chat_session_providers.dart';
 import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
+import 'package:cotv/src/ui/milo/milo_assistant_screen.dart';
 import 'package:cotv/src/ui/tasks/task_list_view.dart';
 
 /// Avoids touching the real `flutter_secure_storage` platform channel
@@ -110,10 +114,13 @@ void main() {
   /// Sizes the surface to an iPhone 14 Pro (393x852pt) rather than the
   /// 800x600 default, so the compact layout under test is the one the app
   /// actually ships to. [logicalSize] overrides that for a test that needs
-  /// the whole scroll extent built at once.
+  /// the whole scroll extent built at once. [extraOverrides] adds to, rather
+  /// than replaces, the three overrides every test in this file needs —
+  /// for a test that also has to touch a Milo provider.
   Future<void> pumpApp(
     WidgetTester tester, {
     Size logicalSize = const Size(393, 852),
+    List<Override> extraOverrides = const [],
   }) async {
     tester.view.physicalSize = logicalSize * 3.0;
     tester.view.devicePixelRatio = 3.0;
@@ -127,6 +134,7 @@ void main() {
           securityServiceProvider.overrideWithValue(_FakeSecurityService()),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),
+          ...extraOverrides,
         ],
         child: const PrayerLockoutApp(),
       ),
@@ -253,6 +261,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Milo'), findsNothing);
+  });
+
+  testWidgets(
+      "the compact bar's Milo launcher opens the end drawer",
+      (tester) async {
+    // MiloDock — the sidebar's own entry point — mounts only past the
+    // navigation-rail breakpoint, so at this compact (393pt) width the
+    // bottom bar's own launcher is the only way in. miloSecretsProvider is
+    // overridden so MiloAssistantScreen's build doesn't reach the Keychain
+    // platform channel, unavailable under flutter_test — the same reason
+    // milo_panel_test.dart overrides it.
+    await pumpApp(
+      tester,
+      extraOverrides: [
+        miloSecretsProvider.overrideWith(
+          (ref) async => const MiloSecrets(groqApiKey: 'gsk_test'),
+        ),
+      ],
+    );
+
+    expect(find.byType(MiloAssistantScreen), findsNothing);
+    expect(find.byTooltip('Milo'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Milo'));
+    // One frame, not pumpAndSettle or a multi-frame wait: the drawer's
+    // content mounts on the very first frame of its open animation (it is
+    // merely translated offscreen before that finishes), so one pump is
+    // enough to find it — and the orb's breath controller repeats forever,
+    // so a widget tree that ever grows to contain it would hang under
+    // pumpAndSettle. A longer wait here isn't just unnecessary: at this
+    // compact width WelcomeHeader is a known pre-existing overflow risk a
+    // few hundred milliseconds in (unrelated to Milo — see the report), so
+    // the minimal pump also sidesteps that.
+    await tester.pump();
+
+    expect(find.byType(MiloAssistantScreen), findsOneWidget);
   });
 
   testWidgets('switches to the task list and opens the form sheet',

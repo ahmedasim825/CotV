@@ -15,6 +15,7 @@ import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
 import '../widgets/status_card.dart';
+import 'reminder_form_sheet.dart';
 import 'task_form_sheet.dart';
 import 'widgets/task_tile.dart';
 
@@ -136,7 +137,7 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
         Expanded(
           child: switch (_segment) {
             _TaskSegment.tasks => _buildTaskList(context),
-            _TaskSegment.reminders => const _ReminderList(),
+            _TaskSegment.reminders => _ReminderList(showFab: widget.showFab),
             _TaskSegment.habits => HabitScreen(showFab: widget.showFab),
           },
         ),
@@ -196,13 +197,15 @@ class _TaskListHeader extends ConsumerWidget {
   }
 }
 
-/// The reminder segment: one row per [Reminder] from [reminderListProvider].
-///
-/// A plain [ConsumerWidget] rather than a stateful one — there is no local
-/// interaction here yet (Task 8 adds the edit pencil), only watches on the
-/// provider and the clock provider, and a render.
+/// The reminder segment: one row per [Reminder] from [reminderListProvider],
+/// each opening [ReminderFormSheet] to edit or delete it, over a shared add
+/// button matching the tasks and habits segments either side of it.
 class _ReminderList extends ConsumerWidget {
-  const _ReminderList();
+  const _ReminderList({required this.showFab});
+
+  /// The split view hosts a single shared FAB, same as [TaskListView.showFab]
+  /// and [HabitScreen.showFab].
+  final bool showFab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -215,71 +218,105 @@ class _ReminderList extends ConsumerWidget {
     // update is driven by the provider instead of the wall clock.
     final now = ref.watch(currentMinuteProvider);
 
-    if (reminders.isEmpty) {
-      return const Center(
-        child: HomeCardNote(icon: PhLight.bellSimple, message: 'No reminders'),
-      );
-    }
-
-    return ListView.separated(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        4,
-        20,
-        // Clears the home indicator; this segment has no FAB of its own.
-        20 + MediaQuery.paddingOf(context).bottom,
-      ),
-      itemCount: reminders.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) =>
-          _ReminderRow(reminder: reminders[index], now: now),
+    return Stack(
+      children: [
+        reminders.isEmpty
+            ? const Center(
+                child: HomeCardNote(
+                  icon: PhLight.bellSimple,
+                  message: 'No reminders',
+                ),
+              )
+            : ListView.separated(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  4,
+                  20,
+                  // Clears the FAB and the home indicator.
+                  96 + MediaQuery.paddingOf(context).bottom,
+                ),
+                itemCount: reminders.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) => _ReminderRow(
+                  reminder: reminders[index],
+                  now: now,
+                  onTap: () => showReminderFormSheet(
+                    context,
+                    existing: reminders[index],
+                  ),
+                ),
+              ),
+        if (showFab)
+          Positioned(
+            right: 20,
+            bottom: 20 + MediaQuery.paddingOf(context).bottom,
+            child: const QuickAddReminderButton(),
+          ),
+      ],
     );
   }
 }
 
 class _ReminderRow extends StatelessWidget {
-  const _ReminderRow({required this.reminder, required this.now});
+  const _ReminderRow({
+    required this.reminder,
+    required this.now,
+    required this.onTap,
+  });
 
   final Reminder reminder;
   final DateTime now;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final overdue = reminder.isOverdue(now);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: context.palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.palette.hairline),
-      ),
-      child: Row(
-        children: [
-          Icon(PhLight.bellSimple, size: 16, color: context.palette.accent),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  reminder.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.typography.ui(size: 15, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  formatReminderDueLabel(reminder.dueAt, now),
-                  style: context.typography.ui(
-                    size: 11.5,
-                    color: overdue ? context.palette.danger : context.palette.textMuted,
-                  ),
-                ),
-              ],
-            ),
+    return Semantics(
+      button: true,
+      label: '${reminder.title}. Edit reminder.',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            color: context.palette.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: context.palette.hairline),
           ),
-        ],
+          child: Row(
+            children: [
+              Icon(PhLight.bellSimple, size: 16, color: context.palette.accent),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      reminder.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          context.typography.ui(size: 15, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formatReminderDueLabel(reminder.dueAt, now),
+                      style: context.typography.ui(
+                        size: 11.5,
+                        color: overdue
+                            ? context.palette.danger
+                            : context.palette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(PhLight.caretRight, size: 14, color: context.palette.textMuted),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -583,6 +620,57 @@ class QuickAddTaskButton extends StatelessWidget {
                 const SizedBox(width: 9),
                 Text(
                   'Task',
+                  style: context.typography.ui(
+                    size: 14,
+                    weight: FontWeight.w700,
+                    color: context.palette.onAccent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The reminders segment's quick-add FAB. Same shape as [QuickAddTaskButton]
+/// beside it — the two segments share a screen, so their add buttons should
+/// read as the same control doing two jobs, not two different ones.
+class QuickAddReminderButton extends StatelessWidget {
+  const QuickAddReminderButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Add reminder',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => showReminderFormSheet(context),
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            decoration: BoxDecoration(
+              color: context.palette.accent,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [
+                BoxShadow(
+                  color: context.palette.accent.withValues(alpha: 0.28),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(PhLight.plus, size: 17, color: context.palette.onAccent),
+                const SizedBox(width: 9),
+                Text(
+                  'Reminder',
                   style: context.typography.ui(
                     size: 14,
                     weight: FontWeight.w700,

@@ -108,12 +108,38 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  Future<void> _delete() async {
+    final existing = widget.existing;
+    if (existing == null) return;
+
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete reminder?',
+      message: 'Removing "${existing.title}" cannot be undone.',
+      confirmIcon: PhLight.trash,
+    );
+    if (!confirmed || !mounted) return;
+
+    ref.read(reminderListProvider.notifier).remove(existing.id);
+    if (mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Form(
       key: _formKey,
       child: StandardBottomSheet(
         title: _isEditing ? 'Edit reminder' : 'New reminder',
+        trailing: _isEditing
+            ? _IconAction(
+                icon: PhLight.trash,
+                tint: palette.danger,
+                semanticLabel: 'Delete reminder',
+                onTap: _isSaving ? null : _delete,
+              )
+            : null,
         actions: Row(
           children: [
             Expanded(
@@ -160,6 +186,50 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
             const SizedBox(height: 10),
             _DueAtField(dueAt: _dueAt, onPick: _pickDueAt),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small circular icon button for a sheet's title row.
+///
+/// Mirrors `habit_form_sheet.dart`'s private widget of the same name and
+/// shape — both sheets put a destructive action in the same spot, and
+/// neither is worth promoting to a shared component for one field each.
+class _IconAction extends StatelessWidget {
+  const _IconAction({
+    required this.icon,
+    required this.onTap,
+    required this.semanticLabel,
+    this.tint,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String semanticLabel;
+  final Color? tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final color = tint ?? palette.textSecondary;
+
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 17, color: color),
         ),
       ),
     );

@@ -10,8 +10,13 @@ import '../widgets/ph_light_icons.dart';
 /// Milo's home in the sidebar: history on the left, Chat on the right, the
 /// orb below, and the last thing Milo said under that.
 ///
-/// Collapsed, everything but the orb goes — the orb is the one control that
-/// still reads at 72pt, and tapping it opens the panel either way.
+/// Collapsed, everything but the orb goes — and a tap on the orb opens the
+/// microphone, not the panel: [MiloOrb] wires a plain tap to
+/// `miloVoiceProvider.toggle()`, and only a double tap on Windows or a long
+/// press on iOS reaches the panel from the orb alone (see [MiloOrbWidget]'s
+/// `onTextMilo`). A small Chat glyph rides along beside it at 72pt so the
+/// panel stays discoverable by a plain tap even when the sidebar is
+/// collapsed.
 class MiloDock extends ConsumerWidget {
   const MiloDock({super.key, required this.showLabels});
 
@@ -22,9 +27,27 @@ class MiloDock extends ConsumerWidget {
     final palette = context.palette;
 
     if (!showLabels) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: MiloOrb(diameter: 48),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MiloOrb(diameter: 48),
+            const SizedBox(height: 6),
+            Tooltip(
+              message: 'Open Milo chat',
+              child: InkWell(
+                onTap: () => Scaffold.of(context).openEndDrawer(),
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: Icon(PhLight.sparkle, size: 15, color: palette.textMuted),
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 

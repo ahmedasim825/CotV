@@ -7,8 +7,12 @@ import '../models/now_playing.dart';
 /// Sample state for now: this build is frontend only, and reading real
 /// now-playing metadata on Windows means the System Media Transport Controls,
 /// which is a platform channel this plan does not add. The four methods below
-/// are the whole surface a real implementation has to satisfy — swapping one
-/// in replaces this class and nothing else.
+/// are the whole surface a real implementation has to satisfy, but swapping
+/// one in does not replace only this class: a real SMTC source is
+/// asynchronous, so the watch site's type moves from `NowPlaying?` to
+/// `AsyncValue<NowPlaying?>`. The one consumer, `MusicWidget`, currently has
+/// only a `playing == null` branch for "nothing playing" — it would need a
+/// loading and an error branch added before the swap compiles.
 class MediaTransportController extends Notifier<NowPlaying?> {
   @override
   NowPlaying? build() {

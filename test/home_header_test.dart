@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // only comes through this leaf import.
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cotv/src/models/milo_models.dart';
 import 'package:cotv/src/models/weather.dart';
 import 'package:cotv/src/providers/clock_providers.dart';
+import 'package:cotv/src/providers/milo_providers.dart';
 import 'package:cotv/src/providers/weather_providers.dart';
 import 'package:cotv/src/ui/home/widgets/home_search_bar.dart';
 import 'package:cotv/src/ui/home/widgets/welcome_header.dart';
@@ -27,6 +30,36 @@ Widget _host(Widget child, {List<Override> overrides = const []}) =>
         home: Scaffold(body: SingleChildScrollView(child: child)),
       ),
     );
+
+/// Same as [_host], but with a real end drawer to open — [HomeSearchBar]'s
+/// Milo mode calls `Scaffold.of(context).openEndDrawer()`, which is a silent
+/// no-op against a `Scaffold` with none configured, the way [_host]'s is.
+Widget _searchHost(Widget child, {List<Override> overrides = const []}) =>
+    ProviderScope(
+      overrides: overrides,
+      child: MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(
+          endDrawer: const Drawer(child: Center(child: Text('Milo drawer'))),
+          body: SingleChildScrollView(child: child),
+        ),
+      ),
+    );
+
+/// Stands in for [MiloConversationNotifier] so a Milo-mode submit can be
+/// checked without reaching the network `send()` would otherwise start —
+/// the same reason `shell_test.dart` has one of these for the dock.
+class _RecordingMiloConversationNotifier extends MiloConversationNotifier {
+  final List<String> sent = [];
+
+  @override
+  MiloConversation build() => const MiloConversation();
+
+  @override
+  Future<void> send(String rawText) async {
+    sent.add(rawText);
+  }
+}
 
 void main() {
   testWidgets('the greeting names the user and the temperature is Celsius',
@@ -109,5 +142,87 @@ void main() {
 
     expect(find.text('Search on Chrome'), findsOneWidget);
     expect(find.text('Search with Milo'), findsNothing);
+  });
+
+  testWidgets(
+      'a Milo-mode submit opens the drawer, reaches the conversation and '
+      'clears the field', (tester) async {
+    final notifier = _RecordingMiloConversationNotifier();
+
+    await tester.pumpWidget(_searchHost(
+      const HomeSearchBar(),
+      overrides: [miloConversationProvider.overrideWith(() => notifier)],
+    ));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'when is asr');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(notifier.sent, ['when is asr']);
+    expect(find.text('Milo drawer'), findsOneWidget);
+    expect(find.text('when is asr'), findsNothing);
+  });
+
+  testWidgets(
+      'a Chrome-mode submit calls the launcher with the encoded query and '
+      'clears the field', (tester) async {
+    final launched = <Uri>[];
+    Future<bool> fakeOpener(Uri url, {LaunchMode mode = LaunchMode.platformDefault}) async {
+      launched.add(url);
+      return true;
+    }
+
+    await tester.pumpWidget(
+      _searchHost(HomeSearchBar(urlOpener: fakeOpener)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Search with Milo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Search on Chrome').last);
+    await tester.pumpAndSettle();
+
+    // "salah & fasting" rather than a plain phrase: a `&` left unescaped
+    // in a query value would be read as the start of the next parameter,
+    // so this is a query a naive `'...?q=$query'` concatenation would
+    // corrupt but a real percent-encode would not.
+    await tester.enterText(find.byType(TextField), 'salah & fasting');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(launched, hasLength(1));
+    // Round-trips through `Uri`'s own query parser...
+    expect(launched.single.queryParameters['q'], 'salah & fasting');
+    // ...because the `&` was actually escaped in the URL (`Uri.https`
+    // form-encodes the space as `+` and the `&` as `%26`), not passed
+    // through raw — a raw `&` here would have split into a second, bogus
+    // query parameter instead.
+    expect(launched.single.toString(), contains('salah+%26+fasting'));
+    expect(launched.single.queryParametersAll.length, 1);
+    expect(find.text('salah & fasting'), findsNothing);
+  });
+
+  testWidgets('an empty or whitespace-only query submits nothing',
+      (tester) async {
+    final notifier = _RecordingMiloConversationNotifier();
+    var launcherCalls = 0;
+    Future<bool> fakeOpener(Uri url, {LaunchMode mode = LaunchMode.platformDefault}) async {
+      launcherCalls++;
+      return true;
+    }
+
+    await tester.pumpWidget(_searchHost(
+      HomeSearchBar(urlOpener: fakeOpener),
+      overrides: [miloConversationProvider.overrideWith(() => notifier)],
+    ));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), '   ');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(notifier.sent, isEmpty);
+    expect(launcherCalls, 0);
   });
 }

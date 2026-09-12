@@ -10,7 +10,13 @@ import '../models/reminder.dart';
 /// that opens nothing is a lie. The three mutators below are the whole
 /// surface a real store has to satisfy; making it persistent means turning
 /// this into a `StreamNotifier` over a Hive box the way `taskListProvider`
-/// already works, and no consumer changes.
+/// already works. That swap is not free of consumer changes, though: the
+/// watch site's type moves from `List<Reminder>` to `AsyncValue<List<Reminder>>`,
+/// and every current consumer has no loading or error branch to receive it —
+/// `reminders_card.dart` does `[...ref.watch(reminderListProvider)]` and
+/// `task_list_view.dart` does `reminders.isEmpty` directly on the list. Both
+/// would need a `.when(...)` (or `.value ?? const []`) added before the swap
+/// compiles.
 class ReminderListController extends Notifier<List<Reminder>> {
   @override
   List<Reminder> build() {

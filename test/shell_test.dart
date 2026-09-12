@@ -121,10 +121,15 @@ void main() {
     expect(find.text('Milo'), findsOneWidget);
     expect(find.text('Chat >'), findsOneWidget);
     expect(find.byType(MiloOrbWidget), findsOneWidget);
+    // `_FakeMiloConversationNotifier` seeds this exact last message
+    // specifically to exercise the dock's `lastLine` branch — assert it
+    // actually renders rather than only that the branch didn't crash.
+    expect(find.text('Asr is at 4:12.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('collapsed, the dock is the orb alone', (tester) async {
+  testWidgets('collapsed, the dock is the orb alone, with a way into the panel',
+      (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: _dockOverrides,
       child: _host(const MiloDock(showLabels: false)),
@@ -134,5 +139,8 @@ void main() {
     expect(find.text('Milo'), findsNothing);
     expect(find.text('Chat >'), findsNothing);
     expect(find.byType(MiloOrbWidget), findsOneWidget);
+    // The orb's own tap opens the microphone, not the panel (see
+    // `MiloOrb.onTap`), so collapsed still needs its own tappable way in.
+    expect(find.byTooltip('Open Milo chat'), findsOneWidget);
   });
 }

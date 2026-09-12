@@ -119,6 +119,21 @@ ThemeData buildAppTheme() {
       ? ThemeData.dark(useMaterial3: true)
       : ThemeData.light(useMaterial3: true);
 
+  // The flat hover/press overlay every bare InkWell and IconButton falls
+  // back to when it sets no color of its own — see `_inkOverlay` below.
+  // Kept out of `highlightColor`/`hoverColor` so its two states (press,
+  // hover-or-focus) share one definition with `iconButtonTheme`'s.
+  Color inkOverlay(Set<WidgetState> states) {
+    if (states.contains(WidgetState.pressed)) {
+      return palette.accent.withValues(alpha: 0.12);
+    }
+    if (states.contains(WidgetState.hovered) ||
+        states.contains(WidgetState.focused)) {
+      return palette.accent.withValues(alpha: 0.08);
+    }
+    return Colors.transparent;
+  }
+
   return base.copyWith(
     scaffoldBackgroundColor: palette.background,
     colorScheme: base.colorScheme.copyWith(
@@ -126,6 +141,11 @@ ThemeData buildAppTheme() {
       primary: palette.accent,
       onPrimary: palette.onAccent,
       secondary: palette.secondary,
+      // M3 paints a selected `SegmentedButton` segment from these two —
+      // unmapped, it falls back to `ThemeData.dark()`'s stock purple-grey
+      // rather than the app's own accent.
+      secondaryContainer: palette.accent,
+      onSecondaryContainer: palette.onAccent,
       surface: palette.surface,
       onSurface: palette.textPrimary,
       // Mapped so a widget reaching through Material rather than
@@ -140,8 +160,25 @@ ThemeData buildAppTheme() {
           bodyColor: palette.textPrimary,
           displayColor: palette.textPrimary,
         ),
+    // The ripple/splash animation stays off everywhere — every card in this
+    // app hand-rolls its own hover state (see `GlassCard`'s `MouseRegion` +
+    // lift) because a Material splash reads as a foreign gesture against
+    // this design. `highlightColor`/`hoverColor` are not part of that: a
+    // bare `InkWell` with no `overlayColor` of its own falls back to them
+    // (see `ink_well.dart`), and this app has eight of those — sidebar rows,
+    // the Milo dock's controls, the home-card pencil, the music widget's
+    // transport buttons, the sidebar restore control — with nothing else
+    // giving them press/hover feedback. Left transparent (as they were),
+    // those eight render nothing under a pointer.
     splashFactory: NoSplash.splashFactory,
-    highlightColor: Colors.transparent,
-    hoverColor: Colors.transparent,
+    highlightColor: palette.accent.withValues(alpha: 0.12),
+    hoverColor: palette.accent.withValues(alpha: 0.08),
+    // `IconButton` doesn't fall back to `highlightColor`/`hoverColor` above —
+    // Material 3's default `overlayColor` for it is its own
+    // `WidgetStateProperty`, independent of those theme fields — so it needs
+    // the same overlay mapped here explicitly.
+    iconButtonTheme: IconButtonThemeData(
+      style: ButtonStyle(overlayColor: WidgetStateProperty.resolveWith(inkOverlay)),
+    ),
   );
 }

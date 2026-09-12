@@ -35,6 +35,7 @@ import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/milo/milo_assistant_screen.dart';
+import 'package:cotv/src/ui/shell/sidebar.dart';
 import 'package:cotv/src/ui/tasks/task_list_view.dart';
 
 /// Avoids touching the real `flutter_secure_storage` platform channel
@@ -367,5 +368,47 @@ void main() {
 
     expect(find.text('Prayer times'), findsOneWidget);
     expect(find.text('Fajr'), findsWidgets);
+  });
+
+  group('sidebar collapse and hide', () {
+    // Past the navigation-rail breakpoint, same width
+    // "the dashboard reflows to two columns when wide" uses — the sidebar
+    // (and its Milo dock, orb included) mounts only here. `pump()`, never
+    // `pumpAndSettle`: the orb's breath controller repeats forever.
+
+    testWidgets('collapsing drops the labels but keeps the icons',
+        (tester) async {
+      await pumpApp(tester, logicalSize: const Size(1100, 2000));
+
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.byTooltip('Home'), findsNothing);
+
+      await tester.tap(find.byTooltip('Collapse sidebar'));
+      await tester.pump();
+
+      expect(find.text('Home'), findsNothing);
+      expect(find.byTooltip('Home'), findsOneWidget);
+    });
+
+    testWidgets(
+        'hiding removes the sidebar and shows the restore control, which '
+        'brings it back', (tester) async {
+      await pumpApp(tester, logicalSize: const Size(1100, 2000));
+
+      expect(find.byType(Sidebar), findsOneWidget);
+      expect(find.byTooltip('Show sidebar'), findsNothing);
+
+      await tester.tap(find.byTooltip('Hide sidebar'));
+      await tester.pump();
+
+      expect(find.byType(Sidebar), findsNothing);
+      expect(find.byTooltip('Show sidebar'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Show sidebar'));
+      await tester.pump();
+
+      expect(find.byType(Sidebar), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
+    });
   });
 }

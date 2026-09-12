@@ -36,6 +36,7 @@ import 'package:cotv/src/providers/habit_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/reminder_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
+import 'package:cotv/src/providers/settings_providers.dart';
 import 'package:cotv/src/security/security_service.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/providers/chat_session_providers.dart';
@@ -385,6 +386,48 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Lock now'), findsOneWidget);
+    });
+
+    testWidgets(
+        'the lockout window row describes the device calendar, and its '
+        'picker writes through to the live duration', (tester) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Lockout window'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      // `scrollUntilVisible` stops as soon as the row exists in the tree —
+      // which can be true while it's still only within the sliver's cache
+      // extent, below the actual viewport — then jumps the scroll offset
+      // synchronously. That jump doesn't take visual effect (and the row's
+      // hit-test geometry doesn't update) until the next frame, so a pump
+      // is required here before anything below can tap it.
+      await tester.pump();
+
+      // Honest copy: what this control now drives is the device-calendar
+      // block, not the deleted in-app overlay.
+      expect(find.textContaining('device calendar'), findsOneWidget);
+      expect(find.text('30 minutes'), findsOneWidget);
+
+      await tester.tap(find.text('Lockout window'));
+      await pumpUntilPresented(
+        tester,
+        () => find.text('45 minutes').evaluate().isNotEmpty,
+      );
+
+      await tester.tap(find.text('45 minutes').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        containerOf(tester).read(lockoutDurationProvider),
+        const Duration(minutes: 45),
+      );
+      expect(find.text('45 minutes'), findsOneWidget);
     });
   });
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../providers/milo_providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 
@@ -12,27 +15,39 @@ enum SearchMode {
     switch (this) {
       case SearchMode.milo:
         return 'Search with Milo';
+      // The user's own copy for this option — corrected only the behaviour
+      // (the default browser, not literally Chrome) and kept the wording.
       case SearchMode.chrome:
         return 'Search on Chrome';
     }
   }
 }
 
+/// Opens [url] in the platform's handler. The signature [launchUrl] itself
+/// satisfies, so a test can swap in a recording fake without a real browser
+/// ever opening.
+typedef UrlOpener = Future<bool> Function(Uri url, {LaunchMode mode});
+
 /// The pill under the welcome header.
 ///
 /// The mode lives here rather than in a provider: nothing outside this widget
-/// reads it yet, and [onSubmitted] hands the caller both halves when there is
-/// somewhere to send them.
-class HomeSearchBar extends StatefulWidget {
-  const HomeSearchBar({super.key, this.onSubmitted});
+/// reads it. Submitting sends the query one of two places: Milo mode opens
+/// the end drawer and hands the text to [miloConversationProvider] — the
+/// same path `MiloAssistantScreen`'s own composer uses — and Chrome mode
+/// opens it as a web search in the platform's default browser via
+/// [urlOpener], despite the dropdown's name for it.
+class HomeSearchBar extends ConsumerStatefulWidget {
+  const HomeSearchBar({super.key, this.urlOpener = launchUrl});
 
-  final void Function(String query, SearchMode mode)? onSubmitted;
+  /// Overridable so a test can assert a launch was attempted without one
+  /// reaching an actual browser.
+  final UrlOpener urlOpener;
 
   @override
-  State<HomeSearchBar> createState() => _HomeSearchBarState();
+  ConsumerState<HomeSearchBar> createState() => _HomeSearchBarState();
 }
 
-class _HomeSearchBarState extends State<HomeSearchBar> {
+class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
   final _controller = TextEditingController();
   SearchMode _mode = SearchMode.milo;
 
@@ -40,6 +55,21 @@ class _HomeSearchBarState extends State<HomeSearchBar> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit(String value) async {
+    final query = value.trim();
+    if (query.isEmpty) return;
+    _controller.clear();
+
+    switch (_mode) {
+      case SearchMode.milo:
+        Scaffold.of(context).openEndDrawer();
+        ref.read(miloConversationProvider.notifier).send(query);
+      case SearchMode.chrome:
+        final url = Uri.https('www.google.com', '/search', {'q': query});
+        await widget.urlOpener(url, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -61,8 +91,7 @@ class _HomeSearchBarState extends State<HomeSearchBar> {
           Expanded(
             child: TextField(
               controller: _controller,
-              onSubmitted: (value) =>
-                  widget.onSubmitted?.call(value, _mode),
+              onSubmitted: _submit,
               style: context.typography.ui(size: 15, color: palette.textPrimary),
               decoration: InputDecoration(
                 isDense: true,

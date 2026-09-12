@@ -73,40 +73,75 @@ class Sidebar extends StatelessWidget {
           alignment: Alignment.centerLeft,
           minWidth: mode.width,
           maxWidth: mode.width == 0 ? SidebarMode.collapsed.width : mode.width,
-          child: Padding(
-            padding: EdgeInsets.only(
-              top: 18,
-              bottom: 18 + MediaQuery.paddingOf(context).bottom,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _HeaderControls(
-                  mode: mode,
-                  onToggleCollapse: onToggleCollapse,
-                  onToggleHidden: onToggleHidden,
-                ),
-                const SizedBox(height: 22),
-                for (final item in AppDestinationX.navItems)
-                  SidebarNavItem(
-                    destination: item,
-                    isSelected: item == destination,
-                    showLabel: mode.showsLabels,
-                    onTap: () => onSelect(item),
+          // Scroll, but only once the content genuinely does not fit.
+          //
+          // Almost everything in this column is a fixed height — five nav
+          // rows, the dock's 205pt orb box, the footer gear — and [Spacer]
+          // is the only thing absorbing slack. Below roughly 620pt of
+          // height there is no slack left and the column overflows, which
+          // is what the yellow-and-black stripe on a short window was.
+          //
+          // A plain [SingleChildScrollView] would fix the overflow and
+          // break the layout: [Spacer] needs a bounded height, and inside
+          // an unbounded scrollable it has none, so the gear would ride up
+          // under the dock instead of sitting at the bottom. The
+          // min-height + [IntrinsicHeight] pairing gives the column the
+          // viewport's height to divide when there is room, and lets it
+          // grow past that — scrolling — when there is not.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.hasBoundedHeight
+                        ? constraints.maxHeight
+                        : 0.0,
                   ),
-                const Spacer(),
-                if (dock != null) ...[
-                  Divider(color: palette.hairline, height: 1, indent: 16, endIndent: 16),
-                  const SizedBox(height: 14),
-                  dock!,
-                ],
-                const SizedBox(height: 10),
-                _FooterGear(
-                  isSelected: destination == AppDestination.settings,
-                  onTap: () => onSelect(AppDestination.settings),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        top: 18,
+                        bottom: 18 + MediaQuery.paddingOf(context).bottom,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _HeaderControls(
+                            mode: mode,
+                            onToggleCollapse: onToggleCollapse,
+                            onToggleHidden: onToggleHidden,
+                          ),
+                          const SizedBox(height: 22),
+                          for (final item in AppDestinationX.navItems)
+                            SidebarNavItem(
+                              destination: item,
+                              isSelected: item == destination,
+                              showLabel: mode.showsLabels,
+                              onTap: () => onSelect(item),
+                            ),
+                          const Spacer(),
+                          if (dock != null) ...[
+                            Divider(
+                              color: palette.hairline,
+                              height: 1,
+                              indent: 16,
+                              endIndent: 16,
+                            ),
+                            const SizedBox(height: 14),
+                            dock!,
+                          ],
+                          const SizedBox(height: 10),
+                          _FooterGear(
+                            isSelected: destination == AppDestination.settings,
+                            onTap: () => onSelect(AppDestination.settings),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),

@@ -33,6 +33,7 @@ import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/providers/chat_session_providers.dart';
 import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/local_storage.dart';
+import 'package:cotv/src/ui/home/home_screen.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/milo/milo_assistant_screen.dart';
 import 'package:cotv/src/ui/shell/sidebar.dart';
@@ -224,10 +225,23 @@ void main() {
     // ListView, where height is unbounded — it throws without the
     // IntrinsicHeight around it, so this asserts the layout actually builds
     // rather than only that the text is present.
+    //
+    // Scoped to HomeScreen on purpose. A bare `find.byType(IntrinsicHeight)`
+    // counts every one in the tree, so it also caught the sidebar's — which
+    // uses one to let its column divide the viewport's height when there is
+    // room and scroll when there is not. Counting a layout primitive
+    // app-wide makes this test fail for changes that have nothing to do
+    // with the bento.
     await pumpApp(tester, logicalSize: const Size(1100, 2000));
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(IntrinsicHeight), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.byType(IntrinsicHeight),
+      ),
+      findsNWidgets(2),
+    );
     expect(find.text('Study time'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);
 

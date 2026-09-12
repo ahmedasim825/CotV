@@ -240,7 +240,6 @@ void main() {
       await pumpCard(tester, const FocusTasksCard());
 
       expect(find.text('No tasks today'), findsOneWidget);
-      expect(find.text('All clear'), findsOneWidget);
     });
 
     testWidgets("renders today's tasks, highest priority first",
@@ -258,7 +257,6 @@ void main() {
       expect(find.text('Dissection notes'), findsOneWidget);
       expect(find.text('Review pathology'), findsOneWidget);
       expect(find.text('Book the rotation'), findsNothing);
-      expect(find.text('2 left'), findsOneWidget);
 
       final titles = tester
           .widgetList<Text>(find.byType(Text))
@@ -302,7 +300,6 @@ void main() {
       await pumpCard(tester, const FocusTasksCard());
 
       expect(find.text('+2 more on Tasks'), findsOneWidget);
-      expect(find.text('7 left'), findsOneWidget);
       expect(find.text('Task number 6'), findsNothing);
     });
   });

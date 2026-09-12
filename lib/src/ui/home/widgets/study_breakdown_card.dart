@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/study_view.dart';
 import '../../../models/subject.dart';
 import '../../../providers/study_providers.dart';
-import '../../components/components.dart';
 import '../../study/subject_colors.dart';
 import '../../study/widgets/study_timer_card.dart' show CountdownRing;
 import '../../theme/app_theme.dart';
@@ -89,7 +88,6 @@ class StudyBreakdownCard extends ConsumerWidget {
             for (var i = 0; i < today.length; i++) ...[
               _SubjectRow(
                 subject: today[i],
-                total: total,
                 color: colors[today[i].subjectId] ?? palette.accent,
               ),
               if (i < today.length - 1) const SizedBox(height: 12),
@@ -104,54 +102,46 @@ class StudyBreakdownCard extends ConsumerWidget {
 class _SubjectRow extends StatelessWidget {
   const _SubjectRow({
     required this.subject,
-    required this.total,
     required this.color,
   });
 
   final SubjectStudyTotal subject;
-  final int total;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final minutes = subject.todayMinutes;
-    final share = total == 0 ? 0.0 : minutes / total;
 
     return Semantics(
       label: '${subject.subjectName}, ${formatStudyMinutes(minutes)}',
       excludeSemantics: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      // No MeterBar: the mock's legend rows are a dot, a coloured name and a
+      // coloured duration — the bar isn't part of it, and `total` (the share
+      // it needed) goes with it.
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  subject.subjectName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.typography.ui(size: 12.5),
-                ),
-              ),
-              Text(
-                formatStudyMinutes(minutes),
-                style: context.typography.ui(
-                  size: 12.5,
-                  weight: FontWeight.w600,
-                  color: palette.textSecondary,
-                ),
-              ),
-            ],
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(height: 7),
-          MeterBar(value: share, color: color),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              subject.subjectName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.typography.ui(size: 12.5, color: color),
+            ),
+          ),
+          Text(
+            formatStudyMinutes(minutes),
+            style: context.typography.ui(
+              size: 12.5,
+              weight: FontWeight.w600,
+              color: color,
+            ),
+          ),
         ],
       ),
     );

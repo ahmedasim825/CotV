@@ -22,7 +22,7 @@ import 'widgets/welcome_header.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  static const double _gap = 20;
+  static const double _gap = 24;
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +57,18 @@ class HomeScreen extends StatelessWidget {
                       ),
               ),
               const SizedBox(height: _gap),
-              const RevealOnEntrance(
-                delay: Duration(milliseconds: 60),
-                child: HomeSearchBar(),
+              RevealOnEntrance(
+                delay: const Duration(milliseconds: 60),
+                // Inset and centred, per the mock, rather than spanning the
+                // full pane edge to edge. Not `const` all the way down:
+                // ConstrainedBox's constructor isn't const in this Flutter
+                // version.
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: const HomeSearchBar(),
+                  ),
+                ),
               ),
               const SizedBox(height: 28),
               RevealOnEntrance(

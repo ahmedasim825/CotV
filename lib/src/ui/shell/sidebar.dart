@@ -148,7 +148,7 @@ class SidebarNavItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 1),
             child: SizedBox(
               height: minTouchTarget,
               child: Row(
@@ -156,7 +156,7 @@ class SidebarNavItem extends StatelessWidget {
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(destination.icon, size: 21, color: color),
+                      Icon(destination.icon, size: 19, color: color),
                       const SizedBox(height: 4),
                       // Reserved whether or not it is drawn, so selecting a
                       // row does not nudge the icons up by two points.

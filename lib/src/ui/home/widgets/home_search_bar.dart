@@ -77,11 +77,11 @@ class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
     final palette = context.palette;
 
     return Container(
-      height: 52,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: palette.surfaceRaised,
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: palette.glassBorder),
       ),
       child: Row(

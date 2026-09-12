@@ -57,20 +57,13 @@ class WelcomeHeader extends ConsumerWidget {
             // text scale overflows the Row. The prayer line yields first —
             // it ellipsises rather than the ~60pt weather chip, since a
             // truncated temperature reads worse than a truncated prayer name.
-            // Flexible, not a bare Text: the prayer name and the user's text
-            // scale are both variable, and on the compact layout this Row is
-            // the narrowest thing on the screen (as little as ~353pt wide).
-            // Without give here, a long prayer name at a larger accessibility
-            // text scale overflows the Row. The prayer line yields first —
-            // it ellipsises rather than the ~60pt weather chip, since a
-            // truncated temperature reads worse than a truncated prayer name.
             Flexible(
               child: Text(
                 '${next.prayer.displayName} is at ${formatClock(next.time)}',
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
                 style: context.typography.ui(
-                  size: 17,
+                  size: 15,
                   weight: FontWeight.w600,
                   color: palette.textPrimary,
                 ),
@@ -78,12 +71,12 @@ class WelcomeHeader extends ConsumerWidget {
             ),
             if (weather != null) ...[
               const SizedBox(width: 16),
-              Icon(weather.condition.icon, size: 22, color: palette.textSecondary),
+              Icon(weather.condition.icon, size: 20, color: palette.textSecondary),
               const SizedBox(width: 7),
               Text(
                 weather.label,
                 style: context.typography.ui(
-                  size: 17,
+                  size: 15,
                   weight: FontWeight.w600,
                   color: palette.textPrimary,
                 ),

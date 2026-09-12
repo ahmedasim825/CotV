@@ -98,7 +98,7 @@ class HomeCardFrame extends StatelessWidget {
     final palette = context.palette;
 
     return GlassCard(
-      radius: 18,
+      radius: 14,
       onTap: onTap,
       hoverLift: hoverLift,
       semanticLabel: semanticLabel,

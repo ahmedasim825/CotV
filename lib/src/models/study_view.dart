@@ -1,6 +1,15 @@
-import 'habit_view.dart' show normalizeDay, weekStartOf;
+import 'habit_view.dart' show daysInMonth, normalizeDay, weekStartOf;
 import 'study_log.dart';
 import 'subject.dart';
+
+/// What a full day of study looks like on a ring.
+///
+/// A target rather than a measurement, so it is a constant on purpose: the
+/// stored user settings carry no study goal to read it from, and a ring needs
+/// something to be a fraction of. Both the Study screen and the home
+/// breakdown card quote it, which is why it lives here rather than beside
+/// either of them.
+const int dailyStudyGoalMinutes = 480;
 
 /// Totals for one subject over the two windows the screen shows.
 class SubjectStudyTotal {
@@ -129,6 +138,67 @@ StudySummary summarizeStudy(List<StudyLog> logs, DateTime now) {
     weekMinutes: weekMinutes,
     todaySessions: todaySessions,
     bySubject: List.unmodifiable(totals),
+  );
+}
+
+/// Minutes logged against each day of one month.
+class MonthStudy {
+  const MonthStudy({
+    required this.year,
+    required this.month,
+    required this.minutesByDay,
+    required this.busiestDayMinutes,
+  });
+
+  final int year;
+  final int month;
+
+  /// One entry per day of the month, the 1st at index 0. The length is the
+  /// month's own day count, so February and March produce different lists —
+  /// the grid reads it for how many squares to draw.
+  final List<int> minutesByDay;
+
+  /// Minutes on the busiest day, or 0 for a month with nothing logged.
+  ///
+  /// The grid shades each day against this rather than against a fixed
+  /// target, so it is carried here rather than rescanned once per square.
+  final int busiestDayMinutes;
+
+  int get days => minutesByDay.length;
+
+  bool get isEmpty => busiestDayMinutes == 0;
+
+  /// Minutes logged on [day] of the month, 1-based.
+  int minutesOn(int day) => minutesByDay[day - 1];
+}
+
+/// Minutes studied on each day of [now]'s month.
+///
+/// A second transform rather than a widening of [summarizeStudy]: that one
+/// starts at the containing Monday and buckets by subject, and stretching it
+/// to a month would change every number the summary strip, the subject tiles
+/// and Milo's context block read off it.
+MonthStudy summarizeStudyMonth(List<StudyLog> logs, DateTime now) {
+  final minutes = List<int>.filled(daysInMonth(now), 0);
+
+  for (final log in logs) {
+    final at = log.timestamp;
+    // Same month of the same year, so a log from last September cannot land
+    // in this one's grid.
+    if (at.year != now.year || at.month != now.month) continue;
+    minutes[at.day - 1] += log.durationMinutes;
+  }
+
+  var busiest = 0;
+  for (final value in minutes) {
+    if (value > busiest) busiest = value;
+  }
+
+  return MonthStudy(
+    year: now.year,
+    month: now.month,
+    minutesByDay: List.unmodifiable(minutes),
+    busiestDayMinutes: busiest,
   );
 }
 

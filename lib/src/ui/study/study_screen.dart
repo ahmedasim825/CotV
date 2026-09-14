@@ -8,66 +8,46 @@ import '../../providers/clock_providers.dart';
 import '../../providers/study_providers.dart';
 import '../components/components.dart';
 import '../responsive/breakpoints.dart';
-import '../settings/option_picker_sheet.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
 import '../widgets/status_card.dart';
+import 'start_session.dart';
 import 'subject_colors.dart';
+import 'widgets/study_month_grid.dart';
 import 'widgets/study_timer_card.dart';
 import 'widgets/subject_form_sheet.dart';
 
-/// The session lengths offered when a subject is tapped.
-///
-/// Two Pomodoro-shaped options and three block lengths, rather than a free
-/// number field: picking is one tap, and a study block is chosen from habit
-/// far more often than it is calculated.
-const List<int> studyDurationMinutes = [15, 25, 45, 60, 90];
-
-/// The study tracker: a session card when one is running, over a summary
-/// strip and a grid of tap-to-start subjects.
+/// The study tracker: today against the day's goal beside the month at a
+/// glance, over a list of tap-to-start subjects.
 ///
 /// Every mutation goes through [StudyNotifier] and the two study
 /// repositories into Hive; the box change streams feed straight back here,
 /// so this screen keeps no copy of the totals it shows.
 class StudyScreen extends ConsumerWidget {
-  const StudyScreen({super.key, this.showFab = true});
-
-  /// Suppressed when a wider layout hosts a single shared add button.
-  final bool showFab;
+  const StudyScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return AdaptiveLayout(
       builder: (context, windowSize) {
         final subjectsAsync = ref.watch(subjectListProvider);
-        final padding = windowSize.pagePadding;
 
-        return Stack(
-          children: [
-            subjectsAsync.when(
-              data: (subjects) =>
-                  _StudyBody(subjects: subjects, windowSize: windowSize),
-              loading: () => Center(
-                child: CircularProgressIndicator(
-                  color: context.palette.accent,
-                  strokeWidth: 2.5,
-                ),
-              ),
-              error: (error, _) => Padding(
-                padding: EdgeInsets.all(padding),
-                child: StatusCard(
-                  message: 'Could not load subjects: $error',
-                  tone: StatusTone.error,
-                ),
-              ),
+        return subjectsAsync.when(
+          data: (subjects) =>
+              _StudyBody(subjects: subjects, windowSize: windowSize),
+          loading: () => Center(
+            child: CircularProgressIndicator(
+              color: context.palette.accent,
+              strokeWidth: 2.5,
             ),
-            if (showFab)
-              Positioned(
-                right: padding,
-                bottom: 20 + MediaQuery.paddingOf(context).bottom,
-                child: const QuickAddSubjectButton(),
-              ),
-          ],
+          ),
+          error: (error, _) => Padding(
+            padding: EdgeInsets.all(windowSize.pagePadding),
+            child: StatusCard(
+              message: 'Could not load subjects: $error',
+              tone: StatusTone.error,
+            ),
+          ),
         );
       },
     );
@@ -80,75 +60,72 @@ class _StudyBody extends ConsumerWidget {
   final List<Subject> subjects;
   final WindowSize windowSize;
 
-  /// Wider windows get more columns rather than wider tiles — a subject
-  /// tile is a fixed stack of name, total and bar, and stretching it just
-  /// leaves a band of empty card.
-  int get _columns {
-    switch (windowSize) {
-      case WindowSize.compact:
-        return 2;
-      case WindowSize.medium:
-        return 3;
-      case WindowSize.expanded:
-        return 4;
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final padding = windowSize.pagePadding;
     final summary = ref.watch(studySummaryProvider);
     final study = ref.watch(studyProvider);
-    final now = ref.watch(currentMinuteProvider);
+    // Day granularity is all this needs: `now` reaches only `_TodayLog`,
+    // which normalises it to a day. Watching the minute rebuilt this whole
+    // `ListView` — every subject row, the timer card and the month grid —
+    // once a minute for a value that changes at midnight.
+    final now = ref.watch(currentDayProvider);
     final ordered = sortSubjects(subjects, summary);
+    final isRunning = study.phase != StudyPhase.idle;
 
     return ListView(
       padding: EdgeInsets.fromLTRB(
         padding,
         12,
         padding,
-        // Clears the add button and the home indicator.
-        96 + MediaQuery.paddingOf(context).bottom,
+        // Clears the home indicator. No floating button to clear any more —
+        // adding a subject is the control in the Subjects header.
+        32 + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
-        const SectionHeader(eyebrow: 'FOCUS', title: 'Study'),
-        const SizedBox(height: 18),
-        if (study.phase != StudyPhase.idle) ...[
+        SectionHeader(
+          title: 'Study',
+          trailing: _HeaderAction(
+            icon: PhLight.timer,
+            label: 'Start a study session',
+            tint: isRunning ? context.palette.accent : null,
+            onTap: () => startAnySession(context, ref),
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (isRunning) ...[
           StudyTimerCard(accent: studyAccentFor(context, ref)),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
         ],
-        _SummaryStrip(summary: summary, now: now),
-        const SizedBox(height: 20),
+        _TodayRow(
+          todayMinutes: summary.todayMinutes,
+          twoUp: !windowSize.isCompact,
+        ),
+        const SizedBox(height: 32),
+        SectionHeader(
+          title: 'Subjects',
+          titleSize: 26,
+          trailing: _HeaderAction(
+            icon: PhLight.plus,
+            label: 'Add a subject',
+            onTap: () => showSubjectFormSheet(context),
+          ),
+        ),
+        const SizedBox(height: 14),
         if (ordered.isEmpty)
           const _EmptyState()
         else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: ordered.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: _columns,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              // A fixed extent rather than an aspect ratio, so the tile's
-              // fixed content stack cannot overflow on a narrow phone.
-              mainAxisExtent: 146,
+          for (var i = 0; i < ordered.length; i++) ...[
+            if (i != 0) const SizedBox(height: 10),
+            _SubjectRow(
+              key: ValueKey(ordered[i].id),
+              subject: ordered[i],
+              todayMinutes: summary.totalFor(ordered[i].id)?.todayMinutes ?? 0,
+              isRunning: study.session?.subjectId == ordered[i].id,
+              onStart: () => startSessionFor(context, ref, ordered[i]),
+              onEdit: () => showSubjectFormSheet(context, existing: ordered[i]),
             ),
-            itemBuilder: (context, index) {
-              final subject = ordered[index];
-              return _SubjectTile(
-                key: ValueKey(subject.id),
-                subject: subject,
-                total: summary.totalFor(subject.id),
-                weekBest: summary.bySubject.isEmpty
-                    ? 0
-                    : summary.bySubject.first.weekMinutes,
-                isRunning: study.session?.subjectId == subject.id,
-                onStart: () => _startSession(context, ref, subject),
-                onEdit: () => showSubjectFormSheet(context, existing: subject),
-              );
-            },
-          ),
+          ],
         if (summary.todaySessions > 0) ...[
           const SizedBox(height: 28),
           _TodayLog(now: now),
@@ -157,259 +134,252 @@ class _StudyBody extends ConsumerWidget {
     );
   }
 
-  /// Asks how long, then starts. Returns without starting if the sheet was
-  /// dismissed.
-  Future<void> _startSession(
-    BuildContext context,
-    WidgetRef ref,
-    Subject subject,
-  ) async {
-    final minutes = await showOptionPicker<int>(
-      context,
-      title: subject.name,
-      subtitle: 'How long is this block?',
-      selected: studyDurationMinutes[1],
-      options: [
-        for (final value in studyDurationMinutes)
-          PickerOption(
-            value: value,
-            label: formatStudyMinutes(value),
-            note: _durationNote(value),
-          ),
+}
+
+/// Today against the day's goal, beside the month a square at a time.
+class _TodayRow extends StatelessWidget {
+  const _TodayRow({required this.todayMinutes, required this.twoUp});
+
+  final int todayMinutes;
+  final bool twoUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final ring = _TodayRing(minutes: todayMinutes);
+
+    // Stacked rather than squeezed: the grid is a fixed 162pt of squares and
+    // the ring a fixed 150, and a narrow pane cannot seat both.
+    if (!twoUp) {
+      return Column(
+        children: [
+          ring,
+          const SizedBox(height: 28),
+          const StudyMonthGrid(),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: Center(child: ring)),
+        const SizedBox(width: 24),
+        const Expanded(child: Center(child: StudyMonthGrid())),
       ],
     );
-    if (minutes == null) return;
-
-    await ref.read(studyProvider.notifier).start(subject, minutes: minutes);
-  }
-
-  String? _durationNote(int minutes) {
-    switch (minutes) {
-      case 25:
-        return 'One Pomodoro.';
-      case 90:
-        return 'A full ultradian block.';
-      default:
-        return null;
-    }
   }
 }
 
-/// Today and this week, plus the average that says whether today is
-/// actually a good day or just a long one.
-class _SummaryStrip extends StatelessWidget {
-  const _SummaryStrip({required this.summary, required this.now});
+/// Minutes studied today, as a fraction of [dailyStudyGoalMinutes].
+class _TodayRing extends StatelessWidget {
+  const _TodayRing({required this.minutes});
 
-  final StudySummary summary;
-  final DateTime now;
+  final int minutes;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final average = summary.dailyAverageMinutes(now);
 
-    return CustomCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+    return CountdownRing(
+      progress: minutes / dailyStudyGoalMinutes,
+      accent: palette.accent,
+      diameter: 150,
+      strokeWidth: 12,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _Stat(
-                  value: formatStudyMinutes(summary.todayMinutes),
-                  label: 'Today',
-                  tint: summary.todayMinutes > 0 ? palette.accent : null,
-                ),
-              ),
-              const _StatDivider(),
-              Expanded(
-                child: _Stat(
-                  value: formatStudyMinutes(summary.weekMinutes),
-                  label: 'This week',
-                ),
-              ),
-              const _StatDivider(),
-              Expanded(
-                child: _Stat(
-                  value: '${summary.todaySessions}',
-                  label: 'Sessions',
-                ),
-              ),
-            ],
-          ),
-          if (!summary.isEmpty) ...[
-            const SizedBox(height: 14),
-            Text(
-              'Averaging ${formatStudyMinutes(average)} a day this week.',
-              style: context.typography.ui(
-                size: 12,
-                color: palette.textMuted,
-              ),
+          Text(
+            formatStudyMinutes(minutes),
+            maxLines: 1,
+            style: context.typography.display(
+              size: 24,
+              weight: FontWeight.w700,
+              color: palette.textPrimary,
             ),
-          ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'of ${dailyStudyGoalMinutes ~/ 60}h',
+            style: context.typography.ui(size: 11.5, color: palette.textMuted),
+          ),
         ],
       ),
     );
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label, this.tint});
+/// A circular control for a [SectionHeader]'s trailing slot.
+class _HeaderAction extends StatelessWidget {
+  const _HeaderAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.tint,
+  });
 
-  final String value;
+  final IconData icon;
+
+  /// Doubles as the tooltip and the screen-reader name, since the control is
+  /// a glyph and nothing else.
   final String label;
+
+  final VoidCallback onTap;
   final Color? tint;
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
+    final color = tint ?? context.palette.textSecondary;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: context.typography.display(
-            size: 26,
-            weight: FontWeight.w500,
-            color: tint ?? palette.textPrimary,
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 19, color: color),
           ),
         ),
-        const SizedBox(height: 5),
-        Text(
-          label.toUpperCase(),
-          style: context.typography.eyebrow(color: palette.textMuted),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _StatDivider extends StatelessWidget {
-  const _StatDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 34,
-      margin: const EdgeInsets.symmetric(horizontal: 14),
-      color: context.palette.hairline,
-    );
-  }
-}
-
-/// One subject: tap to start a block, long-press to edit.
-class _SubjectTile extends StatelessWidget {
-  const _SubjectTile({
+/// One subject: tap to start a block, long-press or the pencil to edit.
+class _SubjectRow extends StatefulWidget {
+  const _SubjectRow({
     super.key,
     required this.subject,
-    required this.total,
-    required this.weekBest,
+    required this.todayMinutes,
     required this.isRunning,
     required this.onStart,
     required this.onEdit,
   });
 
   final Subject subject;
-  final SubjectStudyTotal? total;
-
-  /// This week's busiest subject, which the bar is drawn relative to — so
-  /// the bars compare subjects against each other rather than against an
-  /// arbitrary ceiling.
-  final int weekBest;
-
+  final int todayMinutes;
   final bool isRunning;
   final VoidCallback onStart;
   final VoidCallback onEdit;
 
   @override
+  State<_SubjectRow> createState() => _SubjectRowState();
+}
+
+class _SubjectRowState extends State<_SubjectRow> {
+  bool _hovered = false;
+
+  void _setHovered(bool value) {
+    if (_hovered != value) setState(() => _hovered = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final accent = subjectColor(subject.colorValue);
-    final today = total?.todayMinutes ?? 0;
-    final week = total?.weekMinutes ?? 0;
-    final share = weekBest == 0 ? 0.0 : (week / weekBest).clamp(0.0, 1.0);
+    final accent = subjectColor(widget.subject.colorValue);
 
-    return GestureDetector(
-      onLongPress: onEdit,
-      child: CustomCard(
-        accent: accent,
-        selected: isRunning,
-        onTap: isRunning ? null : onStart,
-        semanticLabel: isRunning
-            ? '${subject.name}, session running'
-            : '${subject.name}, ${formatStudyMinutes(today)} today. '
-                'Start a session.',
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Semantics(
+      button: true,
+      label: widget.isRunning
+          ? '${widget.subject.name}, session running'
+          : '${widget.subject.name}, '
+              '${formatStudyMinutes(widget.todayMinutes)} today. '
+              'Start a session.',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => _setHovered(true),
+        onExit: (_) => _setHovered(false),
+        child: GestureDetector(
+          onTap: widget.isRunning ? null : widget.onStart,
+          onLongPress: widget.onEdit,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: context.motion.hover,
+            curve: Curves.easeOut,
+            height: 56,
+            padding: const EdgeInsets.only(left: 18, right: 12),
+            decoration: BoxDecoration(
+              // The subject's colour washed over the surface rather than laid
+              // on top of it, so eight swatches make eight legible rows
+              // instead of eight differently-readable ones.
+              color: Color.alphaBlend(
+                accent.withValues(alpha: widget.isRunning ? 0.24 : 0.14),
+                palette.surface,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.isRunning ? accent : Colors.transparent,
+              ),
+            ),
+            child: Row(
               children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isRunning ? PhLight.timer : PhLight.bookOpen,
-                    size: 15,
-                    color: accent,
+                Expanded(
+                  child: Text(
+                    widget.subject.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.typography.ui(
+                      size: 15,
+                      weight: FontWeight.w600,
+                      color: palette.textPrimary,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                if (isRunning)
+                if (widget.isRunning) ...[
                   Text(
                     'RUNNING',
                     style: context.typography.eyebrow(color: accent),
                   ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              subject.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.typography.ui(size: 14.5, weight: FontWeight.w600),
-            ),
-            const Spacer(),
-            Text(
-              formatStudyMinutes(today),
-              style: context.typography.display(
-                size: 20,
-                weight: FontWeight.w500,
-                color: today > 0 ? accent : palette.textMuted,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: Stack(
-                children: [
-                  Container(height: 4, color: palette.glassFill),
-                  LayoutBuilder(
-                    builder: (context, constraints) => AnimatedContainer(
-                      duration: context.motion.base,
-                      curve: AppMotion.spring,
-                      height: 4,
-                      width: constraints.maxWidth * share,
-                      color: accent,
+                  const SizedBox(width: 12),
+                ],
+                Text(
+                  formatStudyMinutes(widget.todayMinutes),
+                  style: context.typography.ui(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: widget.todayMinutes > 0
+                        ? palette.textPrimary
+                        : palette.textMuted,
+                  ),
+                ),
+                // Always takes its space, so revealing it does not shuffle
+                // the number beside it.
+                AnimatedOpacity(
+                  opacity: _hovered ? 1 : 0,
+                  duration: context.motion.hover,
+                  curve: Curves.easeOut,
+                  child: IgnorePointer(
+                    ignoring: !_hovered,
+                    child: Tooltip(
+                      message: 'Edit',
+                      child: InkWell(
+                        onTap: widget.onEdit,
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: Icon(
+                            PhLight.pencilSimple,
+                            size: 16,
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              '${formatStudyMinutes(week)} this week',
-              style: context.typography.ui(size: 10.5, color: palette.textMuted),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -518,21 +488,6 @@ class _EmptyState extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// The quick-add button. Exposed so a wider layout can host one shared
-/// button above several panes.
-class QuickAddSubjectButton extends StatelessWidget {
-  const QuickAddSubjectButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return PrimaryButton(
-      label: 'Subject',
-      icon: PhLight.plus,
-      onPressed: () => showSubjectFormSheet(context),
     );
   }
 }

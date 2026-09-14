@@ -4,6 +4,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cotv/src/models/habit_view.dart' show daysInMonth;
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/study_view.dart';
 import 'package:cotv/src/models/subject.dart';
@@ -154,6 +155,85 @@ void main() {
       );
 
       expect([for (final s in ordered) s.name], ['Anatomy', 'Zoology']);
+    });
+  });
+
+  group('daysInMonth', () {
+    test('counts short, long and leap months', () {
+      expect(daysInMonth(DateTime(2026, 9, 12)), 30);
+      expect(daysInMonth(DateTime(2026, 10, 1)), 31);
+      expect(daysInMonth(DateTime(2027, 2, 14)), 28);
+      expect(daysInMonth(DateTime(2028, 2, 14)), 29, reason: 'leap year');
+      expect(daysInMonth(DateTime(2026, 12, 31)), 31,
+          reason: 'December rolls the year over to find day zero of January');
+    });
+  });
+
+  group('summarizeStudyMonth', () {
+    test('an empty month is all zeroes, not an empty list', () {
+      final month = summarizeStudyMonth(const [], _now);
+
+      expect(month.days, 30, reason: 'September 2026');
+      expect(month.minutesByDay, everyElement(0));
+      expect(month.busiestDayMinutes, 0);
+      expect(month.isEmpty, isTrue);
+    });
+
+    test('buckets by day with the 1st at index 0', () {
+      final month = summarizeStudyMonth([
+        _log(id: 'a', minutes: 30, at: DateTime(2026, 9, 1, 9)),
+        _log(id: 'b', minutes: 45, at: DateTime(2026, 9, 30, 22)),
+      ], _now);
+
+      expect(month.minutesByDay.first, 30);
+      expect(month.minutesByDay.last, 45);
+      expect(month.minutesOn(1), 30);
+      expect(month.minutesOn(30), 45);
+      expect(month.minutesOn(2), 0);
+    });
+
+    test('sums several sessions on the same day', () {
+      final month = summarizeStudyMonth([
+        _log(id: 'a', minutes: 25, at: DateTime(2026, 9, 2, 9)),
+        _log(id: 'b', minutes: 45, at: DateTime(2026, 9, 2, 15)),
+        _log(id: 'c', minutes: 20, at: DateTime(2026, 9, 2, 21)),
+      ], _now);
+
+      expect(month.minutesOn(2), 90);
+      expect(month.busiestDayMinutes, 90);
+    });
+
+    test('ignores the months either side', () {
+      final month = summarizeStudyMonth([
+        _log(id: 'before', minutes: 60, at: DateTime(2026, 8, 31, 23)),
+        _log(id: 'inside', minutes: 30, at: DateTime(2026, 9, 4)),
+        _log(id: 'after', minutes: 60, at: DateTime(2026, 10, 1)),
+        _log(id: 'last year', minutes: 60, at: DateTime(2025, 9, 4)),
+      ], _now);
+
+      expect(month.minutesByDay.reduce((a, b) => a + b), 30,
+          reason: 'only the September 2026 log counts');
+      expect(month.minutesOn(4), 30);
+    });
+
+    test('reports the busiest day, which the grid shades everything against',
+        () {
+      final month = summarizeStudyMonth([
+        _log(id: 'a', minutes: 30, at: DateTime(2026, 9, 1)),
+        _log(id: 'b', minutes: 200, at: DateTime(2026, 9, 7)),
+        _log(id: 'c', minutes: 120, at: DateTime(2026, 9, 9)),
+      ], _now);
+
+      expect(month.busiestDayMinutes, 200);
+      expect(month.isEmpty, isFalse);
+    });
+
+    test('carries the month it summarised', () {
+      final month = summarizeStudyMonth(const [], DateTime(2027, 2, 3));
+
+      expect(month.year, 2027);
+      expect(month.month, 2);
+      expect(month.days, 28);
     });
   });
 

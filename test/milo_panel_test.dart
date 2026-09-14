@@ -26,6 +26,7 @@ import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
+import 'package:cotv/src/providers/ambient_providers.dart';
 import 'package:cotv/src/providers/milo_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
@@ -144,6 +145,8 @@ void main() {
           securityServiceProvider.overrideWithValue(_FakeSecurityService()),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),
+          // The orb field animates forever; pumpAndSettle would time out.
+          ambientAnimationProvider.overrideWithValue(false),
           miloHttpClientProvider.overrideWithValue(client),
           miloSecretsProvider.overrideWith(
             (ref) async => const MiloSecrets(groqApiKey: 'gsk_test'),

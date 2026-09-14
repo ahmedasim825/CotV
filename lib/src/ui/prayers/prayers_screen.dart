@@ -10,7 +10,6 @@ import '../../providers/prayer_providers.dart';
 import '../../services/calendar_sync_service.dart';
 import '../components/components.dart';
 import '../theme/app_theme.dart';
-import '../widgets/ambient_background.dart';
 import '../widgets/floating_header.dart';
 import '../widgets/ph_light_icons.dart';
 import '../widgets/prayer_grid_tile.dart';
@@ -32,116 +31,114 @@ class PrayersScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: AmbientBackground(
-        child: SafeArea(
-          child: RefreshIndicator(
-            color: context.palette.accent,
-            backgroundColor: context.palette.surface,
-            onRefresh: () async => ref.invalidate(todayPrayerTimesProvider),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 56),
-              children: [
-                Center(
-                  child: RevealOnEntrance(
-                    child: FloatingHeader(
-                      onRefresh: () => ref.invalidate(todayPrayerTimesProvider),
-                    ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: context.palette.accent,
+          backgroundColor: context.palette.surface,
+          onRefresh: () async => ref.invalidate(todayPrayerTimesProvider),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 56),
+            children: [
+              Center(
+                child: RevealOnEntrance(
+                  child: FloatingHeader(
+                    onRefresh: () => ref.invalidate(todayPrayerTimesProvider),
                   ),
                 ),
-                const SizedBox(height: 40),
-                RevealOnEntrance(
-                  delay: const Duration(milliseconds: 60),
-                  child: const SectionHeader(
-                    eyebrow: "TODAY'S SCHEDULE",
-                    title: 'Prayer times',
+              ),
+              const SizedBox(height: 40),
+              RevealOnEntrance(
+                delay: const Duration(milliseconds: 60),
+                child: const SectionHeader(
+                  eyebrow: "TODAY'S SCHEDULE",
+                  title: 'Prayer times',
+                ),
+              ),
+              const SizedBox(height: 20),
+              prayerTimesAsync.when(
+                data: (timings) => _PrayerBento(timings: timings),
+                loading: () => Padding(
+                  padding: EdgeInsets.symmetric(vertical: 64),
+                  child: Center(
+                    child: CircularProgressIndicator(color: context.palette.accent, strokeWidth: 2.5),
                   ),
                 ),
-                const SizedBox(height: 20),
-                prayerTimesAsync.when(
-                  data: (timings) => _PrayerBento(timings: timings),
-                  loading: () => Padding(
-                    padding: EdgeInsets.symmetric(vertical: 64),
-                    child: Center(
-                      child: CircularProgressIndicator(color: context.palette.accent, strokeWidth: 2.5),
-                    ),
-                  ),
-                  error: (error, stackTrace) =>
-                      StatusCard(message: '$error', tone: StatusTone.error),
-                ),
-                // device_calendar has no Windows implementation, and the
-                // calendar only exists for iOS Shortcuts to key off, so on
-                // desktop the whole section is dropped rather than shown as
-                // a button that can only fail.
-                if (CalendarSyncService.isSupported) ...[
-                  const SizedBox(height: 48),
-                  RevealOnEntrance(
-                    delay: const Duration(milliseconds: 140),
-                    child: const SectionHeader(
-                      eyebrow: 'AUTOMATION',
-                      title: 'Milo calendar',
-                      subtitle:
-                          'Creates a dedicated calendar iOS Shortcuts and Jomo can key '
-                          'off of to trigger focus mode during each prayer window.',
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  RevealOnEntrance(
-                    delay: const Duration(milliseconds: 180),
-                    child: PrimaryButton(
-                      label: 'Sync next 7 days',
-                      icon: PhLight.calendarCheck,
-                      loading: calendarSyncAsync.isLoading,
-                      onPressed: calendarSyncAsync.isLoading
-                          ? null
-                          : () => ref.read(calendarSyncControllerProvider.notifier).syncDays(7),
-                    ),
-                  ),
-                  _CalendarStatus(calendarSyncAsync: calendarSyncAsync),
-                ],
+                error: (error, stackTrace) =>
+                    StatusCard(message: '$error', tone: StatusTone.error),
+              ),
+              // device_calendar has no Windows implementation, and the
+              // calendar only exists for iOS Shortcuts to key off, so on
+              // desktop the whole section is dropped rather than shown as
+              // a button that can only fail.
+              if (CalendarSyncService.isSupported) ...[
                 const SizedBox(height: 48),
                 RevealOnEntrance(
-                  delay: const Duration(milliseconds: 220),
+                  delay: const Duration(milliseconds: 140),
                   child: const SectionHeader(
-                    eyebrow: 'ALERTS',
-                    title: 'Adhan notifications',
-                    subtitle: 'Exact Adhan alerts plus a pre-Adhan reminder for each prayer.',
+                    eyebrow: 'AUTOMATION',
+                    title: 'Milo calendar',
+                    subtitle:
+                        'Creates a dedicated calendar iOS Shortcuts and Jomo can key '
+                        'off of to trigger focus mode during each prayer window.',
                   ),
                 ),
                 const SizedBox(height: 18),
                 RevealOnEntrance(
-                  delay: const Duration(milliseconds: 260),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: PrimaryButton(
-                          label: 'Schedule 7 days',
-                          icon: PhLight.bellSimpleRinging,
-                          expand: true,
-                          loading: notificationScheduleAsync.isLoading,
-                          onPressed: notificationScheduleAsync.isLoading
-                              ? null
-                              : () => ref
-                                  .read(notificationScheduleControllerProvider.notifier)
-                                  .scheduleDays(7),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      PrimaryButton(
-                        label: 'Cancel',
-                        icon: PhLight.xCircle,
-                        variant: ButtonVariant.outline,
+                  delay: const Duration(milliseconds: 180),
+                  child: PrimaryButton(
+                    label: 'Sync next 7 days',
+                    icon: PhLight.calendarCheck,
+                    loading: calendarSyncAsync.isLoading,
+                    onPressed: calendarSyncAsync.isLoading
+                        ? null
+                        : () => ref.read(calendarSyncControllerProvider.notifier).syncDays(7),
+                  ),
+                ),
+                _CalendarStatus(calendarSyncAsync: calendarSyncAsync),
+              ],
+              const SizedBox(height: 48),
+              RevealOnEntrance(
+                delay: const Duration(milliseconds: 220),
+                child: const SectionHeader(
+                  eyebrow: 'ALERTS',
+                  title: 'Adhan notifications',
+                  subtitle: 'Exact Adhan alerts plus a pre-Adhan reminder for each prayer.',
+                ),
+              ),
+              const SizedBox(height: 18),
+              RevealOnEntrance(
+                delay: const Duration(milliseconds: 260),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: PrimaryButton(
+                        label: 'Schedule 7 days',
+                        icon: PhLight.bellSimpleRinging,
+                        expand: true,
+                        loading: notificationScheduleAsync.isLoading,
                         onPressed: notificationScheduleAsync.isLoading
                             ? null
                             : () => ref
                                 .read(notificationScheduleControllerProvider.notifier)
-                                .cancelAll(),
+                                .scheduleDays(7),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 12),
+                    PrimaryButton(
+                      label: 'Cancel',
+                      icon: PhLight.xCircle,
+                      variant: ButtonVariant.outline,
+                      onPressed: notificationScheduleAsync.isLoading
+                          ? null
+                          : () => ref
+                              .read(notificationScheduleControllerProvider.notifier)
+                              .cancelAll(),
+                    ),
+                  ],
                 ),
-                _NotificationStatus(notificationScheduleAsync: notificationScheduleAsync),
-              ],
-            ),
+              ),
+              _NotificationStatus(notificationScheduleAsync: notificationScheduleAsync),
+            ],
           ),
         ),
       ),

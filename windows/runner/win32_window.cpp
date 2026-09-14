@@ -2,6 +2,7 @@
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 
@@ -51,6 +52,54 @@ void EnableFullDpiSupportIfAvailable(HWND hwnd) {
     enable_non_client_dpi_scaling(hwnd);
   }
   FreeLibrary(user32_module);
+}
+
+// How thick the invisible resize edge is, in physical pixels.
+//
+// The window has no visible frame any more, so this is the only thing left to
+// grab it by. Taken from the system rather than fixed, because it is a user
+// setting and it scales with DPI.
+int ResizeBorderThickness() {
+  return GetSystemMetrics(SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+}
+
+// Which resize edge, if any, the cursor is over.
+//
+// With the caption gone, `DefWindowProc` stops reporting the edges itself:
+// removing the non-client area removes the part it was hit-testing. Returns
+// `HTNOWHERE` when the cursor is over the content instead, and always when the
+// window is maximized, which has no edges to drag.
+LRESULT FrameHitTest(HWND hwnd, LPARAM lparam) {
+  if (IsZoomed(hwnd)) {
+    return HTNOWHERE;
+  }
+
+  RECT rect;
+  if (!GetWindowRect(hwnd, &rect)) {
+    return HTNOWHERE;
+  }
+
+  const POINT cursor = {GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+  const int border = ResizeBorderThickness();
+
+  const bool left = cursor.x < rect.left + border;
+  const bool right = cursor.x >= rect.right - border;
+  const bool top = cursor.y < rect.top + border;
+  const bool bottom = cursor.y >= rect.bottom - border;
+
+  if (top) {
+    if (left) return HTTOPLEFT;
+    if (right) return HTTOPRIGHT;
+    return HTTOP;
+  }
+  if (bottom) {
+    if (left) return HTBOTTOMLEFT;
+    if (right) return HTBOTTOMRIGHT;
+    return HTBOTTOM;
+  }
+  if (left) return HTLEFT;
+  if (right) return HTRIGHT;
+  return HTNOWHERE;
 }
 
 }  // namespace
@@ -144,6 +193,15 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
+  // Forces the frame to be recalculated now that the window exists, which is
+  // what gets `WM_NCCALCSIZE` to run against a real window and `WM_SIZE` to
+  // follow it. Without this the child Flutter view keeps the size it was given
+  // for the *old* frame — 1105x700 inside a 1120x737 client area, a caption
+  // and two borders short — and the bottom-right of every screen is cut off.
+  SetWindowPos(window, nullptr, 0, 0, 0, 0,
+               SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                   SWP_NOACTIVATE);
+
   UpdateTheme(window);
 
   return OnCreate();
@@ -197,6 +255,47 @@ Win32Window::MessageHandler(HWND hwnd,
 
       return 0;
     }
+    // Drops the title bar without dropping the window.
+    //
+    // The app draws its own controls over the top of its content instead, so
+    // the OS caption is pure loss here: an opaque strip in a colour the app
+    // does not choose, above a background that is meant to be continuous.
+    //
+    // Reporting the whole window rect as client area is what removes it.
+    // `WS_OVERLAPPEDWINDOW` deliberately stays on the window: it is what
+    // supplies the drop shadow, Snap Layouts, Alt+Tab and the minimise and
+    // maximise animations, none of which a `WS_POPUP` window gets. The only
+    // thing being given up is the caption Windows would paint, and the resize
+    // edges, which [FrameHitTest] puts back.
+    case WM_NCCALCSIZE: {
+      if (wparam == TRUE) {
+        NCCALCSIZE_PARAMS* params =
+            reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
+        // A maximized window is positioned so its frame hangs off every edge
+        // of the monitor — normally invisible, because the frame is where it
+        // hangs. With the client area covering the frame, that overhang would
+        // crop the content instead, so it has to be inset back by hand.
+        if (IsZoomed(hwnd)) {
+          const int border = ResizeBorderThickness();
+          params->rgrc[0].left += border;
+          params->rgrc[0].top += border;
+          params->rgrc[0].right -= border;
+          params->rgrc[0].bottom -= border;
+        }
+        return 0;
+      }
+      break;
+    }
+
+    case WM_NCHITTEST: {
+      const LRESULT frame = FrameHitTest(hwnd, lparam);
+      // Everything that is not an edge is content. Dragging the window is
+      // Dart's to ask for, through the `cotv/window` channel, because only
+      // Dart knows which parts of its own layout are meant to be a handle and
+      // which are buttons sitting on top of one.
+      return frame == HTNOWHERE ? HTCLIENT : frame;
+    }
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/clock_providers.dart';
 import '../../../providers/reminder_providers.dart';
+import '../../app_shell.dart';
 import '../../format/time_format.dart';
 import '../../tasks/reminder_form_sheet.dart';
 import '../../theme/app_theme.dart';
@@ -29,11 +30,12 @@ class RemindersCard extends ConsumerWidget {
     return HomeCardFrame(
       title: 'Reminders',
       onEdit: () => showReminderFormSheet(context),
+      // Reminders live as a segment of the Tasks screen, not a destination of
+      // their own.
+      onTap: () => AppNavigation.maybeOf(context)?.call(AppDestination.tasks),
+      semanticLabel: 'Reminders. Open the task list.',
       child: reminders.isEmpty
-          ? const HomeCardNote(
-              icon: PhLight.bellSimple,
-              message: 'No reminders',
-            )
+          ? const HomeCardNote(message: 'No reminders')
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,

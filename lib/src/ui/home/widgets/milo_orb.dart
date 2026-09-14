@@ -48,7 +48,13 @@ class MiloOrb extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final voice = ref.watch(miloVoiceProvider);
+    // Narrowed to the one field this widget reads. `miloVoiceProvider` emits
+    // a fresh state per amplitude sample while the microphone is open — every
+    // 120ms, per `VoiceCapture.onAmplitudeChanged` — and watching the whole
+    // object rebuilt the orb at that rate for a phase that changes a handful
+    // of times per recording. `error` is not read here; it is handled by the
+    // `ref.listen` below, which does not rebuild.
+    final phase = ref.watch(miloVoiceProvider.select((voice) => voice.phase));
     final isBusy = ref.watch(
       miloConversationProvider.select((conversation) => conversation.isBusy),
     );
@@ -64,9 +70,9 @@ class MiloOrb extends ConsumerWidget {
     });
 
     final MiloOrbState state;
-    if (isBusy || voice.phase == MiloVoicePhase.transcribing) {
+    if (isBusy || phase == MiloVoicePhase.transcribing) {
       state = MiloOrbState.thinking;
-    } else if (voice.phase == MiloVoicePhase.listening) {
+    } else if (phase == MiloVoicePhase.listening) {
       state = MiloOrbState.listening;
     } else {
       state = MiloOrbState.idle;
@@ -75,7 +81,7 @@ class MiloOrb extends ConsumerWidget {
     return MiloOrbWidget(
       diameter: diameter,
       state: state,
-      isListening: voice.phase == MiloVoicePhase.listening,
+      isListening: phase == MiloVoicePhase.listening,
       onTap: () => ref.read(miloVoiceProvider.notifier).toggle(),
       onTextMilo: () => Scaffold.maybeOf(context)?.openEndDrawer(),
     );
@@ -220,57 +226,79 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
     // white ground, so the whole aura is pulled back rather than recoloured.
     final intensity = palette.isDark ? 1.0 : 0.55;
 
-    final label = 'Milo, ${widget.state.description}.'
+    final label =
+        'Milo, ${widget.state.description}.'
         '${widget.onTap == null ? '' : ' Tap to speak.'}'
         '${_gestureHint(platform)}';
 
-    return Semantics(
-      button: true,
-      label: label,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        // Each recognizer is added only on the platform that wants it. A
-        // double-tap recognizer holds the arena for kDoubleTapTimeout, so
-        // wiring one everywhere would put ~300ms between the tap and the
-        // microphone on platforms that never use it.
-        onDoubleTap:
-            platform == TargetPlatform.windows ? widget.onTextMilo : null,
-        onLongPress: platform == TargetPlatform.iOS ? widget.onTextMilo : null,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          // The aura bleeds well past the core, so the box is roomier than
-          // the orb itself and the glow is not clipped by a tight parent.
-          width: size * 1.6,
-          height: size * 1.6,
-          child: Center(
-            child: AnimatedBuilder(
-              animation: Listenable.merge([_breath, _pulse]),
-              builder: (context, _) {
-                final breath = Curves.easeInOut.transform(_breath.value);
-                final pulse = Curves.easeInOut.transform(_pulse.value);
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Transform.scale(
-                      // A 4% swing at rest: enough to read as breathing
-                      // across a 3.2s cycle, small enough not to jostle the
-                      // layout. Listening adds up to 14% on top, at four
-                      // times the rate.
-                      scale: 0.96 + breath * 0.08 + pulse * 0.14,
-                      child: _Aura(
-                        diameter: size * 1.55,
-                        palette: palette,
-                        // Brightened as well as widened: on Monochrome and
-                        // Titanium the accent barely separates from the
-                        // surface, and scale alone would not read there.
-                        intensity: intensity * (1 + pulse * 0.55),
-                        isListening: widget.isListening,
+    // Two boundaries, each doing a different job. This outer one keeps the
+    // breath's repaint from re-recording the sidebar chrome it shares a
+    // display list with: the nav rows, the divider and the footer are static.
+    return RepaintBoundary(
+      child: Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          // Each recognizer is added only on the platform that wants it. A
+          // double-tap recognizer holds the arena for kDoubleTapTimeout, so
+          // wiring one everywhere would put ~300ms between the tap and the
+          // microphone on platforms that never use it.
+          onDoubleTap: platform == TargetPlatform.windows
+              ? widget.onTextMilo
+              : null,
+          onLongPress: platform == TargetPlatform.iOS
+              ? widget.onTextMilo
+              : null,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            // The aura bleeds well past the core, so the box is roomier than
+            // the orb itself and the glow is not clipped by a tight parent.
+            width: size * 1.6,
+            height: size * 1.6,
+            child: Center(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_breath, _pulse]),
+                // The core answers to neither controller, so it is built once
+                // and handed through rather than rebuilt with every breath.
+                child: _Core(diameter: size, palette: palette),
+                builder: (context, core) {
+                  final breath = Curves.easeInOut.transform(_breath.value);
+                  final pulse = Curves.easeInOut.transform(_pulse.value);
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.scale(
+                        // A 4% swing at rest: enough to read as breathing
+                        // across a 3.2s cycle, small enough not to jostle the
+                        // layout. Listening adds up to 14% on top, at four
+                        // times the rate.
+                        scale: 0.96 + breath * 0.08 + pulse * 0.14,
+                        // The inner boundary, and the one that matters. The
+                        // aura carries two shadow blurs, ~83pt and ~60pt wide
+                        // at the expanded dock. Its decoration is value-equal
+                        // between frames while resting, so it never dirties
+                        // itself — but a repainting ancestor re-runs the whole
+                        // subtree's paint, so without this the blurs were
+                        // re-drawn every frame anyway. Behind a boundary they
+                        // rasterize once and the breath scales the retained
+                        // layer at composite time.
+                        child: RepaintBoundary(
+                          child: _Aura(
+                            diameter: size * _auraSpread,
+                            // Brightened as well as widened, so the listening
+                            // state reads as more light rather than only as a
+                            // wider halo.
+                            intensity: intensity * (1 + pulse * 0.55),
+                            isListening: widget.isListening,
+                          ),
+                        ),
                       ),
-                    ),
-                    _Core(diameter: size, palette: palette),
-                  ],
-                );
-              },
+                      core!,
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -283,13 +311,11 @@ class _MiloOrbWidgetState extends State<MiloOrbWidget>
 class _Aura extends StatelessWidget {
   const _Aura({
     required this.diameter,
-    required this.palette,
     required this.intensity,
     required this.isListening,
   });
 
   final double diameter;
-  final AppPalette palette;
 
   /// A multiplier on every alpha in here, above 1 while Milo is listening.
   /// Each product is clamped, since [Color.withValues] rejects an alpha
@@ -299,12 +325,13 @@ class _Aura extends StatelessWidget {
   /// Whether the microphone is open right now.
   final bool isListening;
 
-  /// The aura is the "active" signal, so it has to be visibly weaker at
-  /// rest than while Milo is listening — painting it at full strength
-  /// always would make "active" mean nothing. The rise to full strength
-  /// while listening is carried by [intensity] (driven by `_pulse`); this
-  /// is the floor it rises from.
-  double get _auraOpacity => isListening ? 1.0 : 0.45;
+  /// The aura is the "active" signal, so it stays weaker at rest than while
+  /// Milo is listening — painting it at full strength always would make
+  /// "active" mean nothing. The rise to full strength while listening is
+  /// carried by [intensity] (driven by `_pulse`); this is the floor it rises
+  /// from. Lifted from 0.45 in the redesign: at that value the glow read as
+  /// absent rather than as idle, and the resting orb looked unlit.
+  double get _auraOpacity => isListening ? 1.0 : 0.75;
 
   double _alpha(double base) =>
       (base * intensity * _auraOpacity).clamp(0.0, 1.0);
@@ -317,41 +344,42 @@ class _Aura extends StatelessWidget {
         height: diameter,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          // White light spilling off the orb, falling away to nothing.
+          //
+          // The gradient is the whole glow. There were two [BoxShadow]s under
+          // it as well — a drop shadow is a blurred silhouette of the orb
+          // painted behind it, which on Milo's near-white section ground read
+          // as a grey smudge under the sphere rather than as light.
+          //
+          // Every stop lives past 0.645, and that is the whole trick: this box
+          // is [_auraSpread] times the core's diameter, so the core hides the
+          // inner 1/[_auraSpread] of it. Stops inside that are invisible. The
+          // violet version of this glow put two stops at 0.0 and 0.36 and got
+          // away with it because its box shadows carried the halo; in white and
+          // black the only band left showing was the dark one, which read as a
+          // shadow around the orb rather than as light coming off it.
           gradient: RadialGradient(
             colors: [
-              palette.accent.withValues(alpha: _alpha(0.34)),
-              palette.glowPrimary.withValues(
-                alpha: _alpha(palette.glowPrimary.a * 0.9),
-              ),
-              // `accentDeep`, not `secondary`: `secondary` is cyan, reserved
-              // for data visualisation, and ramping the aura through it read
-              // on screen as a blue halo around a purple sphere. This keeps
-              // the whole glow inside the accent family.
-              palette.accentDeep.withValues(alpha: _alpha(0.10)),
-              palette.accent.withValues(alpha: 0),
+              _orbLight.withValues(alpha: _alpha(0.50)),
+              _orbLight.withValues(alpha: _alpha(0.42)),
+              _orbLight.withValues(alpha: _alpha(0.20)),
+              _orbLight.withValues(alpha: 0),
             ],
-            stops: const [0.0, 0.36, 0.62, 1.0],
+            stops: const [0.0, _coreEdge, 0.84, 1.0],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: palette.accent.withValues(alpha: _alpha(0.22)),
-              blurRadius: diameter * 0.42,
-              spreadRadius: diameter * 0.02,
-            ),
-            BoxShadow(
-              color: palette.accentDeep.withValues(alpha: _alpha(0.12)),
-              blurRadius: diameter * 0.30,
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-/// The orb body: a sphere lit from above-left so it reads as a sphere
-/// rather than a flat disc. No face — what Milo is doing is read off the
-/// aura around it, not off a pair of eyes.
+/// The orb body: a white-to-black ramp running top-left to bottom-right, so it
+/// reads as a sphere lit from above-left rather than as a flat disc. No face —
+/// what Milo is doing is read off the aura around it, not off a pair of eyes.
+///
+/// A [LinearGradient] rather than the radial one this used to carry, and
+/// monochrome rather than violet: the accent moved out to the rail's active
+/// tab in the redesign, and two violet signals competed.
 class _Core extends StatelessWidget {
   const _Core({required this.diameter, required this.palette});
 
@@ -365,22 +393,31 @@ class _Core extends StatelessWidget {
       height: diameter,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: RadialGradient(
-          center: const Alignment(-0.3, -0.4),
-          radius: 1.05,
-          colors: [
-            Color.alphaBlend(
-              palette.accent.withValues(alpha: palette.isDark ? 0.30 : 0.20),
-              palette.surfaceRaised,
-            ),
-            palette.surface,
-          ],
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_orbLight, _orbShadowed],
         ),
-        border: Border.all(
-          color: palette.accent.withValues(alpha: palette.isDark ? 0.42 : 0.30),
-          width: 1.2,
-        ),
+        // No border. The violet rim that used to sit here separated a violet
+        // sphere from a slate ground; in white it drew a hard outline around
+        // the gradient and flattened it into a disc.
       ),
     );
   }
 }
+
+/// The lit end of the orb, and the near half of its glow.
+const Color _orbLight = Color(0xFFFFFFFF);
+
+/// The unlit end of the orb: black at half alpha, so the ground shows through
+/// the shadowed side instead of punching a hole in it.
+const Color _orbShadowed = Color(0x80000000);
+
+/// How much wider the glow is than the orb it comes off.
+const double _auraSpread = 1.55;
+
+/// Where the core's edge falls across the glow's own radius.
+///
+/// The core hides everything inside this, so a gradient stop below it paints
+/// nothing. Kept as a name so the two stay in step.
+const double _coreEdge = 1 / _auraSpread;

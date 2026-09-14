@@ -239,7 +239,7 @@ void main() {
         (tester) async {
       await pumpCard(tester, const FocusTasksCard());
 
-      expect(find.text('No tasks today'), findsOneWidget);
+      expect(find.text('No tasks today.'), findsOneWidget);
     });
 
     testWidgets("renders today's tasks, highest priority first",
@@ -287,7 +287,7 @@ void main() {
       // And the card followed the repository rather than holding its own
       // copy of what is done: a completed task leaves the Today filter.
       expect(find.text('Dissection notes'), findsNothing);
-      expect(find.text('No tasks today'), findsOneWidget);
+      expect(find.text('No tasks today.'), findsOneWidget);
     });
 
     testWidgets('past the shortlist, the rest are counted not listed',
@@ -511,6 +511,40 @@ void main() {
     await pumpCard(tester, const HomeScreen());
 
     expect(tester.takeException(), isNull);
+  });
+
+  // The restyle traded the frosted-glass card for a flat panel that is dim at
+  // rest and lights under a pointer. What follows pins the parts of that a
+  // human looking at the screen would catch and a widget test otherwise would
+  // not: that the glass is actually gone, which card dims, and which way each
+  // one grows.
+  group('the card material', () {
+    testWidgets('nothing on the page blurs its backdrop', (tester) async {
+      await pumpCard(tester, const HomeScreen());
+
+      expect(find.byType(BackdropFilter), findsNothing);
+      // And so there is nothing left for a BackdropGroup to share.
+      expect(find.byType(BackdropGroup), findsNothing);
+    });
+
+    testWidgets('a bento card dims at rest and the music card does not',
+        (tester) async {
+      await pumpCard(tester, const RemindersCard());
+      expect(
+        tester.widget<GlassCard>(find.byType(GlassCard)).idleOpacity,
+        0.4,
+        reason: 'a bento card recedes until a pointer finds it',
+      );
+
+      await pumpCard(tester, const MusicWidget());
+      expect(
+        tester.widget<GlassCard>(find.byType(GlassCard)).idleOpacity,
+        isNull,
+        reason: 'the now-playing card is read at a glance, not hunted for',
+      );
+    });
+
+
   });
 }
 

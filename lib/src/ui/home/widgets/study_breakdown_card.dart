@@ -4,18 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/study_view.dart';
 import '../../../models/subject.dart';
 import '../../../providers/study_providers.dart';
+import '../../app_shell.dart';
+import '../../study/start_session.dart';
 import '../../study/subject_colors.dart';
 import '../../study/widgets/study_timer_card.dart' show CountdownRing;
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 import 'home_card_note.dart';
-
-/// What a full day of study looks like on the ring.
-///
-/// A target rather than a measurement, so it is a constant on purpose:
-/// the stored user settings carry no study goal to read it from, and the
-/// ring needs something to be a fraction of.
-const int _dailyTargetMinutes = 480;
 
 /// Hours studied today, as a ring plus a per-subject breakdown.
 ///
@@ -46,13 +41,24 @@ class StudyBreakdownCard extends ConsumerWidget {
 
     return HomeCardFrame(
       title: 'Study time',
+      // A plus only on the iOS card, per the mock, and it does something the
+      // card's own tap does not: tapping the card goes to the Study screen to
+      // look at it, the plus starts a block without leaving Home. Off iOS the
+      // card carries no corner glyph at all, as before.
+      onEdit: context.useLiquidGlass
+          ? () => startAnySession(context, ref)
+          : null,
+      actionIcon: PhLight.plus,
+      actionTooltip: 'Start a study session',
+      onTap: () => AppNavigation.maybeOf(context)?.call(AppDestination.study),
+      semanticLabel: 'Study time. Open the study screen.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Center(
             child: CountdownRing(
-              progress: total / _dailyTargetMinutes,
+              progress: total / dailyStudyGoalMinutes,
               accent: palette.accent,
               diameter: 132,
               child: Column(
@@ -67,7 +73,7 @@ class StudyBreakdownCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'of ${_dailyTargetMinutes ~/ 60}h',
+                    'of ${dailyStudyGoalMinutes ~/ 60}h',
                     style: context.typography.ui(
                       size: 10.5,
                       color: palette.textMuted,
@@ -79,7 +85,6 @@ class StudyBreakdownCard extends ConsumerWidget {
           ),
           if (today.isEmpty)
             const HomeCardNote(
-              icon: PhLight.timer,
               message: 'Nothing logged today',
               padding: EdgeInsets.only(top: 20),
             )

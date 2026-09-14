@@ -11,6 +11,13 @@ DateTime weekStartOf(DateTime date) {
   return day.subtract(Duration(days: day.weekday - 1));
 }
 
+/// How many days [date]'s month has.
+///
+/// Day zero of the following month is the last day of this one, which is how
+/// you get 28 / 29 / 30 / 31 out of [DateTime]'s own normalisation rather than
+/// out of a table with a leap-year rule in it.
+int daysInMonth(DateTime date) => DateTime(date.year, date.month + 1, 0).day;
+
 extension HabitFrequencyX on HabitFrequency {
   String get label {
     switch (this) {

@@ -36,7 +36,7 @@ class AppPalette {
     required this.surfaceRaised,
     required this.glassFill,
     required this.glassBorder,
-    required this.glassSurface,
+    required this.cardFill,
     required this.glassSpecular,
     required this.hairline,
     required this.innerHighlight,
@@ -50,6 +50,8 @@ class AppPalette {
     required this.textMuted,
     required this.danger,
     required this.success,
+    required this.taskRing,
+    required this.reminderRing,
     required this.priorityLow,
     required this.shadow,
     required this.glowPrimary,
@@ -63,7 +65,11 @@ class AppPalette {
   final Color surfaceRaised;
   final Color glassFill;
   final Color glassBorder;
-  final Color glassSurface;
+
+  /// The dashboard card's fill: white at 2%. Almost nothing, deliberately —
+  /// the card reads as its rim and its contents rather than as a plate, and
+  /// the ambient glow behind it comes straight through.
+  final Color cardFill;
   final Color glassSpecular;
   final Color hairline;
   final Color innerHighlight;
@@ -77,6 +83,21 @@ class AppPalette {
   final Color textMuted;
   final Color danger;
   final Color success;
+
+  /// The ring on a task row in the iOS agenda card.
+  ///
+  /// Only the agenda card reads these two: in a list that interleaves tasks
+  /// and reminders under one title, the ring colour is the only thing saying
+  /// which kind a row is, so each gets a hue of its own rather than sharing
+  /// [accent]. Neither is a general-purpose token — nothing else should
+  /// borrow them.
+  final Color taskRing;
+
+  /// The ring on a reminder row in the iOS agenda card. Always this colour,
+  /// whether or not the reminder is overdue — lateness is carried by the due
+  /// line under the title, not by the ring.
+  final Color reminderRing;
+
   final Color priorityLow;
   final Color shadow;
   final Color glowPrimary;

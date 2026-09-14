@@ -6,19 +6,21 @@ import '../../widgets/ph_light_icons.dart';
 
 /// The neutral line a dashboard card shows in place of rows it has none of.
 ///
-/// The full-screen empty states on Tasks and Study can afford a 56pt glyph
-/// plate and a two-line sentence; a card that has to sit beside three others
-/// cannot. Same language — muted 13.5pt over a `glassFill` circle — at a
-/// third of the height.
+/// One centred line and nothing else. The glyph plate it used to carry above
+/// the message was the loudest thing in an otherwise empty card, which put the
+/// most emphasis on the cards with the least in them.
+///
+/// [icon] survives for the error notes, where the glyph is the signal that
+/// something went wrong rather than decoration on an ordinary empty state.
 class HomeCardNote extends StatelessWidget {
   const HomeCardNote({
     super.key,
-    required this.icon,
+    this.icon,
     required this.message,
     this.padding = const EdgeInsets.symmetric(vertical: 22),
   });
 
-  final IconData icon;
+  final IconData? icon;
   final String message;
   final EdgeInsetsGeometry padding;
 
@@ -26,21 +28,27 @@ class HomeCardNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Padding(
+    // Spans the card on purpose: the parent column is start-aligned, so a
+    // shrink-wrapped note would sit against the left edge and `textAlign`
+    // would have nothing to centre within.
+    return Container(
+      width: double.infinity,
       padding: padding,
       child: Column(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.glassFill,
-              shape: BoxShape.circle,
+          if (icon != null) ...[
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: palette.glassFill,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 17, color: palette.accent),
             ),
-            child: Icon(icon, size: 17, color: palette.accent),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
           Text(
             message,
             textAlign: TextAlign.center,
@@ -56,6 +64,13 @@ class HomeCardNote extends StatelessWidget {
   }
 }
 
+/// What a bento card fades to with nothing hovering it.
+///
+/// Layer opacity, so a resting card's title and contents recede along with its
+/// surface. This is the one number that decides how faint the dashboard reads
+/// before a pointer finds it.
+const double _idleOpacity = 0.4;
+
 /// The bento card frame: a title row with an optional trailing action over
 /// the card's own content.
 ///
@@ -69,6 +84,8 @@ class HomeCardFrame extends StatelessWidget {
     required this.title,
     required this.child,
     this.onEdit,
+    this.actionIcon = PhLight.pencilSimple,
+    this.actionTooltip = 'Edit',
     this.onTap,
     this.hoverLift,
     this.semanticLabel,
@@ -77,15 +94,26 @@ class HomeCardFrame extends StatelessWidget {
   final String title;
   final Widget child;
 
-  /// When set, a pencil appears at the row's trailing edge. Omit it for a
+  /// When set, [actionIcon] appears at the row's trailing edge. Omit it for a
   /// card with nothing to edit rather than wiring it to a no-op.
   final VoidCallback? onEdit;
+
+  /// The glyph [onEdit] wears. A pencil by default, because most cards edit
+  /// something that already exists; Study time and Nutrition pass a plus,
+  /// because theirs adds a new entry instead.
+  final IconData actionIcon;
+
+  /// Announced and tooltipped for [onEdit]. Must agree with [actionIcon] — a
+  /// plus labelled "Edit" reads as a bug to anyone using a screen reader.
+  final String actionTooltip;
+
   final VoidCallback? onTap;
 
-  /// Passed straight through to the underlying [GlassCard]. A card whose
-  /// content is interactive row by row — Tasks, where each row toggles on
-  /// its own tap — still wants the whole card to light up under a pointer,
-  /// even though the card itself carries no [onTap].
+  /// Passed through to the underlying [GlassCard], defaulting on. Every card
+  /// in the bento dims at rest and lights under a pointer whether or not it is
+  /// tappable — Tasks, whose content is interactive row by row, carries no
+  /// [onTap] of its own and still lights. Pass false for a card that should
+  /// not react to one at all.
   final bool? hoverLift;
 
   /// Passed straight through to the underlying [GlassCard]: announced in
@@ -96,11 +124,19 @@ class HomeCardFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final glass = context.useLiquidGlass;
 
     return GlassCard(
-      radius: 14,
+      // A phone-scale corner on glass. 14 is tuned to a dense desktop bento;
+      // at arm's length on a 393pt screen it reads as a hard edge.
+      radius: glass ? 22 : 14,
+      glass: glass,
       onTap: onTap,
-      hoverLift: hoverLift,
+      hoverLift: hoverLift ?? true,
+      // Null on glass: this fades a card until a pointer lights it, and a
+      // touch device never produces one, so every card would sit at 0.4 for
+      // the life of the screen.
+      idleOpacity: glass ? null : _idleOpacity,
       semanticLabel: semanticLabel,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
       child: Column(
@@ -122,14 +158,14 @@ class HomeCardFrame extends StatelessWidget {
               ),
               if (onEdit != null)
                 Tooltip(
-                  message: 'Edit',
+                  message: actionTooltip,
                   child: InkWell(
                     onTap: onEdit,
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       width: 30,
                       height: 30,
-                      child: Icon(PhLight.pencilSimple,
+                      child: Icon(actionIcon,
                           size: 17, color: palette.textMuted),
                     ),
                   ),

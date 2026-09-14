@@ -2,7 +2,10 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/event_channel.h>
+#include <flutter/event_sink.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -28,6 +31,24 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Serves the window operations the removed title bar used to provide.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      window_channel_;
+
+  // Transport commands for whatever the machine is playing.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      media_channel_;
+
+  // The now-playing stream. Windows pushes changes rather than answering
+  // polls, so this half is an event channel — the first one in this app.
+  std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>>
+      media_events_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> media_sink_;
+
+  // Reads the current snapshot out of the bridge and pushes it at Dart. Only
+  // safe on the UI thread; see kMediaChangedMessage in the .cpp.
+  void EmitMediaSnapshot();
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

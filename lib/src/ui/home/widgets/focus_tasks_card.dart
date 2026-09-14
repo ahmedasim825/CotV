@@ -5,6 +5,7 @@ import '../../../models/task.dart';
 import '../../../providers/task_providers.dart';
 import '../../../providers/task_view_providers.dart';
 import '../../components/components.dart';
+import '../../app_shell.dart';
 import '../../tasks/task_form_sheet.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
@@ -36,8 +37,11 @@ class FocusTasksCard extends ConsumerWidget {
     return HomeCardFrame(
       title: 'Tasks',
       onEdit: () => showTaskFormSheet(context),
-      // The rows inside are each their own control, so the card lights up
-      // under a pointer even though the card itself does nothing.
+      onTap: () => AppNavigation.maybeOf(context)?.call(AppDestination.tasks),
+      semanticLabel: 'Tasks. Open the task list.',
+      // The rows inside are each their own control and win the gesture arena
+      // for taps that land on them, so ticking a task still ticks it rather
+      // than navigating.
       hoverLift: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,10 +81,7 @@ class _Rows extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (tasks.isEmpty) {
-      return const HomeCardNote(
-        icon: PhLight.listChecks,
-        message: 'No tasks today',
-      );
+      return const HomeCardNote(message: 'No tasks today.');
     }
 
     final shown = tasks.take(_shortlistLength).toList(growable: false);

@@ -222,10 +222,7 @@ class _ReminderList extends ConsumerWidget {
       children: [
         reminders.isEmpty
             ? const Center(
-                child: HomeCardNote(
-                  icon: PhLight.bellSimple,
-                  message: 'No reminders',
-                ),
+                child: HomeCardNote(message: 'No reminders'),
               )
             : ListView.separated(
                 padding: EdgeInsets.fromLTRB(

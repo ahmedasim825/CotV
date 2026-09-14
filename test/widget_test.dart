@@ -23,6 +23,7 @@ import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
+import 'package:cotv/src/providers/ambient_providers.dart';
 import 'package:cotv/src/providers/milo_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
@@ -36,7 +37,6 @@ import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/home/home_screen.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/milo/milo_assistant_screen.dart';
-import 'package:cotv/src/ui/shell/sidebar.dart';
 import 'package:cotv/src/ui/tasks/task_list_view.dart';
 
 /// Avoids touching the real `flutter_secure_storage` platform channel
@@ -136,6 +136,8 @@ void main() {
           securityServiceProvider.overrideWithValue(_FakeSecurityService()),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),
+          // The orb field animates forever; pumpAndSettle would time out.
+          ambientAnimationProvider.overrideWithValue(false),
           ...extraOverrides,
         ],
         child: const PrayerLockoutApp(),
@@ -189,6 +191,12 @@ void main() {
     //
     // The orb itself lives in the sidebar dock, which only mounts past the
     // navigation-rail breakpoint and so is absent at this compact width.
+    //
+    // That is the *Windows* arrangement, which is what this file pumps:
+    // `buildAppTheme()` sets no `platform:`, so `context.useLiquidGlass` is
+    // false here. On iOS the orb moves into the Home pane and is present at
+    // this width — `ios_home_shell_test.dart` asserts exactly that, and the
+    // two together are what pin the split.
     // The greeting is a different story: WelcomeHeader is wired into every
     // layout HomeScreen renders, compact included, so it has to be on
     // screen here too. This is the assertion DashboardHeader carried before
@@ -213,7 +221,7 @@ void main() {
     // counts something renders its neutral line rather than a number it
     // cannot back. A logged value here, or an invented one, would both pass
     // a looser assertion than this one.
-    expect(find.text('No tasks today'), findsOneWidget);
+    expect(find.text('No tasks today.'), findsOneWidget);
     expect(find.text('Nothing logged today'), findsOneWidget);
     expect(find.text('Nothing logged yet'), findsOneWidget);
   });
@@ -261,6 +269,9 @@ void main() {
     // removed. At this compact width the sidebar dock that legitimately
     // carries that label today has not mounted either, so the absence here
     // still means what it always has.
+    //
+    // Windows only, again: on iOS the Home pane carries the Milo block and
+    // its centred "Milo" title, so this label is legitimately present there.
     //
     // Tall enough to build the whole dashboard, so this also covers the
     // quick-action pill that used to replace the launcher — it is gone too,
@@ -384,45 +395,9 @@ void main() {
     expect(find.text('Fajr'), findsWidgets);
   });
 
-  group('sidebar collapse and hide', () {
-    // Past the navigation-rail breakpoint, same width
-    // "the dashboard reflows to two columns when wide" uses — the sidebar
-    // (and its Milo dock, orb included) mounts only here. `pump()`, never
-    // `pumpAndSettle`: the orb's breath controller repeats forever.
-
-    testWidgets('collapsing drops the labels but keeps the icons',
-        (tester) async {
-      await pumpApp(tester, logicalSize: const Size(1100, 2000));
-
-      expect(find.text('Home'), findsOneWidget);
-      expect(find.byTooltip('Home'), findsNothing);
-
-      await tester.tap(find.byTooltip('Collapse sidebar'));
-      await tester.pump();
-
-      expect(find.text('Home'), findsNothing);
-      expect(find.byTooltip('Home'), findsOneWidget);
-    });
-
-    testWidgets(
-        'hiding removes the sidebar and shows the restore control, which '
-        'brings it back', (tester) async {
-      await pumpApp(tester, logicalSize: const Size(1100, 2000));
-
-      expect(find.byType(Sidebar), findsOneWidget);
-      expect(find.byTooltip('Show sidebar'), findsNothing);
-
-      await tester.tap(find.byTooltip('Hide sidebar'));
-      await tester.pump();
-
-      expect(find.byType(Sidebar), findsNothing);
-      expect(find.byTooltip('Show sidebar'), findsOneWidget);
-
-      await tester.tap(find.byTooltip('Show sidebar'));
-      await tester.pump();
-
-      expect(find.byType(Sidebar), findsOneWidget);
-      expect(find.text('Home'), findsOneWidget);
-    });
-  });
+  // The rail's open/close control moved to the window title bar, which mounts
+  // on Windows alone — so the round trip is pinned in `window_chrome_test.dart`
+  // rather than here, where the theme reports Android. The collapsed
+  // icons-only rail is no longer reachable from the UI at all; `shell_test.dart`
+  // still covers how it renders, by building that mode directly.
 }

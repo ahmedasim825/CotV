@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/security_providers.dart';
 import 'theme/app_theme.dart';
-import 'widgets/ambient_background.dart';
 import 'widgets/lock_screen.dart';
 
 /// Wraps the app root. Renders [child] when unlocked, [LockScreen] when
@@ -63,10 +62,8 @@ class _SecurityLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: AmbientBackground(
-        child: Center(
-          child: CircularProgressIndicator(color: context.palette.accent, strokeWidth: 2.5),
-        ),
+      body: Center(
+        child: CircularProgressIndicator(color: context.palette.accent, strokeWidth: 2.5),
       ),
     );
   }
@@ -81,16 +78,14 @@ class _SecurityError extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: AmbientBackground(
-        child: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Security check failed:\n$message',
-                textAlign: TextAlign.center,
-                style: context.typography.ui(color: context.palette.danger),
-              ),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Security check failed:\n$message',
+              textAlign: TextAlign.center,
+              style: context.typography.ui(color: context.palette.danger),
             ),
           ),
         ),

@@ -9,6 +9,7 @@ import 'src/storage/local_storage.dart';
 import 'src/ui/app_shell.dart';
 import 'src/ui/security_gate.dart';
 import 'src/ui/theme/app_theme.dart';
+import 'src/ui/widgets/orb_field_background.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,19 +47,22 @@ class PrayerLockoutApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Milo',
       debugShowCheckedModeBanner: false,
+      // No `background:` override: the ground is one fixed colour now, so it
+      // comes straight off `kPalette.background`. The parameter stays on
+      // [buildAppTheme] as a general escape hatch — see its doc.
       theme: buildAppTheme(),
-      themeAnimationDuration: WidgetsBinding
-              .instance.platformDispatcher.accessibilityFeatures.disableAnimations
-          ? Duration.zero
-          : AppMotion.themeSwitch,
-      themeAnimationCurve: AppMotion.spring,
       builder: (context, child) {
         return AnnotatedRegion<SystemUiOverlayStyle>(
-          // kPalette is dark, so the status bar gets light glyphs.
+          // The ground is dark, so the status bar gets light glyphs.
           value: kPalette.isDark
               ? SystemUiOverlayStyle.light
               : SystemUiOverlayStyle.dark,
-          child: child ?? const SizedBox.shrink(),
+          // Inside the region and above the [Navigator]: one ground for the
+          // whole app, continuous across route pushes, which is why no screen
+          // paints its own any more.
+          child: OrbFieldBackground(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       home: const SecurityGate(child: AppShell()),

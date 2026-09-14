@@ -65,16 +65,33 @@ final studyLogListProvider =
 );
 
 /// Today's and this week's totals, recomputed when the logs change or the
-/// minute rolls over.
+/// date rolls over.
 ///
-/// Auto-disposed because it watches [currentMinuteProvider]: a provider
-/// that outlives its listeners would hold the one-second ticker open for
-/// the life of the app, which is exactly what that ticker is
-/// auto-disposed to avoid.
+/// Auto-disposed because [currentDayProvider] is derived from the one-second
+/// ticker: a provider that outlives its listeners would hold that ticker open
+/// for the life of the app, which is exactly what it is auto-disposed to
+/// avoid.
 final studySummaryProvider = Provider.autoDispose<StudySummary>((ref) {
   final logs = ref.watch(studyLogListProvider).value ?? const <StudyLog>[];
-  final now = ref.watch(currentMinuteProvider);
+  // The day, not the minute. `summarizeStudy` reads `now` only through
+  // `normalizeDay` and `weekStartOf`, so its answer cannot differ between two
+  // minutes of the same day — but on the minute clock it walked every log in
+  // the box 1440 times a day to prove that. A finished session still lands
+  // immediately: that arrives through `studyLogListProvider` above.
+  final now = ref.watch(currentDayProvider);
   return summarizeStudy(logs, now);
+});
+
+/// Minutes studied on each day of the current month.
+///
+/// Watches [currentDayProvider] rather than [currentMinuteProvider]: the grid
+/// only changes shape when the date does, so there is no reason to rebuild it
+/// sixty times an hour. Auto-disposed for the same reason
+/// [studySummaryProvider] is — it sits downstream of the one-second ticker.
+final studyMonthProvider = Provider.autoDispose<MonthStudy>((ref) {
+  final logs = ref.watch(studyLogListProvider).value ?? const <StudyLog>[];
+  final today = ref.watch(currentDayProvider);
+  return summarizeStudyMonth(logs, today);
 });
 
 /// Where a study session has got to.

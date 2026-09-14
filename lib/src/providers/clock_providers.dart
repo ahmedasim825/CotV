@@ -27,3 +27,13 @@ final currentMinuteProvider = Provider.autoDispose<DateTime>((ref) {
   final now = ref.watch(nowTickerProvider).value ?? DateTime.now();
   return DateTime(now.year, now.month, now.day, now.hour, now.minute);
 });
+
+/// Today's date, at midnight.
+///
+/// One more turn of the same crank as [currentMinuteProvider]: anything that
+/// only changes when the date does — a month grid, a "days elapsed" reading —
+/// watches this and rebuilds once at midnight instead of once a minute.
+final currentDayProvider = Provider.autoDispose<DateTime>((ref) {
+  final now = ref.watch(currentMinuteProvider);
+  return DateTime(now.year, now.month, now.day);
+});

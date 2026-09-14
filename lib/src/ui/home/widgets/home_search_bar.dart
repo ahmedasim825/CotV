@@ -36,6 +36,11 @@ typedef UrlOpener = Future<bool> Function(Uri url, {LaunchMode mode});
 /// same path `MiloAssistantScreen`'s own composer uses — and Chrome mode
 /// opens it as a web search in the platform's default browser via
 /// [urlOpener], despite the dropdown's name for it.
+///
+/// One appearance, in every state. It used to gain a white halo under a pointer
+/// and while it held the caret, animated in over the hover duration; both are
+/// gone. The field is the one control on the page you reach for without looking
+/// for it, and it turned out to need no help being found.
 class HomeSearchBar extends ConsumerStatefulWidget {
   const HomeSearchBar({super.key, this.urlOpener = launchUrl});
 
@@ -49,10 +54,16 @@ class HomeSearchBar extends ConsumerStatefulWidget {
 
 class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
   final _controller = TextEditingController();
+
+  /// Still held here rather than left to the [TextField], because `_submit`
+  /// needs to hand focus back after a query goes out.
+  final _focusNode = FocusNode();
+
   SearchMode _mode = SearchMode.milo;
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -76,29 +87,52 @@ class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
+    // On glass the pill collapses to the mock's shape: the mode's name becomes
+    // the placeholder, the trailing label folds away behind the caret that was
+    // already beside it, and the magnifier goes — three labels ("Search..",
+    // the glyph, and "Search with Milo") saying one thing is two too many at
+    // 393pt. The mode stays visible, just in the one place a search field
+    // always has room for it.
+    final glass = context.useLiquidGlass;
+
     return Container(
-      height: 44,
+      // A plain Container, not an AnimatedContainer: there is nothing left to
+      // animate between, and an implicit animation with no varying property
+      // still rebuilds on every tick of its controller.
+      //
+      // 48 on glass, not 44. The caret is the only control left on that path
+      // and needs a 44pt target of its own — which a 44pt pill cannot give it,
+      // because its 1pt border takes the content box down to 42.
+      height: glass ? 48 : 44,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: palette.surfaceRaised,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: palette.glassBorder),
+        color: _searchFill,
+        borderRadius: BorderRadius.circular(_searchRadius),
+        border: Border.all(color: _searchStroke),
       ),
       child: Row(
         children: [
-          Icon(PhLight.magnifyingGlass, size: 19, color: palette.textMuted),
-          const SizedBox(width: 12),
+          if (!glass) ...[
+            Icon(PhLight.magnifyingGlass, size: 19, color: palette.textMuted),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: TextField(
               controller: _controller,
+              focusNode: _focusNode,
               onSubmitted: _submit,
-              style: context.typography.ui(size: 15, color: palette.textPrimary),
+              style: context.typography.ui(
+                size: 15,
+                color: palette.textPrimary,
+              ),
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                hintText: 'Search..',
-                hintStyle:
-                    context.typography.ui(size: 15, color: palette.textMuted),
+                hintText: glass ? _mode.label : 'Search..',
+                hintStyle: context.typography.ui(
+                  size: 15,
+                  color: palette.textMuted,
+                ),
               ),
             ),
           ),
@@ -115,29 +149,61 @@ class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
                   value: mode,
                   child: Text(
                     mode.label,
-                    style: context.typography
-                        .ui(size: 14, color: palette.textPrimary),
+                    style: context.typography.ui(
+                      size: 14,
+                      color: palette.textPrimary,
+                    ),
                   ),
                 ),
             ],
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(PhLight.caretDown, size: 15, color: palette.textMuted),
-                const SizedBox(width: 7),
-                Text(
-                  _mode.label,
-                  style: context.typography.ui(
-                    size: 13.5,
-                    weight: FontWeight.w600,
-                    color: palette.textSecondary,
+            child: glass
+                // The caret is the entire control on this path, so it has
+                // to carry the touch target the label beside it used to
+                // provide. Padded out rather than drawn larger — a 44pt
+                // chevron would dominate a 44pt pill.
+                ? SizedBox(
+                    width: minTouchTarget,
+                    height: minTouchTarget,
+                    child: Center(
+                      child: Icon(
+                        PhLight.caretDown,
+                        size: 15,
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        PhLight.caretDown,
+                        size: 15,
+                        color: palette.textMuted,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        _mode.label,
+                        style: context.typography.ui(
+                          size: 13.5,
+                          weight: FontWeight.w600,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
 }
+
+/// The field's one appearance.
+///
+/// #D9D9D9 at 2% over the page, a #FFFFFF hairline at 10%, and a 10pt corner —
+/// the same three values in every state. The fill used to be `surfaceRaised`,
+/// which is opaque, so the field read as a slab sitting on the ground rather
+/// than a shape cut into it.
+const Color _searchFill = Color(0x05D9D9D9);
+const Color _searchStroke = Color(0x1AFFFFFF);
+const double _searchRadius = 10;

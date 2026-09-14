@@ -7,6 +7,7 @@ import '../../food/food_route.dart';
 import '../../food/food_search_screen.dart';
 import '../../study/widgets/study_timer_card.dart' show CountdownRing;
 import '../../theme/app_theme.dart';
+import '../../widgets/ph_light_icons.dart';
 import 'home_card_note.dart';
 
 /// One macro's progress against its target.
@@ -41,6 +42,15 @@ class NutritionCard extends ConsumerWidget {
 
     return HomeCardFrame(
       title: 'Nutrition',
+      // iOS only, per the mock. Same destination as the card's own tap for
+      // now — the food logger is both where you look and where you add — but
+      // named as an add, which is what the glyph promises and what someone
+      // reaching for the corner of this card wants.
+      onEdit: context.useLiquidGlass
+          ? () => pushFoodPage(context, const FoodSearchScreen())
+          : null,
+      actionIcon: PhLight.plus,
+      actionTooltip: 'Log food',
       onTap: () => pushFoodPage(context, const FoodSearchScreen()),
       semanticLabel: 'Nutrition, $eaten of ${targets.calories} kilocalories. '
           'Open the food logger.',

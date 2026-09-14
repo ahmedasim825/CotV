@@ -27,10 +27,6 @@ class AppMotion {
   static const Duration fast = Duration(milliseconds: 320);
   static const Duration base = Duration(milliseconds: 700);
   static const Duration slow = Duration(milliseconds: 900);
-
-  /// How long a theme switch cross-fades for. Slower than [fast] so the
-  /// whole surface reads as one considered change rather than a flicker.
-  static const Duration themeSwitch = Duration(milliseconds: 450);
 }
 
 /// [AppMotion]'s durations, collapsed to zero when the platform asks for
@@ -62,12 +58,14 @@ class AppMotionScale {
 /// The app's one palette: deep violet on a slate ground.
 const AppPalette kPalette = AppPalette(
   brightness: Brightness.dark,
-  background: Color(0xFF1B252E),
+  // The ground itself: what `OrbFieldBackground` paints under the whole app,
+  // and what the violet orbs drift over.
+  background: Color(0xFF191717),
   surface: Color(0xFF212C36),
   surfaceRaised: Color(0xFF2A3644),
   glassFill: Color(0x14FFFFFF),
   glassBorder: Color(0x40FFFFFF),
-  glassSurface: Color(0x8C212C36),
+  cardFill: Color(0x05FFFFFF),
   glassSpecular: Color(0x3DFFFFFF),
   hairline: Color(0x1AFFFFFF),
   innerHighlight: Color(0x38FFFFFF),
@@ -78,9 +76,16 @@ const AppPalette kPalette = AppPalette(
   secondary: Color(0xFF22D3EE),
   textPrimary: Color(0xFFFFFFFF),
   textSecondary: Color(0xB3FFFFFF),
-  textMuted: Color(0x73FFFFFF),
+  // Opaque, unlike its two siblings. The ground now drifts underneath, and a
+  // 45%-white token shimmers as an orb passes below the text.
+  textMuted: Color(0xFFA4A4A4),
   danger: Color(0xFFEF4444),
   success: Color(0xFF22C55E),
+  // Straight from the mock, and deliberately not `danger`: #EF4444 is the
+  // app's "something is wrong" red, while #FF0000 here means "this row is a
+  // reminder". Two jobs, two values.
+  taskRing: Color(0xFFFFE100),
+  reminderRing: Color(0xFFFF0000),
   priorityLow: Color(0xFF7FA3B8),
   shadow: Color(0x66000000),
   glowPrimary: Color(0x4D7005BB),
@@ -110,10 +115,58 @@ extension AppSkinContext on BuildContext {
 
   AppMotionScale get motion =>
       AppMotionScale(isReduced: MediaQuery.maybeDisableAnimationsOf(this) ?? false);
+
+  /// Whether to draw the iOS shell: liquid-glass cards, the floating nav pill,
+  /// Milo in the home pane rather than the sidebar, a gear in the home header.
+  ///
+  /// One definition on purpose — `grep useLiquidGlass` finds every gate, and
+  /// there are only six, all of them composition decisions. Leaf widgets never
+  /// ask the platform: [GlassCard] takes a `glass` flag instead, which is what
+  /// keeps this from spreading into the drawing code.
+  ///
+  /// Reads [ThemeData.platform] rather than `defaultTargetPlatform` because
+  /// [buildAppTheme] sets no `platform:`, so under `flutter_test` this is
+  /// false and every pre-existing test keeps exercising the Windows path
+  /// untouched. An iOS test opts in with
+  /// `buildAppTheme().copyWith(platform: TargetPlatform.iOS)` — the same
+  /// mechanism `test/milo_orb_test.dart` already uses to fake a platform.
+  ///
+  /// Costs a dependency on the whole [ThemeData], unlike [palette], which
+  /// returns a const.
+  ///
+  /// Not combined with a width test, deliberately. The phone chrome — the nav
+  /// pill, and the header gear it has no room for — needs
+  /// `useLiquidGlass && windowSize.isCompact`, and that conjunction belongs at
+  /// the call site, where `windowSize` comes from [AdaptiveLayout]'s own
+  /// constraints. A getter here could only read [MediaQuery], which is the
+  /// screen rather than the pane, and would size an iPad Split View wrong.
+  bool get useLiquidGlass => Theme.of(this).platform == TargetPlatform.iOS;
+
+  /// Whether the app draws its own window buttons and drag handle.
+  ///
+  /// True on Windows, where the runner reports the whole window as client area
+  /// (`WM_NCCALCSIZE` in `windows/runner/win32_window.cpp`) and there is no
+  /// caption left to move, minimise or close the window with. Every other
+  /// platform's window is managed for it.
+  ///
+  /// Reads the theme rather than `dart:io`'s `Platform.isWindows` for the same
+  /// reason [useLiquidGlass] does: `Platform` is true under `flutter_test` on
+  /// a Windows machine, which would mount the chrome — and its 32pt inset — in
+  /// every widget test that pumps the shell, on a window that does not exist.
+  /// The cost is that `tool/ios_preview.dart`, which forces the iOS look onto
+  /// a real Windows window, gets no buttons; Alt+F4 closes it.
+  bool get useCustomWindowChrome =>
+      Theme.of(this).platform == TargetPlatform.windows;
 }
 
 /// Builds the app's [ThemeData], carrying [kPalette] and [kTypography].
-ThemeData buildAppTheme() {
+///
+/// [background] overrides the ground. It lands on `scaffoldBackgroundColor`,
+/// which [OrbFieldBackground] reads back out through `Theme.of`. The app itself
+/// passes nothing — the ground is [AppPalette.background] — but the seam is
+/// kept because it is the one place the ground can be swapped without reaching
+/// into the background widget, and tests use it.
+ThemeData buildAppTheme({Color? background}) {
   const palette = kPalette;
   final base = palette.isDark
       ? ThemeData.dark(useMaterial3: true)
@@ -135,7 +188,7 @@ ThemeData buildAppTheme() {
   }
 
   return base.copyWith(
-    scaffoldBackgroundColor: palette.background,
+    scaffoldBackgroundColor: background ?? palette.background,
     colorScheme: base.colorScheme.copyWith(
       brightness: palette.brightness,
       primary: palette.accent,

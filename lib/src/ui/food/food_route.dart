@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import '../widgets/ambient_background.dart';
 import '../widgets/ph_light_icons.dart';
 
 /// Pushes a food-logger screen onto the root navigator.
@@ -17,10 +16,8 @@ Future<T?> pushFoodPage<T>(BuildContext context, Widget page) {
     MaterialPageRoute<T>(
       builder: (context) => Scaffold(
         backgroundColor: Colors.transparent,
-        body: AmbientBackground(
-          // The pages draw their own bottom padding, as the panes do.
-          child: SafeArea(bottom: false, child: page),
-        ),
+        // The pages draw their own bottom padding, as the panes do.
+        body: SafeArea(bottom: false, child: page),
       ),
     ),
   );

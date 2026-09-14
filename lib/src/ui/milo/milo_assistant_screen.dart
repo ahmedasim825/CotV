@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,24 +31,41 @@ class MiloAssistantScreen extends ConsumerWidget {
     final palette = context.palette;
     final conversation = ref.watch(miloConversationProvider);
 
+    const borderRadius = BorderRadius.horizontal(left: Radius.circular(32));
+
     return Drawer(
       width: math.min(maxWidth, MediaQuery.sizeOf(context).width - 24),
       elevation: 0,
-      backgroundColor: palette.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(left: Radius.circular(32)),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            const _PanelHeader(),
-            Expanded(
-              child: conversation.isEmpty
-                  ? const _EmptyState()
-                  : _Transcript(messages: conversation.messages),
+      // Glass over the orb field rather than a slab on top of it. The
+      // panel used to be an opaque fill the colour of the old slate canvas;
+      // against a near-black night base that read as a lighter rectangle
+      // pasted over the app. What it samples is the screen behind dimmed by
+      // the shell's scrim, so the transcript keeps its contrast.
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: borderRadius),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.surface.withValues(alpha: 0.72),
+              border: Border(left: BorderSide(color: palette.glassBorder)),
             ),
-            _Composer(isBusy: conversation.isBusy),
-          ],
+            child: SafeArea(
+              child: Column(
+                children: [
+                  const _PanelHeader(),
+                  Expanded(
+                    child: conversation.isEmpty
+                        ? const _EmptyState()
+                        : _Transcript(messages: conversation.messages),
+                  ),
+                  _Composer(isBusy: conversation.isBusy),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

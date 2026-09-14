@@ -29,6 +29,12 @@ const List<String> _monthNames = [
 
 String _two(int value) => value.toString().padLeft(2, '0');
 
+/// The name of a month, 1-based: `monthName(9)` is `September`.
+///
+/// [formatFullDate] and [formatShortDate] both bake a weekday and a day number
+/// around the name; this is for the surfaces that want the month on its own.
+String monthName(int month) => _monthNames[month - 1];
+
 /// 24-hour clock time, e.g. `05:42`. Matches the prayer cards from Part 1.
 String formatClock(DateTime time) => '${_two(time.hour)}:${_two(time.minute)}';
 

@@ -16,7 +16,7 @@ class AppTypography {
     double letterSpacing = -1.2,
     double height = 1.0,
   }) {
-    return GoogleFonts.plusJakartaSans(
+    return GoogleFonts.inter(
       fontSize: size,
       color: color,
       fontWeight: weight,
@@ -33,7 +33,7 @@ class AppTypography {
     double? letterSpacing,
     double? height,
   }) {
-    return GoogleFonts.plusJakartaSans(
+    return GoogleFonts.inter(
       fontSize: size,
       color: color,
       fontWeight: weight,
@@ -61,5 +61,5 @@ class AppTypography {
 
   /// The base [TextTheme] the [MaterialApp] installs, so any widget that
   /// does not style its own text still lands on the theme's font.
-  TextTheme textTheme(TextTheme base) => GoogleFonts.plusJakartaSansTextTheme(base);
+  TextTheme textTheme(TextTheme base) => GoogleFonts.interTextTheme(base);
 }

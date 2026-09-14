@@ -31,6 +31,7 @@ import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
+import 'package:cotv/src/providers/ambient_providers.dart';
 import 'package:cotv/src/providers/clock_providers.dart';
 import 'package:cotv/src/providers/habit_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
@@ -144,6 +145,8 @@ void main() {
           securityServiceProvider.overrideWithValue(_FakeSecurityService()),
           notificationServiceProvider
               .overrideWithValue(_FakeNotificationService()),
+          // The orb field animates forever; pumpAndSettle would time out.
+          ambientAnimationProvider.overrideWithValue(false),
         ],
         child: const PrayerLockoutApp(),
       ),
@@ -290,6 +293,8 @@ void main() {
               securityServiceProvider.overrideWithValue(_FakeSecurityService()),
               notificationServiceProvider
                   .overrideWithValue(_FakeNotificationService()),
+              // The orb field animates forever; pumpAndSettle would time out.
+              ambientAnimationProvider.overrideWithValue(false),
               // Before due time: 12pm.
               currentMinuteProvider
                   .overrideWithValue(DateTime(2027, 3, 15, 12, 0)),
@@ -338,6 +343,8 @@ void main() {
               securityServiceProvider.overrideWithValue(_FakeSecurityService()),
               notificationServiceProvider
                   .overrideWithValue(_FakeNotificationService()),
+              // The orb field animates forever; pumpAndSettle would time out.
+              ambientAnimationProvider.overrideWithValue(false),
               // After due time: 4pm.
               currentMinuteProvider
                   .overrideWithValue(DateTime(2027, 3, 15, 16, 0)),

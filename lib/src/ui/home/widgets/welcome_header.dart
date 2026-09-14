@@ -9,10 +9,9 @@ import '../../theme/app_theme.dart';
 
 /// "Welcome, Ahmed" over the next prayer and the current temperature.
 ///
-/// The greeting is painted through a radial shader rather than a flat colour:
-/// white at the core, falling to the accent by half the radius. The centre
-/// sits right of middle so the purple lands on "Welcome," and the white on
-/// the name, which is how the design reads.
+/// The greeting is flat white at 70%. It used to ramp from violet to white
+/// through a [ShaderMask]; the redesign dropped the gradient, so it is now
+/// dimmer than the prayer line beneath it rather than more colourful than it.
 class WelcomeHeader extends ConsumerWidget {
   const WelcomeHeader({super.key, this.name = 'Ahmed'});
 
@@ -27,24 +26,14 @@ class WelcomeHeader extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (bounds) => RadialGradient(
-            center: const Alignment(0.6, 0.0),
-            radius: 0.9,
-            colors: [palette.textPrimary, palette.accent],
-            stops: const [0.0, 0.5],
-          ).createShader(bounds),
-          child: Text(
-            'Welcome, $name',
-            style: context.typography.display(
-              size: 42,
-              weight: FontWeight.w700,
-              letterSpacing: -1.4,
-              // srcIn discards the colour but uses the alpha channel; an opaque
-              // colour is needed so the shader shows through completely.
-              color: palette.textPrimary,
-            ),
+        Text(
+          'Welcome, $name',
+          style: context.typography.display(
+            size: 42,
+            weight: FontWeight.w700,
+            letterSpacing: -1.4,
+            // White at 70% — `textSecondary` is exactly that.
+            color: palette.textSecondary,
           ),
         ),
         const SizedBox(height: 8),

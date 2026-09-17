@@ -1,11 +1,13 @@
 import 'package:hive_ce/hive_ce.dart';
 
+import 'sync_stamped.dart';
+
 part 'user_settings.g.dart';
 
 /// Persisted app-wide preferences. There is exactly one record of this,
 /// stored under [UserSettings.defaultId] — see `UserSettingsRepository`.
 @HiveType(typeId: 7)
-class UserSettings {
+class UserSettings implements SyncStamped {
   UserSettings({
     this.id = UserSettings.defaultId,
     this.isBiometricEnabled = false,
@@ -21,12 +23,15 @@ class UserSettings {
     this.proteinTargetGrams,
     this.carbTargetGrams,
     this.fatTargetGrams,
+    this.updatedAtMillis,
+    this.syncedAtMillis,
   });
 
   /// The single key this settings record is always stored under.
   static const String defaultId = 'default';
 
   @HiveField(0)
+  @override
   final String id;
 
   @HiveField(1)
@@ -106,6 +111,23 @@ class UserSettings {
   @HiveField(13)
   final int? fatTargetGrams;
 
+  /// See [SyncStamped]. Settings carried no timestamp before these fields,
+  /// so `HiveMigrations` backfills from the migration instant.
+  @HiveField(14)
+  @override
+  final int? updatedAtMillis;
+
+  @HiveField(15)
+  @override
+  final int? syncedAtMillis;
+
+  /// Always false. There is exactly one settings record and nothing ever
+  /// deletes it, so there is no tombstone to keep and no field stored for
+  /// one — the getter exists only to satisfy [SyncStamped], which the
+  /// merge code reads uniformly across every synced entity.
+  @override
+  bool get isDeleted => false;
+
   bool get hasLocation => latitude != null && longitude != null;
 
   UserSettings copyWith({
@@ -139,6 +161,36 @@ class UserSettings {
       proteinTargetGrams: proteinTargetGrams ?? this.proteinTargetGrams,
       carbTargetGrams: carbTargetGrams ?? this.carbTargetGrams,
       fatTargetGrams: fatTargetGrams ?? this.fatTargetGrams,
+      // Carried forward, not exposed — see the note on Task.copyWith.
+      updatedAtMillis: updatedAtMillis,
+      syncedAtMillis: syncedAtMillis,
     );
   }
+
+  /// These settings marked as changed at [millis]. Called by the repository
+  /// on the way to the box, never by UI code.
+  UserSettings stampUpdated(int millis) => _sync(updatedAtMillis: millis);
+
+  /// Records that the server has seen this record's current state.
+  UserSettings markSynced(int millis) => _sync(syncedAtMillis: millis);
+
+  UserSettings _sync({int? updatedAtMillis, int? syncedAtMillis}) =>
+      UserSettings(
+        id: id,
+        isBiometricEnabled: isBiometricEnabled,
+        preAdhanNotificationMinutes: preAdhanNotificationMinutes,
+        latitude: latitude,
+        longitude: longitude,
+        themeId: themeId,
+        speaksReplies: speaksReplies,
+        listensForWakeWord: listensForWakeWord,
+        voiceName: voiceName,
+        aiMemorySummary: aiMemorySummary,
+        dailyCalorieTarget: dailyCalorieTarget,
+        proteinTargetGrams: proteinTargetGrams,
+        carbTargetGrams: carbTargetGrams,
+        fatTargetGrams: fatTargetGrams,
+        updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
+        syncedAtMillis: syncedAtMillis ?? this.syncedAtMillis,
+      );
 }

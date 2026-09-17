@@ -6,12 +6,14 @@ import '../../providers/auth_providers.dart';
 import '../../providers/nutrition_providers.dart';
 import '../../providers/security_providers.dart';
 import '../../providers/settings_providers.dart';
+import '../../providers/sync_providers.dart';
 import '../../providers/user_settings_providers.dart';
 import '../../security/security_service.dart';
 import '../../services/prayer_service.dart';
 import '../../services/shortcuts_service.dart';
 import '../../services/supabase_config.dart';
 import '../components/components.dart';
+import '../format/time_format.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
@@ -62,7 +64,8 @@ class SettingsScreen extends ConsumerWidget {
               eyebrow: 'SYNC',
               title: 'Account',
               titleSize: 22,
-              subtitle: 'Sign in to carry your food log between devices.',
+              subtitle: 'Sign in to carry your tasks, habits, study and chat '
+                  'between devices.',
             ),
             const SizedBox(height: 16),
             const _AccountSection(),
@@ -198,10 +201,10 @@ class _NutritionTargetsSection extends ConsumerWidget {
 /// implying it will build one.
 /// Who is signed in, and the control to change that.
 ///
-/// The whole food logger works signed out — this section is the difference
-/// between a log that lives on this device and one that follows the
-/// account, so it says which of those is currently true rather than
-/// implying sync is required.
+/// The whole app works signed out — this section is the difference between
+/// records that live on this device and records that follow the account, so
+/// it says which of those is currently true rather than implying sync is
+/// required.
 class _AccountSection extends ConsumerWidget {
   const _AccountSection();
 
@@ -211,6 +214,7 @@ class _AccountSection extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final configured = SupabaseConfig.isConfigured;
     final syncError = ref.watch(syncErrorProvider);
+    final status = ref.watch(syncControllerProvider);
 
     if (!configured) {
       return const SettingsGroup(
@@ -220,7 +224,8 @@ class _AccountSection extends ConsumerWidget {
             title: 'Sync not set up in this build',
             subtitle:
                 'Rebuild with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to '
-                'enable it. The food log works without it, on this device.',
+                'enable it. Everything works without it, on this device '
+                'alone.',
             enabled: false,
           ),
         ],
@@ -239,7 +244,8 @@ class _AccountSection extends ConsumerWidget {
               icon: user == null ? PhLight.lockKeyOpen : PhLight.checkCircle,
               title: user == null ? 'Not signed in' : 'Signed in',
               subtitle: user == null
-                  ? 'Your food log and recipes stay on this device.'
+                  ? 'Tasks, habits, study, chat and settings stay on this '
+                        'device.'
                   : user.email ?? 'Syncing to your account.',
               iconTint: user == null ? palette.textMuted : palette.success,
               trailing: Icon(
@@ -251,32 +257,60 @@ class _AccountSection extends ConsumerWidget {
                   ? () => showAccountSheet(context)
                   : () => _confirmSignOut(context, ref),
             ),
-            if (user != null)
+            if (user != null) ...[
+              if (status.blockedByAccountSwitch)
+                SettingsRow(
+                  icon: PhLight.warningCircle,
+                  title: 'Use this account on this device',
+                  subtitle: 'This device holds data from a different '
+                      'account. Sync is paused until you choose.',
+                  iconTint: palette.danger,
+                  onTap: () =>
+                      ref.read(syncControllerProvider.notifier)
+                          .adoptCurrentAccount(),
+                ),
               SettingsRow(
                 icon: PhLight.arrowClockwise,
-                title: 'Refresh now',
-                subtitle: 'Pull the log and recipes from the server again.',
+                title: status.isSyncing ? 'Syncing…' : 'Sync now',
+                subtitle: _lastSyncedLabel(status),
                 iconTint: palette.textMuted,
+                enabled: !status.isSyncing,
                 onTap: () {
+                  ref.read(syncControllerProvider.notifier).syncAll();
                   ref.read(dailyNutritionProvider.notifier).refresh();
                   ref.read(customRecipeListProvider.notifier).refresh();
                 },
               ),
+            ],
           ],
         ),
       ],
     );
   }
 
+  static String _lastSyncedLabel(SyncStatus status) {
+    final at = status.lastSyncedAt;
+    if (at == null) return 'Not synced on this device yet.';
+    return 'Last synced at ${formatClock(at)}.';
+  }
+
   Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    // The old copy said the log stays on the server and this device drops
+    // to local-only. True of the food log, which has no local store —
+    // and wrong for everything else, whose records stay right here.
     final confirmed = await confirmDestructive(
       context,
       title: 'Sign out?',
-      message: 'Your food log stays on the server. This device drops back '
-          'to a local-only log until you sign in again.',
+      message: 'Tasks, habits, study and chat stay on this device; the food '
+          'log stays on the server. Nothing syncs between your devices '
+          'until you sign in again.',
       confirmLabel: 'Sign out',
     );
-    if (confirmed) await ref.read(authControllerProvider.notifier).signOut();
+    if (!confirmed) return;
+    await ref.read(authControllerProvider.notifier).signOut();
+    // Cursors only. Local records are deliberately left alone — deleting
+    // them would make signing out a destructive act.
+    await ref.read(syncControllerProvider.notifier).forgetCursors();
   }
 }
 

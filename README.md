@@ -310,6 +310,99 @@ Dart constant: the strings in `AppDelegate.swift`, `StudyAppIntents` in
 default duration is duplicated too — `MiloTools.defaultMinutes` and the
 `?? 25` in the Swift.
 
+## Sync
+
+Tasks, habits, subjects, study logs, Milo's chat history and most settings
+are the same on both devices. Nutrition already synced and is untouched;
+reminders and the journal are not synced because neither is persisted at
+all. The Milo API keys and the biometric flag stay on the device they were
+entered on — the Keychain holds the authoritative copy of both.
+
+Supabase carries it, over the project the app was already initialised
+against. Sign in on both devices with the same account and they converge;
+signed out, everything still works, on that device alone.
+
+### What decides a conflict
+
+Every synced row carries two clocks, because they answer different
+questions. `updated_at` is the **server's** clock, set by a trigger, and
+decides *what to fetch* — it is the only ordering the two devices agree
+on, and it is never compared against a device clock.
+`client_updated_at` is the **device's** clock at the moment of the write,
+and decides *who wins*. Clock skew between a laptop and a phone is
+therefore confined to the rare genuine conflict rather than corrupting
+the fetch cursor.
+
+Merging a record has three cases, and only the last compares clocks across
+devices:
+
+- no local record — take the remote one
+- local record is clean — the remote wins, without any comparison
+- local record has unsent changes — a real conflict, settled on
+  `client_updated_at`, with a tie going to the remote so both devices
+  reach the same answer
+
+Two entities do not take that rule, because it loses data for them.
+
+**Habits** union their completion dates. `completedDates` is rewritten
+wholesale on every toggle, so record-level last-write-wins silently drops
+a check-in — tick Monday on the laptop and Tuesday on the phone while both
+are offline and one of them never happened. `streakCount` is recomputed
+from the merged set, since neither side's count describes a set neither
+side has seen. The accepted cost: un-ticking a day on one device is undone
+if the other still holds it. That is visible and re-doable, where the
+silent loss of a completed day is not.
+
+**Settings** sync per key, three-way against the values the device last
+agreed with the server about. Per-key alone is not enough: there is one
+timestamp for the whole record, so "is this remote key newer than my
+record?" says nothing about whether this device ever touched that key, and
+a device that changed one preference a moment ago would shadow every other
+preference the other device sent.
+
+### Deletes
+
+Every delete is a tombstone, not a removal. The row stays in the box (or
+carries `deleted = 1` in `milo.db`) so the deletion itself can be pushed,
+and every read path filters it out. A device that hard-deleted would tell
+the other device nothing, and the row would come back on the next pull.
+
+Tombstones are swept thirty days after the server acknowledges them, and
+only at the end of a clean sync while signed in.
+
+This is also why a fresh iOS sideload cannot wipe the laptop: absence is
+not a deletion, and a new install has no tombstones to push.
+
+### When it runs
+
+Sign-in, app resume, four seconds after a local write, every five minutes
+while the app is foregrounded, and the **Sync now** row in Settings. The
+five-minute poll is the one that matters on Windows, where a desktop
+window is seldom "paused" and `resumed` rarely fires.
+
+There is no Realtime subscription and no connectivity detection. A push
+that fails leaves its records marked as needing to go, and the next
+trigger retries them.
+
+### Setting it up
+
+The tables, their row-level security policies and the triggers are in
+`supabase/migrations/0001_sync_tables.sql`. Every table is scoped by
+`auth.uid()`, so one account can never read another's rows.
+
+CI needs `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` as repository
+secrets. Without them `SupabaseConfig.isConfigured` is false, `main()`
+skips `Supabase.initialize` entirely, and the artifact runs local-only —
+which is a legitimate build, just not one that can sign in. The Groq and
+Gemini keys are deliberately still not injected: those are recoverable
+from a binary with `strings`, and Milo asks for them once on device.
+
+### Signing out
+
+Local records stay. Only the sync cursors are dropped, so signing back in
+merges rather than re-downloads. Deleting the local data would make
+signing out a destructive act, which it is not.
+
 ## Platform differences
 
 | Feature | iOS | Windows |
@@ -320,6 +413,7 @@ default duration is duplicated too — `MiloTools.defaultMinutes` and the
 | Voice commands | yes | yes |
 | App lock | Face ID / Touch ID | Windows Hello |
 | Notifications | yes | yes |
+| Cross-device sync | yes | yes |
 | Calendar sync | yes | no — `device_calendar` is iOS/Android only, so the section is hidden |
 | Study, timer, logs | yes | yes |
 | Study timer notification | yes | yes — needs the full AUMID, see below |

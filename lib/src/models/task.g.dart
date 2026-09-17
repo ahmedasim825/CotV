@@ -28,13 +28,16 @@ class TaskAdapter extends TypeAdapter<Task> {
           : fields[6] as TaskPriority,
       createdAt: fields[7] as DateTime?,
       hasReminder: fields[8] == null ? false : fields[8] as bool,
+      updatedAtMillis: (fields[9] as num?)?.toInt(),
+      isDeleted: fields[10] == null ? false : fields[10] as bool,
+      syncedAtMillis: (fields[11] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -52,7 +55,13 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(7)
       ..write(obj.createdAt)
       ..writeByte(8)
-      ..write(obj.hasReminder);
+      ..write(obj.hasReminder)
+      ..writeByte(9)
+      ..write(obj.updatedAtMillis)
+      ..writeByte(10)
+      ..write(obj.isDeleted)
+      ..writeByte(11)
+      ..write(obj.syncedAtMillis);
   }
 
   @override

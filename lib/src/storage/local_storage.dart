@@ -8,6 +8,8 @@ import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/task.dart';
 import '../models/user_settings.dart';
+import 'hive_migrations.dart';
+import 'sync_metadata.dart';
 
 /// Box names — kept in one place so repositories and tests agree on them.
 class HiveBoxes {
@@ -20,6 +22,7 @@ class HiveBoxes {
   static const String studyLogs = 'study_logs';
   static const String chatMessages = 'chat_messages';
   static const String activeStudySession = 'active_study_session';
+  static const String syncMeta = SyncMetadata.boxName;
 }
 
 bool _initialized = false;
@@ -45,7 +48,20 @@ Future<void> initializeLocalStorage() async {
     Hive.openBox<StudyLog>(HiveBoxes.studyLogs),
     Hive.openBox<ChatMessage>(HiveBoxes.chatMessages),
     Hive.openBox<ActiveStudySession>(HiveBoxes.activeStudySession),
+    Hive.openBox<dynamic>(HiveBoxes.syncMeta),
   ]);
+
+  // After the boxes are open and before anything can read them, so no
+  // provider ever sees a record without its sync metadata.
+  await runHiveMigrations(
+    metadata: SyncMetadata(Hive.box<dynamic>(HiveBoxes.syncMeta)),
+    tasks: Hive.box<Task>(HiveBoxes.tasks),
+    habits: Hive.box<Habit>(HiveBoxes.habits),
+    subjects: Hive.box<Subject>(HiveBoxes.subjects),
+    studyLogs: Hive.box<StudyLog>(HiveBoxes.studyLogs),
+    userSettings: Hive.box<UserSettings>(HiveBoxes.userSettings),
+    backup: backupLocalStores,
+  );
 
   _initialized = true;
 }

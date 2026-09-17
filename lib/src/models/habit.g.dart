@@ -25,13 +25,16 @@ class HabitAdapter extends TypeAdapter<Habit> {
       completedDates: (fields[3] as List?)?.cast<DateTime>(),
       streakCount: fields[4] == null ? 0 : (fields[4] as num).toInt(),
       colorHex: fields[5] == null ? '#D8A657' : fields[5] as String,
+      updatedAtMillis: (fields[6] as num?)?.toInt(),
+      isDeleted: fields[7] == null ? false : fields[7] as bool,
+      syncedAtMillis: (fields[8] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Habit obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -43,7 +46,13 @@ class HabitAdapter extends TypeAdapter<Habit> {
       ..writeByte(4)
       ..write(obj.streakCount)
       ..writeByte(5)
-      ..write(obj.colorHex);
+      ..write(obj.colorHex)
+      ..writeByte(6)
+      ..write(obj.updatedAtMillis)
+      ..writeByte(7)
+      ..write(obj.isDeleted)
+      ..writeByte(8)
+      ..write(obj.syncedAtMillis);
   }
 
   @override

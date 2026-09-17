@@ -22,13 +22,16 @@ class StudyLogAdapter extends TypeAdapter<StudyLog> {
       subjectName: fields[2] as String,
       durationMinutes: (fields[3] as num).toInt(),
       timestamp: fields[4] as DateTime,
+      updatedAtMillis: (fields[5] as num?)?.toInt(),
+      isDeleted: fields[6] == null ? false : fields[6] as bool,
+      syncedAtMillis: (fields[7] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, StudyLog obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -38,7 +41,13 @@ class StudyLogAdapter extends TypeAdapter<StudyLog> {
       ..writeByte(3)
       ..write(obj.durationMinutes)
       ..writeByte(4)
-      ..write(obj.timestamp);
+      ..write(obj.timestamp)
+      ..writeByte(5)
+      ..write(obj.updatedAtMillis)
+      ..writeByte(6)
+      ..write(obj.isDeleted)
+      ..writeByte(7)
+      ..write(obj.syncedAtMillis);
   }
 
   @override

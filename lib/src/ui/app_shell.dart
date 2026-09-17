@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/chat_session_providers.dart';
 import '../providers/milo_providers.dart';
 import '../providers/study_providers.dart';
+import '../providers/sync_providers.dart';
 import 'food/food_search_screen.dart';
 import 'home/home_screen.dart';
 import 'milo/milo_assistant_screen.dart';
@@ -227,6 +228,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     // this provider, so without a watch it would never run. A no-op off
     // iOS.
     ref.watch(studyAppIntentsProvider);
+
+    // And once more for sync's scheduler, which owns every trigger: the
+    // pull on sign-in, the one on resume, the debounce after a local write
+    // and the five-minute poll. A no-op signed out or in a build with no
+    // Supabase defines.
+    ref.watch(syncSchedulerProvider);
 
     return AdaptiveLayout(
       builder: (context, windowSize) {

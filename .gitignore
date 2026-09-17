@@ -60,3 +60,6 @@ certs/
 # ~350MB of downloaded artifact, and past GitHub's file limit — the agent
 # reports them missing and falls back to the OS voice when they are not here.
 tools/milo_pc_agent/models/
+
+# Claude Code worktrees and local session state.
+.claude/

@@ -198,30 +198,45 @@ begin
   ] loop
     execute format('alter table public.%I enable row level security', t);
 
+    -- RLS alone is not enough. PostgREST reaches these as the
+    -- `authenticated` role, and without the grant every request is a
+    -- permission error rather than an empty result. Supabase's default
+    -- privileges cover tables created through the dashboard; a table
+    -- created by a migration does not get them for free.
+    execute format(
+      'grant select, insert, update, delete on public.%I to authenticated', t
+    );
+
     execute format('drop policy if exists %I on public.%I', t || '_select', t);
     execute format('drop policy if exists %I on public.%I', t || '_insert', t);
     execute format('drop policy if exists %I on public.%I', t || '_update', t);
     execute format('drop policy if exists %I on public.%I', t || '_delete', t);
 
     execute format(
-      'create policy %I on public.%I for select using (auth.uid() = user_id)',
+      'create policy %I on public.%I for select using ((select auth.uid()) = user_id)',
       t || '_select', t
     );
     execute format(
-      'create policy %I on public.%I for insert with check (auth.uid() = user_id)',
+      'create policy %I on public.%I for insert with check ((select auth.uid()) = user_id)',
       t || '_insert', t
     );
     execute format(
       'create policy %I on public.%I for update
-         using (auth.uid() = user_id) with check (auth.uid() = user_id)',
+         using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id)',
       t || '_update', t
     );
     -- Sync itself never issues a hard delete; this exists so a user can
     -- purge their own rows, and so `on delete cascade` from auth.users
     -- has somewhere to land.
     execute format(
-      'create policy %I on public.%I for delete using (auth.uid() = user_id)',
+      'create policy %I on public.%I for delete using ((select auth.uid()) = user_id)',
       t || '_delete', t
     );
   end loop;
 end $$;
+
+-- PostgREST serves from a cached copy of the schema. Without this the
+-- tables exist and every request still answers "Could not find the table
+-- 'public.<name>' in the schema cache" — which is what happened the first
+-- time these were applied.
+notify pgrst, 'reload schema';

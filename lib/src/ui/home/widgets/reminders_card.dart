@@ -23,9 +23,15 @@ class RemindersCard extends ConsumerWidget {
     // while the card is on screen has to flip to danger by itself. The task
     // list next door already keys off this provider for the same reason.
     final now = ref.watch(currentMinuteProvider);
-    final reminders = [...ref.watch(reminderListProvider)]
-      ..sort((a, b) => a.dueAt.compareTo(b.dueAt));
-    final shown = reminders.take(_shortlistLength).toList(growable: false);
+    // Null for the one frame between the box opening and its stream
+    // delivering. Held as a nullable rather than defaulted to `[]` so the
+    // card can tell "nothing yet" from "nothing to show" below — claiming
+    // "No reminders" on a cold launch would be a statement the app cannot
+    // back at that point.
+    final reminders = ref.watch(reminderListProvider).value?.toList()
+      ?..sort((a, b) => a.dueAt.compareTo(b.dueAt));
+    final shown = reminders?.take(_shortlistLength).toList(growable: false) ??
+        const [];
 
     return HomeCardFrame(
       title: 'Reminders',
@@ -34,7 +40,9 @@ class RemindersCard extends ConsumerWidget {
       // their own.
       onTap: () => AppNavigation.maybeOf(context)?.call(AppDestination.tasks),
       semanticLabel: 'Reminders. Open the task list.',
-      child: reminders.isEmpty
+      child: reminders == null
+          ? const SizedBox(height: 24)
+          : reminders.isEmpty
           ? const HomeCardNote(message: 'No reminders')
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,

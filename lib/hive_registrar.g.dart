@@ -5,7 +5,7 @@
 import 'package:hive_ce/hive_ce.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
-import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -15,8 +15,7 @@ extension HiveRegistrar on HiveInterface {
   void registerAdapters() {
     registerAdapter(ActiveStudySessionAdapter());
     registerAdapter(ChatMessageAdapter());
-    registerAdapter(HabitAdapter());
-    registerAdapter(HabitFrequencyAdapter());
+    registerAdapter(ReminderAdapter());
     registerAdapter(StudyLogAdapter());
     registerAdapter(SubjectAdapter());
     registerAdapter(TaskAdapter());
@@ -29,8 +28,7 @@ extension IsolatedHiveRegistrar on IsolatedHiveInterface {
   void registerAdapters() {
     registerAdapter(ActiveStudySessionAdapter());
     registerAdapter(ChatMessageAdapter());
-    registerAdapter(HabitAdapter());
-    registerAdapter(HabitFrequencyAdapter());
+    registerAdapter(ReminderAdapter());
     registerAdapter(StudyLogAdapter());
     registerAdapter(SubjectAdapter());
     registerAdapter(TaskAdapter());

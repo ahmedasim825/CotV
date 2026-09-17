@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/calendar_sync_models.dart';
 import '../models/daily_prayer_times.dart';
 import '../models/prayer_window.dart';
+import '../ui/format/time_format.dart';
 import 'calendar_providers.dart';
 import 'clock_providers.dart';
 import 'prayer_providers.dart';

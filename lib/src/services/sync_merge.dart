@@ -5,8 +5,6 @@
 // values and asserts the pair converges, rather than standing up two
 // devices to find out.
 
-import '../models/habit.dart';
-import '../models/habit_view.dart';
 import '../models/sync_stamped.dart';
 import '../models/user_settings.dart';
 
@@ -69,7 +67,7 @@ class MergeResult<T> {
 ///
 /// Accepted loss: two devices editing *different fields* of one record
 /// while both are offline. The later write's whole record wins and the
-/// earlier device's field edit is gone. [mergeHabit] is the one entity
+/// earlier device's field edit is gone. Habits used to be the one entity
 /// where that was too expensive to accept.
 MergeResult<T> resolveRecord<T extends SyncStamped>(T? local, T remote) {
   if (local == null) return MergeResult(MergeDecision.applyRemote, remote);
@@ -87,75 +85,6 @@ MergeResult<T> resolveRecord<T extends SyncStamped>(T? local, T remote) {
       ? MergeResult(MergeDecision.applyRemote, remote)
       : const MergeResult.keepLocal();
 }
-
-/// Habits, where the default rule loses data outright.
-///
-/// `completedDates` is rewritten wholesale on every toggle, so record-level
-/// last-write-wins silently drops a check-in: tick Monday on the laptop and
-/// Tuesday on the phone while both are offline, and one of them simply
-/// never happened. So the dates are unioned, and `streakCount` is
-/// recomputed from the merged set rather than taken from either side —
-/// neither side's count describes a set neither side has seen.
-///
-/// Everything else on the habit (title, cadence, colour) still follows
-/// [resolveRecord]'s clock comparison.
-///
-/// **Accepted loss:** un-ticking a day on one device is undone if the other
-/// still holds that date and syncs afterwards. That failure is visible —
-/// the tick reappears and can be undone again — where the record-LWW
-/// failure is the silent loss of a completed day.
-///
-/// A `removedDates` tombstone list looks like the fix and is not: A removes
-/// Monday, B later re-ticks Monday, and `union(completed) - union(removed)`
-/// drops B's newer action. Making that converge needs a timestamp per date,
-/// which is the `habit_check_ins` table in the plan — worth doing whole,
-/// later, rather than half-built now.
-MergeResult<Habit> mergeHabit(Habit? local, Habit remote, DateTime now) {
-  // `streakCount` is derived from the dates and so is not a column — a
-  // habit off the wire always arrives with zero. Recomputing here, before
-  // anything compares or stores it, is what stops a pulled habit showing a
-  // streak of nothing on the second device.
-  final incoming = _withStreak(remote, now);
-  final base = resolveRecord<Habit>(local, incoming);
-
-  // Only a genuine conflict unions. A clean local habit holds exactly what
-  // the server last gave it, so the remote strictly supersedes it — and
-  // unioning here would resurrect every date un-ticked on the other device,
-  // which would stop un-ticks propagating at all rather than only losing
-  // the rare simultaneous one.
-  if (local == null || !local.isDirty) return base;
-  if (base.decision == MergeDecision.inSync) return base;
-
-  final localDates = local.completedDates.map(normalizeDay).toSet();
-  final remoteDates = incoming.completedDates.map(normalizeDay).toSet();
-  final union = {...localDates, ...remoteDates};
-
-  // Nothing to reconcile: the two sides already hold the same days.
-  if (union.length == localDates.length && union.length == remoteDates.length) {
-    return base;
-  }
-
-  // Whichever record won on the clock supplies the scalar fields; the dates
-  // and the streak come from the union regardless.
-  final winner = base.decision == MergeDecision.keepLocal ? local : incoming;
-  final sorted = union.toList()..sort();
-
-  return MergeResult(
-    MergeDecision.applyAndPush,
-    winner.copyWith(
-      completedDates: sorted,
-      streakCount: computeStreak(union, winner.frequency, now),
-    ),
-  );
-}
-
-Habit _withStreak(Habit habit, DateTime now) => habit.copyWith(
-      streakCount: computeStreak(
-        habit.completedDates.map(normalizeDay).toSet(),
-        habit.frequency,
-        now,
-      ),
-    );
 
 /// [resolveRecord]'s rule, over a chat row rather than a model.
 ///

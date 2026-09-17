@@ -27,5 +27,9 @@ import 'package:cotv/main.dart' as app;
 
 Future<void> main() async {
   debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+  // Its own Hive directory, so this can run while the installed build is
+  // open. Sharing one, the second process to start dies on a locked box with
+  // an unhandled FileSystemException before it ever paints.
+  app.debugStorageSubdirectory = 'preview';
   await app.main();
 }

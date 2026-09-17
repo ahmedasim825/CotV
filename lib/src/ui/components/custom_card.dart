@@ -29,8 +29,7 @@ class CustomCard extends StatefulWidget {
   final double radius;
 
   /// When set, the card borrows this color for its border and (when
-  /// [selected]) its fill — how a habit tile carries its own color and how
-  /// the theme picker marks the active theme.
+  /// [selected]) its fill — how the theme picker marks the active theme.
   final Color? accent;
 
   /// Overrides the fill entirely. Takes precedence over [accent].

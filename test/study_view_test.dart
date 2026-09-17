@@ -4,7 +4,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cotv/src/models/habit_view.dart' show daysInMonth;
+import 'package:cotv/src/ui/format/time_format.dart' show daysInMonth;
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/study_view.dart';
 import 'package:cotv/src/models/subject.dart';

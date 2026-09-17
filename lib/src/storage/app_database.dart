@@ -3,7 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 /// The SQL half of Milo's local storage.
 ///
-/// Hive still owns tasks, habits, subjects, study logs and settings, and is
+/// Hive still owns tasks, reminders, subjects, study logs and settings, and is
 /// a good fit for them: whole-object reads of small collections. This
 /// exists for the things it is a bad fit for — an ordered, paged message
 /// history, and later a vector index and a sync queue. Those want `LIMIT`,

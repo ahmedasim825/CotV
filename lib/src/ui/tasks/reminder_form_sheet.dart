@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/reminder.dart';
+import '../../models/task.dart';
 import '../../providers/reminder_providers.dart';
 import '../components/components.dart';
 import '../format/time_format.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
+import 'widgets/priority_selector.dart';
+import 'widgets/sheet_icon_action.dart';
 
 const _uuid = Uuid();
 
@@ -39,6 +42,7 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late DateTime _dueAt;
+  late TaskPriority _priority;
   bool _isSaving = false;
 
   bool get _isEditing => widget.existing != null;
@@ -49,6 +53,7 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
     final existing = widget.existing;
     _titleController = TextEditingController(text: existing?.title ?? '');
     _dueAt = existing?.dueAt ?? _nextHour(DateTime.now());
+    _priority = existing?.priority ?? TaskPriority.medium;
   }
 
   @override
@@ -99,10 +104,22 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
     final existing = widget.existing;
     final notifier = ref.read(reminderListProvider.notifier);
 
+    // Awaited now that these reach a Hive box rather than an in-memory list.
+    // `_isSaving` has always existed for this moment; until reminders were
+    // persisted there was nothing for it to cover.
     if (existing == null) {
-      notifier.add(Reminder(id: _uuid.v4(), title: title, dueAt: _dueAt));
+      await notifier.addReminder(Reminder(
+        id: _uuid.v4(),
+        title: title,
+        dueAt: _dueAt,
+        priority: _priority,
+      ));
     } else {
-      notifier.update(existing.copyWith(title: title, dueAt: _dueAt));
+      await notifier.updateReminder(existing.copyWith(
+        title: title,
+        dueAt: _dueAt,
+        priority: _priority,
+      ));
     }
 
     if (mounted) Navigator.of(context).pop();
@@ -120,7 +137,7 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
     );
     if (!confirmed || !mounted) return;
 
-    ref.read(reminderListProvider.notifier).remove(existing.id);
+    await ref.read(reminderListProvider.notifier).deleteReminder(existing.id);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -133,7 +150,7 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
       child: StandardBottomSheet(
         title: _isEditing ? 'Edit reminder' : 'New reminder',
         trailing: _isEditing
-            ? _IconAction(
+            ? SheetIconAction(
                 icon: PhLight.trash,
                 tint: palette.danger,
                 semanticLabel: 'Delete reminder',
@@ -185,6 +202,16 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
             FieldLabel(icon: PhLight.clock, label: 'Due date & time'),
             const SizedBox(height: 10),
             _DueAtField(dueAt: _dueAt, onPick: _pickDueAt),
+            const SizedBox(height: 22),
+            FieldLabel(icon: PhLight.flagPennant, label: 'Priority'),
+            const SizedBox(height: 10),
+            // The same control the task sheet uses, over the same enum.
+            // Without it the priority dot the list draws on every reminder
+            // row would be stuck on `medium` and purely decorative.
+            PrioritySelector(
+              selected: _priority,
+              onChanged: (value) => setState(() => _priority = value),
+            ),
           ],
         ),
       ),
@@ -194,48 +221,6 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
 
 /// A small circular icon button for a sheet's title row.
 ///
-/// Mirrors `habit_form_sheet.dart`'s private widget of the same name and
-/// shape — both sheets put a destructive action in the same spot, and
-/// neither is worth promoting to a shared component for one field each.
-class _IconAction extends StatelessWidget {
-  const _IconAction({
-    required this.icon,
-    required this.onTap,
-    required this.semanticLabel,
-    this.tint,
-  });
-
-  final IconData icon;
-  final VoidCallback? onTap;
-  final String semanticLabel;
-  final Color? tint;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final color = tint ?? palette.textSecondary;
-
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 17, color: color),
-        ),
-      ),
-    );
-  }
-}
-
 class _DueAtField extends StatelessWidget {
   const _DueAtField({required this.dueAt, required this.onPick});
 

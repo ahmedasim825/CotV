@@ -53,6 +53,8 @@ class AppPalette {
     required this.taskRing,
     required this.reminderRing,
     required this.priorityLow,
+    required this.priorityMedium,
+    required this.priorityHigh,
     required this.shadow,
     required this.glowPrimary,
     required this.glowSecondary,
@@ -98,13 +100,59 @@ class AppPalette {
   /// line under the title, not by the ring.
   final Color reminderRing;
 
+  /// The three priority hues, used as the dot on a task or reminder row and
+  /// as the tint on the priority badge and the timeline blocks.
+  ///
+  /// All three are their own fields rather than being borrowed from [danger]
+  /// and [secondary] the way they used to be: priority is one scale, and a
+  /// scale whose top step is literally the app's error red cannot be retuned
+  /// without also restyling every failure state. Rows render them at 60%;
+  /// the alpha is applied at the call site, not baked in here.
   final Color priorityLow;
+  final Color priorityMedium;
+  final Color priorityHigh;
   final Color shadow;
   final Color glowPrimary;
   final Color glowSecondary;
   final PrayerHues prayerHues;
 
   bool get isDark => brightness == Brightness.dark;
+
+  /// The tight second shadow directly beneath a floating surface. Darker and
+  /// much smaller than [shadow], which is the wide ambient one.
+  Color get shadowContact => const Color(0xFF000000).withValues(alpha: 0.45);
+
+  /// The lit and shaded ends of a glass rim, running top-leading to
+  /// bottom-trailing. Derived rather than two more constructor fields: every
+  /// pane in the app is lit from the same direction, so these are a property
+  /// of the palette's light, not of any one surface.
+  Color get rimLit => textPrimary.withValues(alpha: 0.35);
+
+  Color get rimShade => textPrimary.withValues(alpha: 0.05);
+
+  /// The bento card on the tasks screen: a 3% white plate under a 6% white
+  /// rim. Far quieter than [cardFill]/[hairline] (2%/10%) because the card is
+  /// a grouping device rather than a surface — the rows are the content, and
+  /// the plate only has to say where the day starts and stops.
+  Color get bentoFill => textPrimary.withValues(alpha: 0.03);
+
+  /// The bento card's rim, and the rules between its rows. One token for both:
+  /// the divider is the same line as the border, just drawn inside.
+  Color get bentoBorder => textPrimary.withValues(alpha: 0.06);
+
+  /// An unchecked completion box. A shade above [bentoFill] so the control
+  /// separates from the card it sits on without needing a heavier rim.
+  Color get checkboxFill => textPrimary.withValues(alpha: 0.04);
+
+  /// The pill behind the selected segment. Accent at 20% rather than flat
+  /// [accent]: the control is a location indicator, not a button, and a solid
+  /// fill reads as something to press.
+  Color get segmentActive => accent.withValues(alpha: 0.20);
+
+  /// A reminder's due line once the moment has passed. Hotter than [danger]
+  /// on purpose — [danger] marks a failure the app is reporting, this marks a
+  /// time the user has missed.
+  Color get dueOverdue => const Color(0xFFF20606);
 
   Color get accentSoft => accent.withValues(alpha: 0.16);
 

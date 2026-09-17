@@ -1,53 +1,48 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 import '../models/reminder.dart';
+import '../repositories/reminder_repository.dart';
+import '../storage/local_storage.dart';
 
-/// The reminder list, held in memory and seeded with samples.
+final reminderBoxProvider =
+    Provider<Box<Reminder>>((ref) => Hive.box<Reminder>(HiveBoxes.reminders));
+
+final reminderRepositoryProvider = Provider<ReminderRepository>((ref) {
+  return HiveReminderRepository(ref.watch(reminderBoxProvider));
+});
+
+/// The live reminder list plus CRUD actions.
 ///
-/// Frontend only for now: there is no reminder box, adapter or repository, so
-/// edits live until the process exits. That limit is deliberate and the
-/// alternative was worse — the card carries an edit affordance, and a pencil
-/// that opens nothing is a lie. The three mutators below are the whole
-/// surface a real store has to satisfy; making it persistent means turning
-/// this into a `StreamNotifier` over a Hive box the way `taskListProvider`
-/// already works. That swap is not free of consumer changes, though: the
-/// watch site's type moves from `List<Reminder>` to `AsyncValue<List<Reminder>>`,
-/// and every current consumer has no loading or error branch to receive it —
-/// `reminders_card.dart` does `[...ref.watch(reminderListProvider)]` and
-/// `task_list_view.dart` does `reminders.isEmpty` directly on the list. Both
-/// would need a `.when(...)` (or `.value ?? const []`) added before the swap
-/// compiles.
-class ReminderListController extends Notifier<List<Reminder>> {
+/// Reminders used to be a plain in-memory [Notifier] seeded with two samples,
+/// because there was no box, adapter or repository behind them. Giving the
+/// rows checkboxes is what forced the change: a tick that vanishes on the next
+/// launch is worse than no tick at all.
+///
+/// Every write goes through the repository, which mutates the Hive box; the
+/// box's own change stream flows back into this provider's state, so the UI
+/// never needs manual invalidation. Same shape as [TaskListNotifier], minus
+/// the notification reconciliation — a reminder schedules nothing yet.
+class ReminderListNotifier extends StreamNotifier<List<Reminder>> {
+  ReminderRepository get _repository => ref.read(reminderRepositoryProvider);
+
   @override
-  List<Reminder> build() {
-    return [
-      Reminder(
-        id: 'sample-1',
-        title: 'Workout',
-        dueAt: DateTime(2026, 7, 27, 3, 0),
-      ),
-      Reminder(
-        id: 'sample-2',
-        title: "Watch Dr.Bassant's Lecture",
-        dueAt: DateTime(2026, 7, 28, 20, 0),
-      ),
-    ];
-  }
+  Stream<List<Reminder>> build() => _repository.watchAll();
 
-  void add(Reminder reminder) => state = [...state, reminder];
+  /// Named for the entity rather than the verb alone, matching
+  /// [TaskListNotifier] — and because a bare `update` collides with
+  /// `StreamNotifier`'s own state-updating method.
+  Future<void> addReminder(Reminder reminder) => _repository.add(reminder);
 
-  void update(Reminder reminder) {
-    state = [
-      for (final existing in state)
-        existing.id == reminder.id ? reminder : existing,
-    ];
-  }
+  Future<void> updateReminder(Reminder reminder) =>
+      _repository.update(reminder);
 
-  void remove(String id) =>
-      state = state.where((reminder) => reminder.id != id).toList();
+  Future<void> deleteReminder(String id) => _repository.delete(id);
+
+  Future<void> toggleCompleted(String id) => _repository.toggleCompleted(id);
 }
 
 final reminderListProvider =
-    NotifierProvider<ReminderListController, List<Reminder>>(
-  ReminderListController.new,
+    StreamNotifierProvider<ReminderListNotifier, List<Reminder>>(
+  ReminderListNotifier.new,
 );

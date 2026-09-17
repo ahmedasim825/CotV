@@ -74,7 +74,7 @@ final studyLogListProvider =
 final studySummaryProvider = Provider.autoDispose<StudySummary>((ref) {
   final logs = ref.watch(studyLogListProvider).value ?? const <StudyLog>[];
   // The day, not the minute. `summarizeStudy` reads `now` only through
-  // `normalizeDay` and `weekStartOf`, so its answer cannot differ between two
+  // `startOfDay` and `weekStartOf`, so its answer cannot differ between two
   // minutes of the same day — but on the minute clock it walked every log in
   // the box 1440 times a day to prove that. A finished session still lands
   // immediately: that arrives through `studyLogListProvider` above.

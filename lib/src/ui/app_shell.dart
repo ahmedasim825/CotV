@@ -139,7 +139,7 @@ Widget paneFor(AppDestination destination) {
 ///
 /// Every destination takes the full pane. There is no split view: the two
 /// halves it used to pair were the timeline and the task list, and the
-/// timeline is gone. The dashboard, the prayer bento and the habit grid all
+/// timeline is gone. The dashboard, the prayer bento and the task list all
 /// widen into their own multi-column layouts instead, which reads better
 /// than two unrelated screens sharing a window.
 class AppShell extends ConsumerStatefulWidget {
@@ -159,6 +159,27 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// so rebuilding on every direction flip would rebuild the whole screen to
   /// move one capsule. Only the capsule listens.
   final ValueNotifier<bool> _navCollapsed = ValueNotifier<bool>(false);
+
+  /// Handed to the compact pane as its [PrimaryScrollController], so tapping
+  /// the tab you are already on can send it back to the top the way every
+  /// iOS tab bar does.
+  ///
+  /// One controller for all five panes is safe because only one is mounted at
+  /// a time — but "safe" here rests on that staying true, so [_scrollToTop]
+  /// checks rather than assumes. A controller with two attached positions
+  /// throws the moment anything reads `.position`.
+  final ScrollController _paneScroll = ScrollController();
+
+  void _scrollToTop() {
+    if (_paneScroll.positions.length != 1) return;
+    final ScrollPosition position = _paneScroll.positions.first;
+    if (position.pixels <= position.minScrollExtent) return;
+    position.animateTo(
+      position.minScrollExtent,
+      duration: context.motion.base,
+      curve: AppMotion.spring,
+    );
+  }
 
   /// Collapses the capsule on a downward drag and restores it on an upward
   /// one, the way Apple's own floating bars behave.
@@ -183,14 +204,19 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _navCollapsed.dispose();
+    _paneScroll.dispose();
     super.dispose();
   }
 
   void _select(AppDestination destination) {
-    if (_destination != destination) {
-      _navCollapsed.value = false;
-      setState(() => _destination = destination);
+    if (_destination == destination) {
+      // The tab you are already on: go back to the top instead of rebuilding
+      // the pane you are already looking at.
+      _scrollToTop();
+      return;
     }
+    _navCollapsed.value = false;
+    setState(() => _destination = destination);
   }
 
   /// Opens and closes the rail, from the control in `WindowChrome`.
@@ -297,9 +323,16 @@ class _AppShellState extends ConsumerState<AppShell> {
                     )
                   : NotificationListener<UserScrollNotification>(
                       onNotification: _onUserScroll,
-                      child: AppNavigation(
-                        select: _select,
-                        child: revealedPaneFor(_destination),
+                      // Only the compact pane. The rail layout has no tab to
+                      // re-tap, and giving an iPad's two-column body a shared
+                      // primary controller is how you end up with two
+                      // positions attached to one controller.
+                      child: PrimaryScrollController(
+                        controller: _paneScroll,
+                        child: AppNavigation(
+                          select: _select,
+                          child: revealedPaneFor(_destination),
+                        ),
                       ),
                     ),
             ),

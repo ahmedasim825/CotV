@@ -54,6 +54,29 @@ String formatShortDate(DateTime date) =>
     '${_weekdayNames[date.weekday - 1].substring(0, 3)} ${date.day} '
     '${_monthNames[date.month - 1].substring(0, 3)}';
 
+/// Midnight on the day [date] falls in.
+///
+/// The app's one date normaliser. Every comparison that means "the same day"
+/// rather than "the same instant" runs both sides through this first — prayer
+/// windows, the tasks screen's day grouping, [relativeDayName] below. It lives
+/// here rather than in `prayer_providers.dart`, where it started, because it
+/// is a date fact and not a prayer one, and the tasks screen has no business
+/// importing the prayer providers to get at it.
+DateTime startOfDay(DateTime date) => DateTime(date.year, date.month, date.day);
+
+/// Monday-start week bucket for [date].
+DateTime weekStartOf(DateTime date) {
+  final day = startOfDay(date);
+  return day.subtract(Duration(days: day.weekday - 1));
+}
+
+/// How many days [date]'s month has.
+///
+/// Day zero of the following month is the last day of this one, which is how
+/// you get 28 / 29 / 30 / 31 out of [DateTime]'s own normalisation rather than
+/// out of a table with a leap-year rule in it.
+int daysInMonth(DateTime date) => DateTime(date.year, date.month + 1, 0).day;
+
 /// "Today" / "Tomorrow" / "Yesterday" where they apply, otherwise null.
 /// Both arguments should be midnight-normalized.
 String? relativeDayName(DateTime date, DateTime today) {
@@ -118,6 +141,22 @@ String formatDueLabel(DateTime due, DateTime today) {
 /// date, there is no "no time of day" state to special-case — so the time is
 /// never dropped, and a numeric `dd/mm/yyyy` stands in for the weekday-name
 /// form once the date is more than a day away in either direction.
+/// A reminder's due line on the tasks screen, e.g. `Today at 18:00`,
+/// `Yesterday at 03:00`, `27 Jul at 20:00`.
+///
+/// Separate from [formatReminderDueLabel] rather than replacing it: that one
+/// produces the comma-and-numeric-date shape the dashboard cards render and
+/// the screen tests assert on, and this one is a full sentence fragment
+/// because it sits under a title rather than inside a chip.
+///
+/// 24-hour throughout, matching [formatClock] and every other time in the
+/// app.
+String formatReminderDueLine(DateTime due, DateTime today) {
+  final relative = relativeDayName(startOfDay(due), startOfDay(today));
+  final day = relative ?? formatShortDate(due);
+  return '$day at ${formatClock(due)}';
+}
+
 String formatReminderDueLabel(DateTime due, DateTime today) {
   final dueDay = DateTime(due.year, due.month, due.day);
   final relative = relativeDayName(dueDay, DateTime(today.year, today.month, today.day));

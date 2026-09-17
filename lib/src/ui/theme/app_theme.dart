@@ -86,7 +86,9 @@ const AppPalette kPalette = AppPalette(
   // reminder". Two jobs, two values.
   taskRing: Color(0xFFFFE100),
   reminderRing: Color(0xFFFF0000),
-  priorityLow: Color(0xFF7FA3B8),
+  priorityLow: Color(0xFFA0AAB8),
+  priorityMedium: Color(0xFFFFB800),
+  priorityHigh: Color(0xFFFF4D4D),
   shadow: Color(0x66000000),
   glowPrimary: Color(0x4D7005BB),
   glowSecondary: Color(0x2622D3EE),

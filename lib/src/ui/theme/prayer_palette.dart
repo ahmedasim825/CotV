@@ -38,15 +38,20 @@ extension PrayerPaletteX on AppPalette {
   Color prayerBandEdge(PrayerLabel prayer) =>
       prayerHue(prayer).withValues(alpha: 0.45);
 
-  /// The accent a task carries wherever it appears — list tile, timeline
-  /// block, form sheet or badge. High reads as a warning without being an
-  /// error state; low stays deliberately quiet.
+  /// The accent a task or reminder carries wherever it appears — list row,
+  /// timeline block, form sheet or badge. High reads as a warning without
+  /// being an error state; low stays deliberately quiet.
+  ///
+  /// Each step now resolves to a priority token of its own. High used to
+  /// return [AppPalette.danger] and medium [AppPalette.secondary], which tied
+  /// the scale to the error red and the app's cyan: retuning priority meant
+  /// restyling every failure state and every secondary accent with it.
   Color priorityColor(TaskPriority priority) {
     switch (priority) {
       case TaskPriority.high:
-        return danger;
+        return priorityHigh;
       case TaskPriority.medium:
-        return secondary;
+        return priorityMedium;
       case TaskPriority.low:
         return priorityLow;
     }

@@ -2,12 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/daily_prayer_times.dart';
 import '../services/prayer_service.dart';
+import '../ui/format/time_format.dart';
 import 'settings_providers.dart';
 
 final prayerServiceProvider = Provider<PrayerService>((ref) => PrayerService());
-
-DateTime startOfDay(DateTime date) =>
-    DateTime(date.year, date.month, date.day);
 
 /// Prayer timings for an arbitrary day, recomputed whenever location,
 /// calculation method or madhab change. Pass a midnight-normalized

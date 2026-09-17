@@ -1,39 +1,7 @@
 import 'task.dart';
 
-/// The category tabs above the task list.
-enum TaskFilter { today, upcoming, completed, priority }
-
 /// How the visible tasks are ordered.
 enum TaskSort { priority, dueTime }
-
-extension TaskFilterX on TaskFilter {
-  String get label {
-    switch (this) {
-      case TaskFilter.today:
-        return 'Today';
-      case TaskFilter.upcoming:
-        return 'Upcoming';
-      case TaskFilter.completed:
-        return 'Completed';
-      case TaskFilter.priority:
-        return 'Priority';
-    }
-  }
-
-  /// Shown when the filter matches nothing.
-  String get emptyMessage {
-    switch (this) {
-      case TaskFilter.today:
-        return 'Nothing due today. Enjoy the clear run.';
-      case TaskFilter.upcoming:
-        return 'No upcoming tasks yet.';
-      case TaskFilter.completed:
-        return 'Completed tasks will collect here.';
-      case TaskFilter.priority:
-        return 'No high-priority tasks outstanding.';
-    }
-  }
-}
 
 extension TaskSortX on TaskSort {
   String get label {
@@ -72,40 +40,27 @@ extension TaskPriorityX on TaskPriority {
   }
 }
 
-/// Selects the tasks a [TaskFilter] should show, relative to [now].
+/// Today's outstanding tasks: anything incomplete and dated no later than
+/// the end of today, overdue included.
 ///
-/// The four filters are deliberately not a partition: a high-priority task
-/// due today appears under both Today and Priority. What matters is that no
-/// incomplete task is invisible under *every* tab — tasks with no due date
-/// fall to Upcoming rather than vanishing.
-List<Task> filterTasks(
-  List<Task> tasks,
-  TaskFilter filter,
-  DateTime now,
-) {
-  final endOfToday = DateTime(now.year, now.month, now.day)
-      .add(const Duration(days: 1));
+/// This is the dashboard's shortlist, and all that survives of the four
+/// filter tabs the task list used to carry. The tabs went with the redesign —
+/// the list groups by day now — but the dashboard still wants exactly this
+/// slice, so the rule moved here rather than being inlined at the one call
+/// site that needs it.
+///
+/// Overdue tasks stay in rather than falling off: a task that was due
+/// yesterday is more today's problem, not less.
+List<Task> todayTasks(List<Task> tasks, DateTime now) {
+  final endOfToday =
+      DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
 
-  switch (filter) {
-    case TaskFilter.today:
-      // Overdue tasks stay in Today rather than falling off the list.
-      return tasks
-          .where((t) =>
-              !t.isCompleted && t.dueDate != null && t.dueDate!.isBefore(endOfToday))
-          .toList(growable: false);
-    case TaskFilter.upcoming:
-      return tasks
-          .where((t) =>
-              !t.isCompleted &&
-              (t.dueDate == null || !t.dueDate!.isBefore(endOfToday)))
-          .toList(growable: false);
-    case TaskFilter.completed:
-      return tasks.where((t) => t.isCompleted).toList(growable: false);
-    case TaskFilter.priority:
-      return tasks
-          .where((t) => !t.isCompleted && t.priority == TaskPriority.high)
-          .toList(growable: false);
-  }
+  return tasks
+      .where((t) =>
+          !t.isCompleted &&
+          t.dueDate != null &&
+          t.dueDate!.isBefore(endOfToday))
+      .toList(growable: false);
 }
 
 /// Orders [tasks] by [sort]. Both orderings are total — ties fall through to
@@ -135,15 +90,4 @@ List<Task> sortTasks(List<Task> tasks, TaskSort sort) {
     return a.createdAt.compareTo(b.createdAt);
   });
   return List.unmodifiable(ordered);
-}
-
-/// [filterTasks] then [sortTasks] — the single transform the task list UI
-/// applies to the raw repository stream.
-List<Task> buildTaskView(
-  List<Task> tasks, {
-  required TaskFilter filter,
-  required TaskSort sort,
-  required DateTime now,
-}) {
-  return sortTasks(filterTasks(tasks, filter, now), sort);
 }

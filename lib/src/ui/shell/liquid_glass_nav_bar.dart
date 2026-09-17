@@ -3,6 +3,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_shell.dart';
 import '../components/liquid_glass.dart';
@@ -51,20 +52,22 @@ class LiquidGlassNavBar extends StatefulWidget {
   /// shell it would rebuild the whole pane on every flick.
   final ValueListenable<bool> collapsed;
 
-  /// 48pt of touch target with 4pt of breathing room above and below.
-  static const double expandedHeight = 56;
+  /// 71, from the design. Taller than the 56 this started at, which is most
+  /// of why the bar now reads as a slab of glass rather than a strip.
+  static const double expandedHeight = 71;
 
-  /// Still past the 44pt minimum, so the capsule stays usable while collapsed
-  /// rather than becoming a decoration you have to scroll up to use.
-  static const double collapsedHeight = 44;
+  /// Scrolled-away height. Still well past the 44pt minimum, so the capsule
+  /// stays usable rather than becoming a decoration you scroll up to reach.
+  static const double collapsedHeight = 56;
 
-  /// Inset from the pane's edges. Less than the 20pt content gutter, so the
-  /// capsule reads as floating over the column rather than ruled to it.
+  /// Inset from the pane's edges. Only reached on a screen too narrow to give
+  /// the capsule its full [maxWidth].
   static const double inset = 16;
 
-  /// Stops the capsule stretching across an iPad. Five glyphs over 1100pt
-  /// would put a finger's travel between neighbours.
-  static const double maxWidth = 420;
+  /// 354, from the design. On any iPhone this is the capsule's actual width —
+  /// 393pt of screen less two 16pt insets leaves 361, so the constraint binds
+  /// and the bar measures exactly 354.
+  static const double maxWidth = 354;
 
   /// The hairline [LiquidGlass] draws round itself. Subtracted here so the
   /// row of glyphs sits inside the rim rather than under it.
@@ -188,16 +191,41 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
               // than being clipped away with the refraction.
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(radius),
+                // Two shadows, which is what actually reads as floating. A
+                // single soft one only ever looks like a smudge under the
+                // capsule: the wide ambient pass says the bar is well clear of
+                // the page, and the tight contact pass under it is what the
+                // eye uses to judge *how far*. One without the other reads as
+                // either pasted on or hovering in nowhere.
                 boxShadow: [
                   BoxShadow(
                     color: palette.shadow,
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
+                    blurRadius: 32,
+                    spreadRadius: -4,
+                    offset: const Offset(0, 12),
+                  ),
+                  BoxShadow(
+                    color: palette.shadowContact,
+                    blurRadius: 6,
+                    spreadRadius: -2,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: LiquidGlass(
                 radius: radius,
+                // Not the design file's Frost 4, deliberately. At Frost 4
+                // over a 2% fill the page stayed *legible* through the bar —
+                // you could read body text behind the glyphs — and the one
+                // thing Apple's material is built to guarantee is that a
+                // control stays readable over whatever scrolls beneath it.
+                // Enough blur that content behind reads as colour and
+                // movement, never as words.
+                blurSigma: 20,
+                // 12%, against the design's 2%, for the same reason. Flat,
+                // not a gradient: the blur separates the bar from the page
+                // now, so the fill does not have to.
+                fill: palette.textPrimary.withValues(alpha: 0.12),
                 child: SizedBox(
                   height: height,
                   child: Padding(
@@ -223,7 +251,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   }
 }
 
-/// The selection chip and the row of glyphs that sits over it.
+/// The selection capsule and the row of glyphs that sits over it.
 class _Items extends StatelessWidget {
   const _Items({
     required this.destination,
@@ -236,7 +264,7 @@ class _Items extends StatelessWidget {
   final AppDestination destination;
   final ValueChanged<AppDestination> onSelect;
 
-  /// Where the chip is, as a fractional tab index.
+  /// Where the glow is, as a fractional tab index.
   final double chipIndex;
 
   /// 0 at the start of a move, 1 at the end. Drives the stretch.
@@ -244,8 +272,11 @@ class _Items extends StatelessWidget {
 
   final double collapse;
 
-  static const double _chipWidth = 46;
-  static const double _chipHeight = 34;
+  /// The capsule's footprint. One tab of a 354pt bar is ~71pt wide, so this
+  /// leaves a clear gutter either side rather than running its neighbours
+  /// together.
+  static const double _capsuleWidth = 58;
+  static const double _capsuleHeight = 52;
 
   @override
   Widget build(BuildContext context) {
@@ -256,22 +287,23 @@ class _Items extends StatelessWidget {
       builder: (context, constraints) {
         final double slot = constraints.maxWidth / items.length;
 
-        // What makes it read as liquid rather than as a sliding rectangle:
-        // the chip stretches along its direction of travel and recovers,
-        // peaking at the halfway point. Zero at both ends, so a chip at rest
-        // is exactly its nominal size.
+        // What makes it read as liquid rather than as a sliding shape: the
+        // capsule stretches along its direction of travel and recovers,
+        // peaking halfway. Zero at both ends, so at rest it is exactly its
+        // nominal size.
         final double stretch = 1 + 0.42 * math.sin(math.pi * travel);
-        final double chipWidth = math.min(
-          _chipWidth * stretch,
+        final double capsuleWidth = math.min(
+          _capsuleWidth * stretch,
           constraints.maxWidth,
         );
-        final double chipHeight = lerpDouble(_chipHeight, 28, collapse)!;
+        final double capsuleHeight =
+            lerpDouble(_capsuleHeight, 40, collapse)!;
 
         // Positioned rather than an Alignment, because Align's x maps through
-        // the *free* space and would drift as the chip stretches.
-        final double left = (slot * (chipIndex + 0.5) - chipWidth / 2).clamp(
+        // the *free* space and would drift as the capsule stretches.
+        final double left = (slot * (chipIndex + 0.5) - capsuleWidth / 2).clamp(
           0.0,
-          math.max(0.0, constraints.maxWidth - chipWidth),
+          math.max(0.0, constraints.maxWidth - capsuleWidth),
         );
 
         return Stack(
@@ -279,18 +311,20 @@ class _Items extends StatelessWidget {
           children: [
             Positioned(
               left: left,
-              top: (constraints.maxHeight - chipHeight) / 2,
-              width: chipWidth,
-              height: chipHeight,
+              top: (constraints.maxHeight - capsuleHeight) / 2,
+              width: capsuleWidth,
+              height: capsuleHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  // A tint and a rim, not a second pane of glass. Nesting a
-                  // backdrop filter inside this one would cost a second
-                  // snapshot to render a lens inside a lens, which Apple's
-                  // own guidance says not to do and which reads as muddy.
+                  // A brighter tint and a rim over the bar's own fill — not a
+                  // second backdrop filter. Nesting one would cost another
+                  // snapshot to render a lens inside a lens, and glass inside
+                  // glass is the thing Apple's own guidance is most explicit
+                  // about avoiding. Colour alone did not carry the selection
+                  // at a glance, which is why this is a shape again.
                   color: palette.glassFill,
                   border: Border.all(color: palette.glassBorder),
-                  borderRadius: BorderRadius.circular(chipHeight / 2),
+                  borderRadius: BorderRadius.circular(capsuleHeight / 2),
                 ),
               ),
             ),
@@ -302,7 +336,14 @@ class _Items extends StatelessWidget {
                     child: _NavItem(
                       destination: item,
                       isSelected: item == destination,
-                      onTap: () => onSelect(item),
+                      onTap: () {
+                        // Apple ticks on a tab change and stays silent when you
+                        // tap the tab you are already on. A no-op off iOS.
+                        if (item != destination) {
+                          HapticFeedback.selectionClick();
+                        }
+                        onSelect(item);
+                      },
                     ),
                   ),
               ],
@@ -356,7 +397,8 @@ class _NavItem extends StatelessWidget {
               curve: AppMotion.spring,
               builder: (context, colour, _) => Icon(
                 destination.icon,
-                size: 21,
+                // Sized to the 71pt bar rather than the 56pt one it replaced.
+                size: 26,
                 color: colour,
               ),
             ),

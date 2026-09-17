@@ -5,10 +5,10 @@ import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
-import '../models/habit.dart';
 import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/sync_stamped.dart';
+import '../models/reminder.dart';
 import '../models/task.dart';
 import '../models/user_settings.dart';
 import '../repositories/chat_session_repository.dart';
@@ -19,9 +19,9 @@ import '../storage/local_storage.dart';
 import '../storage/sync_metadata.dart';
 import 'auth_providers.dart';
 import 'chat_session_providers.dart';
-import 'habit_providers.dart';
 import 'nutrition_providers.dart' show syncErrorProvider;
 import 'study_providers.dart';
+import 'reminder_providers.dart';
 import 'task_providers.dart';
 import 'task_reminder_providers.dart';
 import 'user_settings_providers.dart';
@@ -128,7 +128,7 @@ class SyncController extends Notifier<SyncStatus> {
       await _syncSubjects(service);
       await _syncStudyLogs(service);
       await _syncTasks(service);
-      await _syncHabits(service);
+      await _syncReminders(service);
       await _syncSettings(service);
       await _syncChat(service);
 
@@ -218,6 +218,18 @@ class SyncController extends Notifier<SyncStatus> {
         onApplied: _reconcileReminder,
       );
 
+  Future<void> _syncReminders(MiloSyncService service) =>
+      _syncEntity<Reminder>(
+        name: 'reminders',
+        repository:
+            _syncable<Reminder>(ref.read(reminderRepositoryProvider)),
+        fetch: service.fetchReminders,
+        push: service.pushReminders,
+        // No `onApplied`: unlike a task, a reminder schedules no local
+        // notification yet, so there is nothing on this device to reconcile
+        // when one arrives from the other.
+      );
+
   /// A notification is local to the device that scheduled it, so a task
   /// pulled from the phone has no reminder on the laptop until one is
   /// scheduled here. Without this, a reminder set on one device simply
@@ -236,16 +248,6 @@ class SyncController extends Notifier<SyncStatus> {
       await reminders.sync(task);
     }
   }
-
-  Future<void> _syncHabits(MiloSyncService service) => _syncEntity<Habit>(
-        name: 'habits',
-        repository: _syncable<Habit>(ref.read(habitRepositoryProvider)),
-        fetch: service.fetchHabits,
-        push: service.pushHabits,
-        // The one entity that does not take the default rule: see
-        // [mergeHabit] for why record-level LWW loses a check-in here.
-        merge: (local, remote) => mergeHabit(local, remote, DateTime.now()),
-      );
 
   /// Settings, which sync per key rather than per record.
   ///
@@ -306,7 +308,7 @@ class SyncController extends Notifier<SyncStatus> {
       _syncable<Subject>(ref.read(subjectRepositoryProvider)),
       _syncable<StudyLog>(ref.read(studyLogRepositoryProvider)),
       _syncable<Task>(ref.read(taskRepositoryProvider)),
-      _syncable<Habit>(ref.read(habitRepositoryProvider)),
+      _syncable<Reminder>(ref.read(reminderRepositoryProvider)),
     ]) {
       await repository?.purgeTombstonesBefore(cutoff.millisecondsSinceEpoch);
     }
@@ -410,7 +412,10 @@ class SyncController extends Notifier<SyncStatus> {
 
   /// Pull, merge, push for one entity.
   ///
-  /// [merge] defaults to [resolveRecord]; only habits override it.
+  /// [merge] defaults to [resolveRecord], which is now the rule for every
+/// entity. The seam is kept because it is the only place a record-level
+/// last-write-wins can be replaced with a field-level merge, and habits
+/// needed exactly that before they were removed.
   /// [onApplied] runs for each record a pull actually changed, for the side
   /// effects a local write would have performed — scheduling a task's
   /// notification, in the one case that has any.
@@ -543,7 +548,7 @@ class SyncScheduler extends Notifier<void> {
     // write is a write however it got made, Siri and Milo's tools included.
     for (final listenable in [
       taskListProvider,
-      habitListProvider,
+      reminderListProvider,
       subjectListProvider,
       studyLogListProvider,
     ]) {

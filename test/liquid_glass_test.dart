@@ -69,31 +69,26 @@ void main() {
       );
     });
 
-    testWidgets('draws the bevel the shader would otherwise compute',
-        (tester) async {
+    testWidgets('draws the gradient rim that defines its edge', (tester) async {
       await pumpGlass(tester);
 
-      // Two decorations: the fill and rim, plus the lit top edge that stands
-      // in for the shader's per-pixel rim specular. With a shader present the
-      // second one is not drawn, because a straight lit line laid over a
-      // computed rim reads as a seam.
-      final decorations = tester
-          .widgetList<DecoratedBox>(
-            find.descendant(
-              of: find.byType(LiquidGlass),
-              matching: find.byType(DecoratedBox),
-            ),
-          )
-          .toList();
+      // The rim is a foreground painter rather than a border, because neither
+      // BoxDecoration nor ShapeDecoration can stroke a gradient. It is drawn
+      // on both paths — it is the whole edge when there is no shader, and it
+      // sits under the computed specular when there is one — so this assertion
+      // holds regardless of whether a program was loaded.
+      final painted = tester.widgetList<CustomPaint>(
+        find.descendant(
+          of: find.byType(LiquidGlass),
+          matching: find.byType(CustomPaint),
+        ),
+      ).where((paint) => paint.foregroundPainter != null);
 
-      final foreground = decorations.where(
-        (box) => box.position == DecorationPosition.foreground,
+      expect(painted, hasLength(1));
+      expect(
+        painted.single.foregroundPainter.runtimeType.toString(),
+        contains('GradientRim'),
       );
-      expect(foreground, hasLength(1));
-
-      final border = (foreground.single.decoration as BoxDecoration).border!;
-      expect(border.top.color, kPalette.innerHighlight);
-      expect(border.bottom, BorderSide.none);
     });
   });
 
@@ -128,12 +123,14 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    // One fill, and the rim painted over it. A scope holding a null program
+    // reaches exactly the same code as no scope at all.
     expect(
       find.descendant(
         of: find.byType(LiquidGlass),
         matching: find.byType(DecoratedBox),
       ),
-      findsNWidgets(2),
+      findsOneWidget,
     );
   });
 

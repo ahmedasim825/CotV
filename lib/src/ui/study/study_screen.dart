@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/habit_view.dart' show normalizeDay;
+import '../format/time_format.dart' show startOfDay;
 import '../../models/study_view.dart';
 import '../../models/subject.dart';
 import '../../providers/clock_providers.dart';
@@ -398,10 +398,10 @@ class _TodayLog extends ConsumerWidget {
     // Filtered off the watched list rather than read back through the
     // repository, so a session finishing while this is on screen adds its
     // row without waiting for something else to rebuild it.
-    final today = normalizeDay(now);
+    final today = startOfDay(now);
     final logs = [
       for (final log in ref.watch(studyLogListProvider).value ?? const [])
-        if (normalizeDay(log.timestamp) == today) log,
+        if (startOfDay(log.timestamp) == today) log,
     ]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     if (logs.isEmpty) return const SizedBox.shrink();

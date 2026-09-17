@@ -31,7 +31,7 @@ import 'package:hive_ce/hive_ce.dart';
 import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
-import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -97,7 +97,7 @@ void main() {
     }
     await Future.wait([
       Hive.openBox<Task>(HiveBoxes.tasks),
-      Hive.openBox<Habit>(HiveBoxes.habits),
+      Hive.openBox<Reminder>(HiveBoxes.reminders),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
       Hive.openBox<Subject>(HiveBoxes.subjects),
       Hive.openBox<StudyLog>(HiveBoxes.studyLogs),
@@ -309,9 +309,10 @@ void main() {
       final pill = tester.getRect(find.byTooltip('Home'));
       final screenBottom = tester.getRect(find.byType(AppShell)).bottom;
 
-      // 56 of capsule less its 1pt rim top and bottom. Comfortably past the
-      // 44pt minimum, which is the part that actually matters.
-      expect(pill.height, 54);
+      // The design's 71pt capsule, less the 1pt the row is inset by at the
+      // top and bottom. Comfortably past the 44pt minimum, which is the part
+      // that actually matters.
+      expect(pill.height, 69);
       // max(10, 34 - 12) = 22, plus that 1pt rim below the item.
       expect(screenBottom - pill.bottom, closeTo(23, 0.5));
     });
@@ -326,7 +327,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byType(HomeScreen), findsNothing);
-      expect(find.text('Upcoming'), findsOneWidget);
+      // The Tasks pane's own day heading — always rendered, because the Today
+      // section carries the inline add control even when it is empty.
+      expect(find.text('Today'), findsWidgets);
     });
 
     testWidgets('leaves no Opacity between itself and its glass',
@@ -361,7 +364,7 @@ void main() {
           tester.getRect(find.byTooltip('Home')).height;
 
       final double resting = capsuleHeight();
-      expect(resting, 54);
+      expect(resting, 69);
 
       await tester.fling(find.byType(HomeScreen), const Offset(0, -220), 900);
       await tester.pump();
@@ -405,6 +408,51 @@ void main() {
       expect(bodyPadding(), before, reason: 'fully collapsed');
     });
 
+    testWidgets('re-tapping the active tab sends the pane back to the top',
+        (tester) async {
+      await pumpApp(tester);
+
+      final Finder pane = find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.byType(Scrollable),
+      );
+      await tester.drag(pane.first, const Offset(0, -260));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final ScrollPosition scrolled =
+          tester.state<ScrollableState>(pane.first).position;
+      expect(scrolled.pixels, greaterThan(0), reason: 'did not scroll');
+
+      // The tab it is already on. Apple sends the list home rather than
+      // rebuilding the pane you are already looking at.
+      await tester.tap(find.byTooltip('Home'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(tester.state<ScrollableState>(pane.first).position.pixels, 0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('only ever attaches one pane to the shared scroll controller',
+        (tester) async {
+      await pumpApp(tester);
+
+      // The guard in `_scrollToTop` exists because a ScrollController with two
+      // attached positions throws the moment anything reads `.position`. Walk
+      // every destination and re-tap it, which is the sequence that would trip
+      // it if two panes were ever mounted at once.
+      for (final label in ['Home', 'Tasks', 'Study', 'Food', 'Prayers']) {
+        await tester.tap(find.byTooltip(label));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 600));
+        await tester.tap(find.byTooltip(label));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(tester.takeException(), isNull, reason: label);
+      }
+    });
+
     testWidgets('every pane clears the pill rather than scrolling under it',
         (tester) async {
       await pumpApp(
@@ -433,8 +481,8 @@ void main() {
         ),
       ).bottom;
 
-      // The capsule's 56pt plus the 22pt it floats above the screen edge.
-      expect(bodyPadding, greaterThanOrEqualTo(78));
+      // The capsule's 71pt plus the 22pt it floats above the screen edge.
+      expect(bodyPadding, greaterThanOrEqualTo(93));
 
       for (final label in ['Home', 'Tasks', 'Study', 'Food', 'Prayers']) {
         await tester.tap(find.byTooltip(label));

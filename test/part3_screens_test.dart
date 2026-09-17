@@ -25,7 +25,6 @@ import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/main.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
-import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
@@ -33,7 +32,6 @@ import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/ambient_providers.dart';
 import 'package:cotv/src/providers/clock_providers.dart';
-import 'package:cotv/src/providers/habit_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/reminder_providers.dart';
 import 'package:cotv/src/providers/security_providers.dart';
@@ -44,8 +42,6 @@ import 'package:cotv/src/providers/chat_session_providers.dart';
 import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/app_shell.dart';
-import 'package:cotv/src/ui/habits/habit_form_sheet.dart';
-import 'package:cotv/src/ui/habits/widgets/habit_tile.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 
 /// Stands in for every `local_auth` / `flutter_secure_storage` call the
@@ -105,7 +101,7 @@ void main() {
     }
     await Future.wait([
       Hive.openBox<Task>(HiveBoxes.tasks),
-      Hive.openBox<Habit>(HiveBoxes.habits),
+      Hive.openBox<Reminder>(HiveBoxes.reminders),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
       // The shell reconciles a leftover study session on launch, and
       // Milo's context reads the durable transcript, so these have to
@@ -194,81 +190,6 @@ void main() {
   // navigation. Task 7 restored it as the third segment of the Tasks
   // screen, so these now get there through the Tasks tab and the segmented
   // control rather than a "Habits" tooltip of their own.
-  group('habits', () {
-    /// [pumpApp] renders at an iPhone 14 Pro's logical size, which is
-    /// [WindowSize.compact] — [AppShell] shows the icon-only bottom bar
-    /// there, not the sidebar, so `Tasks` is still reachable by tooltip.
-    /// (The sidebar's Milo dock renders an orb whose breath controller
-    /// never settles; the bottom bar carries no such widget, so
-    /// `pumpAndSettle` is safe here the same way it is for the settings
-    /// group below.)
-    Future<void> openHabitsSegment(WidgetTester tester) async {
-      await tester.tap(find.byTooltip('Tasks'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Habits'));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('opens the habit form sheet from the grid', (tester) async {
-      await pumpApp(tester);
-      await openHabitsSegment(tester);
-
-      expect(
-        find.text('No habits yet.\nAdd one and it starts counting from today.'),
-        findsOneWidget,
-      );
-
-      // The quick-add button. The bar is icon-only, so this no longer
-      // has to be told apart from a "Habits" navigation label.
-      await tester.tap(find.text('Habit'));
-      await pumpUntilPresented(
-        tester,
-        () => find.byType(HabitFormSheet).evaluate().isNotEmpty,
-      );
-
-      expect(find.text('New habit'), findsOneWidget);
-      expect(find.text('What do you want to keep up?'), findsOneWidget);
-      expect(find.text('Daily'), findsOneWidget);
-      expect(find.text('Weekly'), findsOneWidget);
-      expect(find.text('Add habit'), findsOneWidget);
-    });
-
-    testWidgets('a stored habit renders, and completing it updates the summary',
-        (tester) async {
-      await pumpApp(tester);
-      await openHabitsSegment(tester);
-
-      final habits = containerOf(tester).read(habitListProvider.notifier);
-      final habit = Habit(id: 'habit-1', title: 'Dhikr');
-
-      await tester.runAsync(() => habits.addHabit(habit));
-      await pumpUntil(tester, () => find.text('Dhikr').evaluate().isNotEmpty);
-
-      // Nothing re-read the box by hand: the write travelled repository ->
-      // Hive -> watchAll() -> habitListProvider -> this grid.
-      expect(find.text('Dhikr'), findsOneWidget);
-      expect(find.text('Every day'), findsOneWidget);
-      expect(find.text('0/1'), findsOneWidget);
-
-      await tester.runAsync(
-        () => habits.toggleCompletedOn(habit.id, DateTime.now()),
-      );
-      await pumpUntil(tester, () => find.text('1/1').evaluate().isNotEmpty);
-
-      expect(find.text('1/1'), findsOneWidget);
-      // Scoped to the tile: the summary strip renders a bare '1' twice on
-      // its own, so an unscoped finder would pass with no badge at all.
-      expect(
-        find.descendant(
-          of: find.byType(HabitTile),
-          matching: find.text('1'),
-        ),
-        findsOneWidget,
-      );
-    });
-  });
-
   group('reminders', () {
     testWidgets(
       'reminder due label reacts to currentMinuteProvider clock, not wall clock',
@@ -307,13 +228,23 @@ void main() {
         // Add a reminder due at 3pm.
         final notifier =
             containerOf(tester).read(reminderListProvider.notifier);
-        notifier.add(
-          Reminder(
-            id: 'test-reminder',
-            title: 'Test Reminder',
-            dueAt: dueTime,
-          ),
-        );
+        // Inside `runAsync`: this reaches a real Hive box now that reminders
+        // are persisted, and real file IO cannot complete inside the fake
+        // async zone `testWidgets` runs the body in — awaiting it there hangs
+        // rather than failing. `agenda_card_test.dart` seeds its tasks the
+        // same way.
+        await tester.runAsync(() async {
+          await notifier.addReminder(
+            Reminder(
+              id: 'test-reminder',
+              title: 'Test Reminder',
+              dueAt: dueTime,
+            ),
+          );
+        });
+        // Twice: once for the box's change stream to deliver, once for the
+        // provider's new state to reach the tree.
+        await tester.pump();
         await tester.pump();
 
         // Navigate to reminders segment.
@@ -323,11 +254,12 @@ void main() {
         await tester.pumpAndSettle();
 
         // At 12pm, the reminder due at 3pm is NOT yet overdue.
-        // Both times are on March 15, so the label format is "Today, 15:00",
-        // and the due label renders in the muted (non-overdue) color.
+        // Both times are on March 15, so the label format is
+        // "Today at 15:00", and the due line renders in the muted
+        // (non-overdue) color.
         expect(find.text('Test Reminder'), findsOneWidget);
-        expect(find.text('Today, 15:00'), findsOneWidget);
-        final beforeLabel = tester.widget<Text>(find.text('Today, 15:00'));
+        expect(find.text('Today at 15:00'), findsOneWidget);
+        final beforeLabel = tester.widget<Text>(find.text('Today at 15:00'));
         expect(beforeLabel.style?.color, kPalette.textMuted);
 
         // Second pump: app with clock at after-due time (4pm, same day).
@@ -361,14 +293,14 @@ void main() {
         await tester.pumpAndSettle();
 
         // At 4pm, the reminder due at 3pm is now overdue per the pinned
-        // clock. Assert the due label switched to the danger color — the
+        // clock. Assert the due line switched to the overdue color — the
         // actual signal the row exists to give the user — rather than only
-        // re-checking the label text, which stays "Today, 15:00" in both
-        // halves and would not by itself catch a clock regression here.
+        // re-checking the text, which stays "Today at 15:00" in both halves
+        // and would not by itself catch a clock regression here.
         expect(find.text('Test Reminder'), findsOneWidget);
-        expect(find.text('Today, 15:00'), findsOneWidget);
-        final afterLabel = tester.widget<Text>(find.text('Today, 15:00'));
-        expect(afterLabel.style?.color, kPalette.danger);
+        expect(find.text('Today at 15:00'), findsOneWidget);
+        final afterLabel = tester.widget<Text>(find.text('Today at 15:00'));
+        expect(afterLabel.style?.color, kPalette.dueOverdue);
       },
     );
   });

@@ -1,49 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../models/day_groups.dart';
 import '../../models/reminder.dart';
 import '../../models/task.dart';
 import '../../models/task_view.dart';
 import '../../providers/clock_providers.dart';
 import '../../providers/reminder_providers.dart';
 import '../../providers/task_providers.dart';
-import '../../providers/task_view_providers.dart';
 import '../format/time_format.dart';
-import '../habits/habit_screen.dart';
-import '../home/widgets/home_card_note.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
-import '../widgets/ph_light_icons.dart';
 import '../widgets/status_card.dart';
 import 'reminder_form_sheet.dart';
 import 'task_form_sheet.dart';
-import 'widgets/task_tile.dart';
+import 'widgets/bento_section.dart';
+import 'widgets/checkable_row.dart';
+import 'widgets/inline_add_row.dart';
+import 'widgets/segment_switcher.dart';
 
-/// Which of the three lists the segmented control is showing.
-enum _TaskSegment { tasks, reminders, habits }
+const _uuid = Uuid();
 
-/// The Tasks destination: a segmented control over the task list, the
-/// reminder list, and the habit grid.
+/// Which of the two lists the segmented control is showing.
+enum _TaskSegment { tasks, reminders }
+
+/// The Tasks destination: a segmented control over the task list and the
+/// reminder list, each grouped into Today / Yesterday / Last 7 days.
 ///
-/// Habits lives here rather than as its own sidebar destination because the
-/// sidebar has exactly five rows by design (see `AppDestinationX.navItems`);
-/// this segment is what makes [HabitScreen] reachable again. Tasks stays the
-/// default segment so `paneFor(AppDestination.tasks)` opens to the same
-/// screen it always has.
+/// ## What this screen does not show
+///
+/// Anything dated after today. [groupByDay] drops it — there is no section a
+/// future item could land in, and the design has none. A task due next week
+/// exists, syncs and fires its notification; it simply is not on this screen
+/// until the day arrives. The form sheet reached from the dashboard can still
+/// create one, so this is a real way to set something and not see it here.
+///
+/// Tasks with no due date fall back to [Task.createdAt], so a quick capture
+/// made today sits under Today rather than vanishing for want of a date.
 ///
 /// Segment selection is local UI state, not app state — nothing outside this
-/// widget cares which of the three is showing, and it resets on rebuild the
-/// way a `TabBar`'s selection would. That is why this is a
-/// [ConsumerStatefulWidget] rather than the [ConsumerWidget] it used to be:
-/// a `Notifier` would outlive the screen for no reason and give every other
-/// consumer a provider to ignore.
+/// widget cares which of the two is showing, and it resets on rebuild the way
+/// a `TabBar`'s selection would.
 class TaskListView extends ConsumerStatefulWidget {
-  const TaskListView({super.key, this.showFab = true});
-
-  /// The split view hosts a single shared FAB, so the pane suppresses its
-  /// own. Only meaningful for the tasks and habits segments — each renders
-  /// its own FAB internally and reads this same flag.
-  final bool showFab;
+  const TaskListView({super.key});
 
   @override
   ConsumerState<TaskListView> createState() => _TaskListViewState();
@@ -52,633 +52,241 @@ class TaskListView extends ConsumerStatefulWidget {
 class _TaskListViewState extends ConsumerState<TaskListView> {
   _TaskSegment _segment = _TaskSegment.tasks;
 
-  /// The task list exactly as it was before segments existed.
-  ///
-  /// Every mutation goes through [TaskListNotifier], which writes to Hive;
-  /// the box's change stream feeds [visibleTasksProvider] straight back
-  /// here, so nothing in this method manages its own copy of the list.
-  Widget _buildTaskList(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     return AdaptiveLayout(
       builder: (context, windowSize) {
-        final tasksAsync = ref.watch(visibleTasksProvider);
-        final filter = ref.watch(taskFilterProvider);
-        final now = ref.watch(currentMinuteProvider);
         final padding = windowSize.pagePadding;
 
-        return Stack(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(padding, 12, padding, 0),
-                  child: const _TaskListHeader(),
+            Padding(
+              padding: EdgeInsets.fromLTRB(padding, 18, padding, 0),
+              child: SegmentSwitcher(
+                labels: const ['Tasks', 'Reminders'],
+                selectedIndex: _segment.index,
+                onSelected: (index) => setState(
+                  () => _segment = _TaskSegment.values[index],
                 ),
-                const SizedBox(height: 14),
-                _FilterTabs(horizontalPadding: padding),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: tasksAsync.when(
-                    data: (tasks) => tasks.isEmpty
-                        ? _EmptyState(filter: filter, padding: padding)
-                        : _TaskList(
-                            tasks: tasks,
-                            now: now,
-                            padding: padding,
-                          ),
-                    loading: () => Center(
-                      child: CircularProgressIndicator(
-                        color: context.palette.accent,
-                        strokeWidth: 2.5,
-                      ),
-                    ),
-                    error: (error, _) => Padding(
-                      padding: EdgeInsets.all(padding),
-                      child: StatusCard(
-                        message: 'Could not load tasks: $error',
-                        tone: StatusTone.error,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (widget.showFab)
-              Positioned(
-                right: padding,
-                bottom: 20 + MediaQuery.paddingOf(context).bottom,
-                child: const QuickAddTaskButton(),
               ),
+            ),
+            const SizedBox(height: 26),
+            Expanded(
+              child: switch (_segment) {
+                _TaskSegment.tasks => _TaskSections(padding: padding),
+                _TaskSegment.reminders => _ReminderSections(padding: padding),
+              },
+            ),
           ],
         );
       },
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: SegmentedButton<_TaskSegment>(
-            segments: const [
-              ButtonSegment(value: _TaskSegment.tasks, label: Text('Tasks')),
-              ButtonSegment(
-                  value: _TaskSegment.reminders, label: Text('Reminders')),
-              ButtonSegment(value: _TaskSegment.habits, label: Text('Habits')),
-            ],
-            selected: {_segment},
-            showSelectedIcon: false,
-            onSelectionChanged: (next) =>
-                setState(() => _segment = next.first),
-          ),
-        ),
-        Expanded(
-          child: switch (_segment) {
-            _TaskSegment.tasks => _buildTaskList(context),
-            _TaskSegment.reminders => _ReminderList(showFab: widget.showFab),
-            _TaskSegment.habits => HabitScreen(showFab: widget.showFab),
-          },
-        ),
-      ],
-    );
-  }
 }
 
-class _TaskListHeader extends ConsumerWidget {
-  const _TaskListHeader();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sort = ref.watch(taskSortProvider);
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Tasks',
-            style: context.typography.display(size: 30, weight: FontWeight.w500),
-          ),
-        ),
-        Semantics(
-          button: true,
-          label: 'Sort by ${sort.label}. Tap to change.',
-          child: GestureDetector(
-            onTap: () => ref.read(taskSortProvider.notifier).toggle(),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-              decoration: BoxDecoration(
-                color: context.palette.glassFill,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: context.palette.glassBorder),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    PhLight.sortAscending,
-                    size: 14,
-                    color: context.palette.accent,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    sort.label,
-                    style: context.typography.ui(size: 12.5, weight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// The reminder segment: one row per [Reminder] from [reminderListProvider],
-/// each opening [ReminderFormSheet] to edit or delete it, over a shared add
-/// button matching the tasks and habits segments either side of it.
-class _ReminderList extends ConsumerWidget {
-  const _ReminderList({required this.showFab});
-
-  /// The split view hosts a single shared FAB, same as [TaskListView.showFab]
-  /// and [HabitScreen.showFab].
-  final bool showFab;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final reminders = ref.watch(reminderListProvider);
-    // Watch the clock provider so the list updates when a reminder crosses
-    // its due instant while this segment stays mounted. Without this, a row
-    // would show stale `isOverdue()` and due-label colors until an unrelated
-    // rebuild triggered (a segment switch, or an add/update/remove). We watch
-    // currentMinuteProvider rather than reading DateTime.now() inline so the
-    // update is driven by the provider instead of the wall clock.
-    final now = ref.watch(currentMinuteProvider);
-
-    return Stack(
-      children: [
-        reminders.isEmpty
-            ? const Center(
-                child: HomeCardNote(message: 'No reminders'),
-              )
-            : ListView.separated(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  4,
-                  20,
-                  // Clears the FAB and the home indicator.
-                  96 + MediaQuery.paddingOf(context).bottom,
-                ),
-                itemCount: reminders.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) => _ReminderRow(
-                  reminder: reminders[index],
-                  now: now,
-                  onTap: () => showReminderFormSheet(
-                    context,
-                    existing: reminders[index],
-                  ),
-                ),
-              ),
-        if (showFab)
-          Positioned(
-            right: 20,
-            bottom: 20 + MediaQuery.paddingOf(context).bottom,
-            child: const QuickAddReminderButton(),
-          ),
-      ],
-    );
-  }
-}
-
-class _ReminderRow extends StatelessWidget {
-  const _ReminderRow({
-    required this.reminder,
-    required this.now,
-    required this.onTap,
-  });
-
-  final Reminder reminder;
-  final DateTime now;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final overdue = reminder.isOverdue(now);
-
-    return Semantics(
-      button: true,
-      label: '${reminder.title}. Edit reminder.',
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: BoxDecoration(
-            color: context.palette.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: context.palette.hairline),
-          ),
-          child: Row(
-            children: [
-              Icon(PhLight.bellSimple, size: 16, color: context.palette.accent),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      reminder.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          context.typography.ui(size: 15, weight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      formatReminderDueLabel(reminder.dueAt, now),
-                      style: context.typography.ui(
-                        size: 11.5,
-                        color: overdue
-                            ? context.palette.danger
-                            : context.palette.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(PhLight.caretRight, size: 14, color: context.palette.textMuted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterTabs extends ConsumerWidget {
-  const _FilterTabs({required this.horizontalPadding});
-
-  final double horizontalPadding;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(taskFilterProvider);
-    final counts = ref.watch(taskFilterCountsProvider);
-
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-        itemCount: TaskFilter.values.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final filter = TaskFilter.values[index];
-          return _FilterChip(
-            filter: filter,
-            count: counts[filter] ?? 0,
-            isSelected: filter == selected,
-            onTap: () => ref.read(taskFilterProvider.notifier).select(filter),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.filter,
-    required this.count,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final TaskFilter filter;
-  final int count;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: '${filter.label}, $count tasks',
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: context.motion.fast,
-          curve: AppMotion.spring,
-          padding: const EdgeInsets.symmetric(horizontal: 15),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? context.palette.accent : context.palette.glassFill,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: isSelected ? context.palette.accent : context.palette.glassBorder,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                filter.label,
-                style: context.typography.ui(
-                  size: 13,
-                  weight: FontWeight.w600,
-                  color: isSelected ? context.palette.onAccent : context.palette.textSecondary,
-                ),
-              ),
-              if (count > 0) ...[
-                const SizedBox(width: 7),
-                Text(
-                  '$count',
-                  style: context.typography.ui(
-                    size: 11.5,
-                    weight: FontWeight.w700,
-                    color: isSelected
-                        ? context.palette.onAccent.withValues(alpha: 0.7)
-                        : context.palette.textMuted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TaskList extends ConsumerWidget {
-  const _TaskList({
-    required this.tasks,
-    required this.now,
+/// The day-grouped list both segments render into.
+///
+/// Generic over the row type so the two segments share their whole layout —
+/// the scroll padding, the section spacing, the inline add in Today — and
+/// differ only in what a row is and what adding one means.
+class _SectionList<T> extends StatelessWidget {
+  const _SectionList({
+    required this.sections,
     required this.padding,
+    required this.rowBuilder,
+    required this.addHint,
+    required this.addLabel,
+    required this.onAdd,
   });
 
-  final List<Task> tasks;
-  final DateTime now;
+  final List<DaySection<T>> sections;
   final double padding;
+  final Widget Function(T item) rowBuilder;
+  final String addHint;
+  final String addLabel;
+  final ValueChanged<String> onAdd;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
         padding,
-        4,
+        0,
         padding,
-        // Clears the FAB and the home indicator.
-        96 + MediaQuery.paddingOf(context).bottom,
+        // Clears the nav bar, the home indicator, and the keyboard when the
+        // inline add has focus — without the inset the field would open
+        // underneath it.
+        28 +
+            MediaQuery.paddingOf(context).bottom +
+            MediaQuery.viewInsetsOf(context).bottom,
       ),
-      itemCount: tasks.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemCount: sections.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 32),
       itemBuilder: (context, index) {
-        final task = tasks[index];
-        return _DismissibleTask(
-          key: ValueKey(task.id),
-          task: task,
-          now: now,
+        final section = sections[index];
+        return BentoSection(
+          title: section.title,
+          isPast: section.isPast,
+          rows: [for (final item in section.items) rowBuilder(item)],
+          // Only Today takes new items. Adding to a past day would mean
+          // back-dating, which is a different gesture than the one this
+          // control offers.
+          footer: section.bucket == DayBucket.today
+              ? InlineAddRow(
+                  hint: addHint,
+                  semanticLabel: addLabel,
+                  onSubmit: onAdd,
+                )
+              : null,
         );
       },
     );
   }
 }
 
-/// Wraps a [TaskTile] in swipe-to-delete with an undo affordance.
-///
-/// Deletion is committed immediately rather than held behind a timer, so the
-/// list and the database never disagree; undo re-adds the task from the copy
-/// captured before the delete.
-class _DismissibleTask extends ConsumerWidget {
-  const _DismissibleTask({super.key, required this.task, required this.now});
+class _TaskSections extends ConsumerWidget {
+  const _TaskSections({required this.padding});
 
-  final Task task;
-  final DateTime now;
+  final double padding;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final messenger = ScaffoldMessenger.of(context);
-    // Resolved before the delete so the snack bar is styled from tokens
-    // captured while this context was still mounted.
-    final palette = context.palette;
-    final typography = context.typography;
+    final tasksAsync = ref.watch(taskListProvider);
+    // Watched rather than read off the wall clock, so a row crossing midnight
+    // moves from Today to Yesterday without waiting for an unrelated rebuild.
+    final now = ref.watch(currentMinuteProvider);
 
-    return Dismissible(
-      key: ValueKey('dismiss:${task.id}'),
-      direction: DismissDirection.endToStart,
-      // Deliberately more than the default 0.4: deleting is destructive, so
-      // it should take a decisive swipe.
-      dismissThresholds: const {DismissDirection.endToStart: 0.55},
-      background: const _DeleteBackground(),
-      onDismissed: (_) async {
-        final removed = task;
-        await ref.read(taskListProvider.notifier).deleteTask(removed.id);
+    return tasksAsync.when(
+      data: (tasks) {
+        final sections = groupByDay<Task>(
+          // Sorted before grouping, so each section comes out in due-time
+          // order without every section re-sorting its own slice.
+          sortTasks(tasks, TaskSort.dueTime),
+          dateOf: (task) => task.dueDate ?? task.createdAt,
+          now: now,
+        );
 
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              backgroundColor: palette.surface,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: palette.glassBorder),
+        return _SectionList<Task>(
+          sections: sections,
+          padding: padding,
+          addHint: 'New task',
+          addLabel: 'Add task',
+          onAdd: (title) => ref.read(taskListProvider.notifier).addTask(
+                // No due date: `groupByDay` falls back to `createdAt`, which
+                // is now, so it lands in Today without this control having to
+                // ask for a date it has no room to ask for.
+                Task(id: _uuid.v4(), title: title),
               ),
-              content: Text(
-                'Deleted "${removed.title}"',
-                style: typography.ui(size: 13),
-              ),
-              action: SnackBarAction(
-                label: 'Undo',
-                textColor: palette.accent,
-                onPressed: () =>
-                    ref.read(taskListProvider.notifier).addTask(removed),
-              ),
-            ),
-          );
+          rowBuilder: (task) => CheckableRow(
+            key: ValueKey(task.id),
+            title: task.title,
+            isCompleted: task.isCompleted,
+            priority: task.priority,
+            onToggle: () =>
+                ref.read(taskListProvider.notifier).toggleCompleted(task.id),
+            onTap: () => showTaskFormSheet(context, existing: task),
+          ),
+        );
       },
-      child: TaskTile(
-        task: task,
-        now: now,
-        onToggleCompleted: () =>
-            ref.read(taskListProvider.notifier).toggleCompleted(task.id),
-        onTap: () => showTaskFormSheet(context, existing: task),
-      ),
+      loading: () => _Loading(),
+      error: (error, _) => _Error(message: 'Could not load tasks: $error',
+          padding: padding),
     );
   }
 }
 
-class _DeleteBackground extends StatelessWidget {
-  const _DeleteBackground();
+class _ReminderSections extends ConsumerWidget {
+  const _ReminderSections({required this.padding});
+
+  final double padding;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 24),
-      decoration: BoxDecoration(
-        color: context.palette.danger.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(PhLight.trash, size: 18, color: context.palette.danger),
-        ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final remindersAsync = ref.watch(reminderListProvider);
+    // Also drives the overdue colour: a reminder passing its due instant
+    // while this segment is on screen has to turn red by itself.
+    final now = ref.watch(currentMinuteProvider);
+
+    return remindersAsync.when(
+      data: (reminders) {
+        final sorted = [...reminders]
+          ..sort((a, b) => a.dueAt.compareTo(b.dueAt));
+        final sections = groupByDay<Reminder>(
+          sorted,
+          dateOf: (reminder) => reminder.dueAt,
+          now: now,
+        );
+
+        return _SectionList<Reminder>(
+          sections: sections,
+          padding: padding,
+          addHint: 'New reminder',
+          addLabel: 'Add reminder',
+          onAdd: (title) =>
+              ref.read(reminderListProvider.notifier).addReminder(
+                    Reminder(
+                      id: _uuid.v4(),
+                      title: title,
+                      // End of today. A reminder must have a moment, and this
+                      // control has no room to ask for one: the last minute of
+                      // the day puts the row in Today without it arriving
+                      // already overdue. Tapping the row opens the sheet to
+                      // set a real time.
+                      dueAt: _endOfDay(now),
+                    ),
+                  ),
+          rowBuilder: (reminder) => CheckableRow(
+            key: ValueKey(reminder.id),
+            title: reminder.title,
+            isCompleted: reminder.isCompleted,
+            priority: reminder.priority,
+            dueLine: formatReminderDueLine(reminder.dueAt, now),
+            dueOverdue: reminder.isOverdue(now),
+            onToggle: () => ref
+                .read(reminderListProvider.notifier)
+                .toggleCompleted(reminder.id),
+            onTap: () => showReminderFormSheet(context, existing: reminder),
+          ),
+        );
+      },
+      loading: () => _Loading(),
+      error: (error, _) => _Error(
+        message: 'Could not load reminders: $error',
+        padding: padding,
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.filter, required this.padding});
+DateTime _endOfDay(DateTime now) =>
+    DateTime(now.year, now.month, now.day, 23, 59);
 
-  final TaskFilter filter;
-  final double padding;
+class _Loading extends StatelessWidget {
+  const _Loading();
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: padding + 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: context.palette.glassFill,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                PhLight.sparkle,
-                size: 24,
-                color: context.palette.accent,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              filter.emptyMessage,
-              textAlign: TextAlign.center,
-              style: context.typography.ui(
-                size: 14,
-                color: context.palette.textMuted,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
+      child: CircularProgressIndicator(
+        color: context.palette.accent,
+        strokeWidth: 2.5,
       ),
     );
   }
 }
 
-/// The quick-add FAB. Exposed so the iPad split view can host one shared
-/// button above both panes.
-class QuickAddTaskButton extends StatelessWidget {
-  const QuickAddTaskButton({super.key});
+class _Error extends StatelessWidget {
+  const _Error({required this.message, required this.padding});
+
+  final String message;
+  final double padding;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Add task',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => showTaskFormSheet(context),
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-            decoration: BoxDecoration(
-              color: context.palette.accent,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: [
-                BoxShadow(
-                  color: context.palette.accent.withValues(alpha: 0.28),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(PhLight.plus, size: 17, color: context.palette.onAccent),
-                const SizedBox(width: 9),
-                Text(
-                  'Task',
-                  style: context.typography.ui(
-                    size: 14,
-                    weight: FontWeight.w700,
-                    color: context.palette.onAccent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The reminders segment's quick-add FAB. Same shape as [QuickAddTaskButton]
-/// beside it — the two segments share a screen, so their add buttons should
-/// read as the same control doing two jobs, not two different ones.
-class QuickAddReminderButton extends StatelessWidget {
-  const QuickAddReminderButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Add reminder',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => showReminderFormSheet(context),
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-            decoration: BoxDecoration(
-              color: context.palette.accent,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: [
-                BoxShadow(
-                  color: context.palette.accent.withValues(alpha: 0.28),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(PhLight.plus, size: 17, color: context.palette.onAccent),
-                const SizedBox(width: 9),
-                Text(
-                  'Reminder',
-                  style: context.typography.ui(
-                    size: 14,
-                    weight: FontWeight.w700,
-                    color: context.palette.onAccent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return Padding(
+      padding: EdgeInsets.all(padding),
+      child: StatusCard(message: message, tone: StatusTone.error),
     );
   }
 }

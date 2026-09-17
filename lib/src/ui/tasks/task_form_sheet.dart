@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/task.dart';
-import '../../models/task_view.dart';
 import '../../providers/task_providers.dart';
 import '../components/components.dart';
 import '../format/time_format.dart';
 import '../theme/app_theme.dart';
-import '../theme/prayer_palette.dart';
 import '../widgets/ph_light_icons.dart';
+import 'widgets/priority_selector.dart';
+import 'widgets/sheet_icon_action.dart';
 
 const _uuid = Uuid();
 
@@ -118,6 +118,29 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
     });
   }
 
+  /// Deletes the task being edited, behind a confirmation.
+  ///
+  /// This is the only way to delete a task. The list it is reached from draws
+  /// its rows inside a ruled card with rounded outer corners only, where a
+  /// swipe-to-delete panel sliding out behind a middle row has nowhere to
+  /// sit — so the gesture moved here, where the reminder sheet already kept
+  /// its own.
+  Future<void> _delete() async {
+    final existing = widget.existing;
+    if (existing == null) return;
+
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete task?',
+      message: 'Removing "${existing.title}" cannot be undone.',
+      confirmIcon: PhLight.trash,
+    );
+    if (!confirmed || !mounted) return;
+
+    await ref.read(taskListProvider.notifier).deleteTask(existing.id);
+    if (mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -166,6 +189,14 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
       key: _formKey,
       child: StandardBottomSheet(
         title: _isEditing ? 'Edit task' : 'New task',
+        trailing: _isEditing
+            ? SheetIconAction(
+                icon: PhLight.trash,
+                tint: context.palette.danger,
+                semanticLabel: 'Delete task',
+                onTap: _isSaving ? null : _delete,
+              )
+            : null,
         actions: Row(
           children: [
             Expanded(
@@ -234,7 +265,7 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
                       const SizedBox(height: 22),
                       FieldLabel(icon: PhLight.flagPennant, label: 'Priority'),
                       const SizedBox(height: 10),
-                      _PrioritySelector(
+                      PrioritySelector(
                         selected: _priority,
                         onChanged: (value) => setState(() => _priority = value),
                       ),
@@ -264,95 +295,6 @@ class _TaskFormSheetState extends ConsumerState<TaskFormSheet> {
     );
   }
 
-}
-
-class _PrioritySelector extends StatelessWidget {
-  const _PrioritySelector({required this.selected, required this.onChanged});
-
-  final TaskPriority selected;
-  final ValueChanged<TaskPriority> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    // High first: the order the list sorts in.
-    const ordered = [TaskPriority.high, TaskPriority.medium, TaskPriority.low];
-
-    return Row(
-      children: [
-        for (final priority in ordered) ...[
-          Expanded(
-            child: _PriorityChip(
-              priority: priority,
-              isSelected: priority == selected,
-              onTap: () => onChanged(priority),
-            ),
-          ),
-          if (priority != ordered.last) const SizedBox(width: 10),
-        ],
-      ],
-    );
-  }
-}
-
-class _PriorityChip extends StatelessWidget {
-  const _PriorityChip({
-    required this.priority,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final TaskPriority priority;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = context.palette.priorityColor(priority);
-
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: '${priority.label} priority',
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: context.motion.fast,
-          curve: AppMotion.spring,
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? accent.withValues(alpha: 0.16)
-                : context.palette.glassFill,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected ? accent : context.palette.glassBorder,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                PhLight.flagPennant,
-                size: 13,
-                color: isSelected ? accent : context.palette.textMuted,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                priority.label,
-                style: context.typography.ui(
-                  size: 13,
-                  weight: FontWeight.w600,
-                  color: isSelected ? accent : context.palette.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _DueDateField extends StatelessWidget {

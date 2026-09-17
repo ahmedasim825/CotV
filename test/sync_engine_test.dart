@@ -17,7 +17,7 @@ import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/src/models/chat_message.dart';
-import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/sync_stamped.dart';
@@ -25,7 +25,7 @@ import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/auth_providers.dart';
 import 'package:cotv/src/providers/chat_session_providers.dart';
-import 'package:cotv/src/providers/habit_providers.dart';
+import 'package:cotv/src/providers/reminder_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/nutrition_providers.dart'
     show syncErrorProvider;
@@ -34,7 +34,7 @@ import 'package:cotv/src/providers/sync_providers.dart';
 import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/providers/user_settings_providers.dart';
 import 'package:cotv/src/repositories/chat_session_repository.dart';
-import 'package:cotv/src/repositories/habit_repository.dart';
+import 'package:cotv/src/repositories/reminder_repository.dart';
 import 'package:cotv/src/repositories/study_log_repository.dart';
 import 'package:cotv/src/repositories/subject_repository.dart';
 import 'package:cotv/src/repositories/task_repository.dart';
@@ -117,12 +117,12 @@ class _FakeRemote implements MiloSyncService {
       _push('tasks', tasks.map(taskToRow));
 
   @override
-  Future<List<RemoteRecord<Habit>>> fetchHabits(String? since) async =>
-      _fetch('habits', since, habitFromRow);
+  Future<List<RemoteRecord<Reminder>>> fetchReminders(String? since) async =>
+      _fetch('reminders', since, reminderFromRow);
 
   @override
-  Future<void> pushHabits(Iterable<Habit> habits) async =>
-      _push('habits', habits.map(habitToRow));
+  Future<void> pushReminders(Iterable<Reminder> reminders) async =>
+      _push('reminders', reminders.map(reminderToRow));
 
   /// Settings live in their own shape: one row per key, not per record.
   final Map<String, ({Object? value, int millis, String cursor})> settings = {};
@@ -225,7 +225,7 @@ class _Device {
     Box<Subject> subjects,
     Box<StudyLog> logs,
     Box<Task> tasks,
-    Box<Habit> habits,
+    Box<Reminder> reminders,
     Box<UserSettings> settings,
     Box<dynamic> meta,
   }) boxes;
@@ -249,7 +249,8 @@ class _Device {
       container.read(subjectRepositoryProvider);
   StudyLogRepository get logs => container.read(studyLogRepositoryProvider);
   TaskRepository get tasks => container.read(taskRepositoryProvider);
-  HabitRepository get habits => container.read(habitRepositoryProvider);
+  ReminderRepository get reminders =>
+      container.read(reminderRepositoryProvider);
   UserSettingsRepository get settings =>
       container.read(userSettingsRepositoryProvider);
 
@@ -294,7 +295,7 @@ void main() {
       subjects: await Hive.openBox<Subject>('${name}_subjects'),
       logs: await Hive.openBox<StudyLog>('${name}_logs'),
       tasks: await Hive.openBox<Task>('${name}_tasks'),
-      habits: await Hive.openBox<Habit>('${name}_habits'),
+      reminders: await Hive.openBox<Reminder>('${name}_reminders'),
       settings: await Hive.openBox<UserSettings>('${name}_settings'),
       meta: await Hive.openBox<dynamic>('${name}_meta'),
     );
@@ -322,8 +323,8 @@ void main() {
         taskRepositoryProvider.overrideWithValue(
           HiveTaskRepository(boxes.tasks, () => built.clock),
         ),
-        habitRepositoryProvider.overrideWithValue(
-          HiveHabitRepository(boxes.habits, () => built.clock),
+        reminderRepositoryProvider.overrideWithValue(
+          HiveReminderRepository(boxes.reminders, () => built.clock),
         ),
         userSettingsRepositoryProvider.overrideWithValue(
           HiveUserSettingsRepository(boxes.settings, () => built.clock),
@@ -616,36 +617,60 @@ void main() {
     });
   });
 
-  group('habits', () {
-    test('a check-in on each device survives the merge', () async {
+  group('reminders', () {
+    test('an edit on each device settles on the later one', () async {
       final a = await device('a');
       final b = await device('b');
-      final wednesday = DateTime(2026, 9, 16);
-      final thursday = DateTime(2026, 9, 17);
 
-      await a.habits.add(Habit(id: 'h1', title: 'Fajr on time'));
+      await a.reminders.add(Reminder(
+        id: 'r1',
+        title: 'Workout',
+        dueAt: DateTime(2026, 9, 17, 18),
+      ));
       await a.syncNow();
       await b.syncNow();
 
-      // Both offline, each ticking a different day.
+      // Both offline, each editing the same reminder.
       a.clock = _now + 2000;
       b.clock = _now + 3000;
-      await a.habits.toggleCompletedOn('h1', wednesday);
-      await b.habits.toggleCompletedOn('h1', thursday);
+      await a.reminders.toggleCompleted('r1');
+      await b.reminders.update(
+        b.reminders.getById('r1')!.copyWith(title: 'Workout, longer'),
+      );
 
       await a.syncNow();
       await b.syncNow();
       await a.syncNow();
 
-      // This is the whole case for unioning rather than taking the later
-      // record: under record-level last-write-wins one of these two days
-      // would simply never have happened.
-      final onA = a.habits.getById('h1')!;
-      final onB = b.habits.getById('h1')!;
-      expect(onA.completedDates, [wednesday, thursday]);
-      expect(onB.completedDates, [wednesday, thursday]);
-      expect(onA.streakCount, onB.streakCount,
-          reason: 'recomputed from the union on both sides, not exchanged');
+      // Plain record-level last-write-wins, unlike the habit check-ins this
+      // group replaced: a reminder has no set-valued field, so there is
+      // nothing to union and the later whole record is the right answer.
+      final onA = a.reminders.getById('r1')!;
+      final onB = b.reminders.getById('r1')!;
+      expect(onA.title, 'Workout, longer');
+      expect(onB.title, 'Workout, longer');
+      expect(onA.isCompleted, onB.isCompleted);
+    });
+
+    test('a deletion propagates', () async {
+      final a = await device('a');
+      final b = await device('b');
+
+      await a.reminders.add(Reminder(
+        id: 'r1',
+        title: 'Workout',
+        dueAt: DateTime(2026, 9, 17, 18),
+      ));
+      await a.syncNow();
+      await b.syncNow();
+      expect(b.reminders.getById('r1'), isNotNull);
+
+      a.clock = _now + 2000;
+      await a.reminders.delete('r1');
+      await a.syncNow();
+      await b.syncNow();
+
+      expect(b.reminders.getById('r1'), isNull);
     });
   });
 

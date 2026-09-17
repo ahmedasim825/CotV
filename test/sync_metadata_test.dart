@@ -12,7 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
-import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -23,7 +22,6 @@ import 'package:cotv/src/storage/sync_metadata.dart';
 void main() {
   late Directory tempDir;
   late Box<Task> tasks;
-  late Box<Habit> habits;
   late Box<Subject> subjects;
   late Box<StudyLog> studyLogs;
   late Box<UserSettings> userSettings;
@@ -39,7 +37,6 @@ void main() {
       Hive.registerAdapters();
     }
     tasks = await Hive.openBox<Task>('m_tasks');
-    habits = await Hive.openBox<Habit>('m_habits');
     subjects = await Hive.openBox<Subject>('m_subjects');
     studyLogs = await Hive.openBox<StudyLog>('m_logs');
     userSettings = await Hive.openBox<UserSettings>('m_settings');
@@ -55,7 +52,6 @@ void main() {
   Future<void> migrate() => runHiveMigrations(
         metadata: metadata,
         tasks: tasks,
-        habits: habits,
         subjects: subjects,
         studyLogs: studyLogs,
         userSettings: userSettings,
@@ -98,15 +94,12 @@ void main() {
 
     test('records with no timestamp fall back to the migration instant',
         () async {
-      await habits.put('h1', Habit(id: 'h1', title: 'Fajr on time'));
       await userSettings.put(UserSettings.defaultId, UserSettings());
 
       await migrate();
 
       // Not zero. Zero means "older than anything", which on the first sync
-      // would lose every habit on the device holding the real data to an
-      // empty remote.
-      expect(habits.get('h1')!.updatedAtMillis, migratedAt);
+      // would lose the device holding the real data to an empty remote.
       expect(
         userSettings.get(UserSettings.defaultId)!.updatedAtMillis,
         migratedAt,
@@ -122,16 +115,13 @@ void main() {
     test('is idempotent — a second run changes nothing', () async {
       final march = DateTime(2026, 3, 2);
       await tasks.put('t1', Task(id: 't1', title: 'Old', createdAt: march));
-      await habits.put('h1', Habit(id: 'h1', title: 'Fajr on time'));
 
       await migrate();
       final taskStamp = tasks.get('t1')!.updatedAtMillis;
-      final habitStamp = habits.get('h1')!.updatedAtMillis;
 
       // A later run, with a later clock: already-stamped rows must not move.
       await backfillSyncMetadata(
         tasks: tasks,
-        habits: habits,
         subjects: subjects,
         studyLogs: studyLogs,
         userSettings: userSettings,
@@ -139,13 +129,11 @@ void main() {
       );
 
       expect(tasks.get('t1')!.updatedAtMillis, taskStamp);
-      expect(habits.get('h1')!.updatedAtMillis, habitStamp);
     });
 
     test('an empty install migrates without inventing records', () async {
       await migrate();
       expect(tasks.isEmpty, isTrue);
-      expect(habits.isEmpty, isTrue);
       // The settings box stays empty too: get() synthesises defaults on
       // read, and writing them here would push a record the user never
       // touched over one the other device may have.
@@ -178,7 +166,6 @@ void main() {
       await runHiveMigrations(
         metadata: metadata,
         tasks: tasks,
-        habits: habits,
         subjects: subjects,
         studyLogs: studyLogs,
         userSettings: userSettings,
@@ -201,7 +188,6 @@ void main() {
       await runHiveMigrations(
         metadata: metadata,
         tasks: tasks,
-        habits: habits,
         subjects: subjects,
         studyLogs: studyLogs,
         userSettings: userSettings,
@@ -216,7 +202,7 @@ void main() {
     test('round-trip and reset', () async {
       await metadata.setSchemaVersion(HiveMigrations.currentVersion);
       await metadata.setLastPulled('tasks', '2026-09-17T05:00:00Z');
-      await metadata.setLastPulled('habits', '2026-09-17T05:01:00Z');
+      await metadata.setLastPulled('reminders', '2026-09-17T05:01:00Z');
       await metadata.setLastSyncedUserId('user-1');
 
       expect(metadata.lastPulled('tasks'), '2026-09-17T05:00:00Z');
@@ -224,7 +210,7 @@ void main() {
       await metadata.resetCursors();
 
       expect(metadata.lastPulled('tasks'), isNull);
-      expect(metadata.lastPulled('habits'), isNull);
+      expect(metadata.lastPulled('reminders'), isNull);
       // The account survives a cursor reset: it is what detects the switch
       // that caused the reset in the first place.
       expect(metadata.lastSyncedUserId, 'user-1');

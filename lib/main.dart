@@ -15,9 +15,13 @@ import 'src/ui/security_gate.dart';
 import 'src/ui/theme/app_theme.dart';
 import 'src/ui/widgets/orb_field_background.dart';
 
+/// Set by `tool/ios_preview.dart` so a dev run keeps its own Hive directory
+/// and can sit alongside the installed build instead of failing to open it.
+String? debugStorageSubdirectory;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeLocalStorage();
+  await initializeLocalStorage(subdirectory: debugStorageSubdirectory);
 
   // Opened once, here, and handed to the scope as an override. A provider
   // that opened it lazily could open a second connection to the same file,

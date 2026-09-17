@@ -14,12 +14,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
-import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/sync_stamped.dart';
 import 'package:cotv/src/models/task.dart';
-import 'package:cotv/src/repositories/habit_repository.dart';
 import 'package:cotv/src/repositories/study_log_repository.dart';
 import 'package:cotv/src/repositories/subject_repository.dart';
 import 'package:cotv/src/repositories/task_repository.dart';
@@ -244,18 +242,6 @@ void main() {
       await repository.delete('study-s1-1');
       expect(repository.getAll(), isEmpty);
       expect(box.get('study-s1-1')!.isDeleted, isTrue);
-    });
-  });
-
-  group('habits', () {
-    test('a toggle stamps the record', () async {
-      final box = await Hive.openBox<Habit>('t_habits');
-      final repository = HiveHabitRepository(box, () => 5000);
-      await repository.add(Habit(id: 'h1', title: 'Fajr on time'));
-      await repository.toggleCompletedOn('h1', DateTime.now());
-
-      expect(box.get('h1')!.updatedAtMillis, 5000);
-      expect(box.get('h1')!.streakCount, 1);
     });
   });
 }

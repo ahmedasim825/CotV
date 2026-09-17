@@ -1,6 +1,7 @@
 /// The record metadata every synced entity carries.
 ///
-/// Implemented by [Task], [Habit], [Subject], [StudyLog] and [UserSettings]
+/// Implemented by [Task], [Reminder], [Subject], [StudyLog] and
+/// [UserSettings]
 /// so the merge and engine code can read a record's sync state without
 /// knowing which box it came out of. The stamping methods are deliberately
 /// *not* here: each returns its own concrete type, and a self-referential

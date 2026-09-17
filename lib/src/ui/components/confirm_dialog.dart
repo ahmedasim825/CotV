@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'primary_button.dart';
 
-/// Asks the user to confirm something irreversible — deleting a habit,
+/// Asks the user to confirm something irreversible — deleting a reminder,
 /// discarding an unsaved task.
 ///
 /// Resolves to true only on an explicit confirm; dismissing by scrim, back

@@ -64,7 +64,7 @@ class SettingsScreen extends ConsumerWidget {
               eyebrow: 'SYNC',
               title: 'Account',
               titleSize: 22,
-              subtitle: 'Sign in to carry your tasks, habits, study and chat '
+              subtitle: 'Sign in to carry your tasks, reminders, study and chat '
                   'between devices.',
             ),
             const SizedBox(height: 16),
@@ -244,7 +244,7 @@ class _AccountSection extends ConsumerWidget {
               icon: user == null ? PhLight.lockKeyOpen : PhLight.checkCircle,
               title: user == null ? 'Not signed in' : 'Signed in',
               subtitle: user == null
-                  ? 'Tasks, habits, study, chat and settings stay on this '
+                  ? 'Tasks, reminders, study, chat and settings stay on this '
                         'device.'
                   : user.email ?? 'Syncing to your account.',
               iconTint: user == null ? palette.textMuted : palette.success,
@@ -301,7 +301,7 @@ class _AccountSection extends ConsumerWidget {
     final confirmed = await confirmDestructive(
       context,
       title: 'Sign out?',
-      message: 'Tasks, habits, study and chat stay on this device; the food '
+      message: 'Tasks, reminders, study and chat stay on this device; the food '
           'log stays on the server. Nothing syncs between your devices '
           'until you sign in again.',
       confirmLabel: 'Sign out',
@@ -724,7 +724,7 @@ class _PrivacyNote extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Tasks, habits, study logs and settings are stored only '
+              'Tasks, reminders, study logs and settings are stored only '
               'on this device. The app-lock preference lives in the '
               'system keychain.',
               style: context.typography.ui(

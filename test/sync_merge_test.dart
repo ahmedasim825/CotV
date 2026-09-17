@@ -7,7 +7,6 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/services/sync_merge.dart';
@@ -98,84 +97,6 @@ void main() {
       );
       expect(result.decision, MergeDecision.applyRemote);
       expect(result.value!.isDeleted, isTrue);
-    });
-  });
-
-  group('mergeHabit', () {
-    final now = DateTime(2026, 9, 17);
-    final wednesday = DateTime(2026, 9, 16);
-    final thursday = DateTime(2026, 9, 17);
-
-    Habit habit(List<DateTime> dates, int millis, {int synced = 500}) =>
-        Habit(id: 'h1', title: 'Fajr on time', completedDates: dates)
-            .stampUpdated(millis)
-            .markSynced(synced);
-
-    test('check-ins made on both devices both survive', () {
-      // The case record-level last-write-wins gets wrong: one of these two
-      // days would simply never have happened.
-      final result = mergeHabit(
-        habit([wednesday], 1000),
-        habit([thursday], 2000, synced: 2000),
-        now,
-      );
-
-      expect(result.decision, MergeDecision.applyAndPush);
-      expect(result.value!.completedDates, [wednesday, thursday]);
-    });
-
-    test('the streak is recomputed from the union, not taken from a side', () {
-      // Each side alone is a streak of 1. Neither has seen the merged set.
-      final local = habit([wednesday], 1000);
-      final remote = habit([thursday], 2000, synced: 2000);
-      expect(local.streakCount, 0);
-      expect(remote.streakCount, 0);
-
-      final merged = mergeHabit(local, remote, now).value!;
-
-      expect(merged.streakCount, 2);
-    });
-
-    test('scalar fields still follow the clock', () {
-      final local = Habit(
-        id: 'h1',
-        title: 'Local title',
-        colorHex: '#AAAAAA',
-        completedDates: [wednesday],
-      ).stampUpdated(3000).markSynced(500);
-      final remote = Habit(
-        id: 'h1',
-        title: 'Remote title',
-        colorHex: '#BBBBBB',
-        completedDates: [thursday],
-      ).stampUpdated(1000).markSynced(1000);
-
-      final merged = mergeHabit(local, remote, now).value!;
-
-      expect(merged.title, 'Local title', reason: 'local is newer');
-      expect(merged.colorHex, '#AAAAAA');
-      expect(merged.completedDates, hasLength(2), reason: 'dates still union');
-    });
-
-    test('no union is needed when one side already contains the other', () {
-      final result = mergeHabit(
-        habit([wednesday, thursday], 1000),
-        habit([wednesday, thursday], 2000, synced: 2000),
-        now,
-      );
-      // applyRemote, not applyAndPush: nothing was merged, so there is
-      // nothing new to send back.
-      expect(result.decision, MergeDecision.applyRemote);
-    });
-
-    test('a clean local habit just takes the remote', () {
-      final result = mergeHabit(
-        habit([wednesday], 1000, synced: 1000),
-        habit([thursday], 2000, synced: 2000),
-        now,
-      );
-      expect(result.decision, MergeDecision.applyRemote);
-      expect(result.value!.completedDates, [thursday]);
     });
   });
 
@@ -360,29 +281,6 @@ void main() {
             reason: 'the pair must not disagree');
         expect(settledA.title, 'From B', reason: 'the later write wins');
       }
-    });
-
-    test('a habit merge converges in one more round', () {
-      final now = DateTime(2026, 9, 17);
-      final wednesday = DateTime(2026, 9, 16);
-      final thursday = DateTime(2026, 9, 17);
-
-      final a = Habit(id: 'h1', title: 'Fajr', completedDates: [wednesday])
-          .stampUpdated(1000)
-          .markSynced(500);
-      final b = Habit(id: 'h1', title: 'Fajr', completedDates: [thursday])
-          .stampUpdated(2000)
-          .markSynced(500);
-
-      // A merges B's copy and pushes the result; B then pulls that.
-      final merged = mergeHabit(a, b, now).value!;
-      final onB = mergeHabit(b, merged.markSynced(merged.updatedAtMillis!), now);
-
-      final settledB =
-          onB.decision == MergeDecision.keepLocal ? b : onB.value!;
-
-      expect(settledB.completedDates, merged.completedDates);
-      expect(settledB.streakCount, merged.streakCount);
     });
   });
 }

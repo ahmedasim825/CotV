@@ -1,5 +1,10 @@
-// Exercises the task list's filter/sort transform. The invariant that
-// matters most: no incomplete task may be invisible under every tab.
+// Exercises what survives of the task list's view transform: the dashboard's
+// today shortlist, and the ordering the tasks screen groups by.
+//
+// The four filter tabs went with the redesign, and the invariant they carried
+// — no incomplete task invisible under every tab — went with them. The screen
+// groups by day now and deliberately shows neither future-dated nor undated
+// tasks; `day_groups_test.dart` is where that rule is pinned.
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,66 +33,39 @@ Task _task(
 List<String> _ids(List<Task> tasks) => tasks.map((t) => t.id).toList();
 
 void main() {
-  group('filterTasks', () {
-    test('Today holds tasks due later today', () {
+  group('todayTasks', () {
+    test('holds tasks due later today', () {
       final task = _task('a', due: DateTime(2026, 9, 1, 18));
-      expect(_ids(filterTasks([task], TaskFilter.today, _now)), ['a']);
+      expect(_ids(todayTasks([task], _now)), ['a']);
     });
 
-    test('Today keeps overdue tasks rather than dropping them', () {
+    test('keeps overdue tasks rather than dropping them', () {
       final overdue = _task('a', due: DateTime(2026, 8, 28, 9));
-      expect(_ids(filterTasks([overdue], TaskFilter.today, _now)), ['a']);
+      expect(_ids(todayTasks([overdue], _now)), ['a']);
     });
 
-    test('Today excludes completed tasks', () {
+    test('excludes completed tasks', () {
       final done = _task('a', due: DateTime(2026, 9, 1, 18), completed: true);
-      expect(filterTasks([done], TaskFilter.today, _now), isEmpty);
+      expect(todayTasks([done], _now), isEmpty);
     });
 
-    test('Upcoming holds tasks due after today', () {
+    test('excludes tasks due after today', () {
       final later = _task('a', due: DateTime(2026, 9, 3, 9));
-      expect(_ids(filterTasks([later], TaskFilter.upcoming, _now)), ['a']);
+      expect(todayTasks([later], _now), isEmpty);
     });
 
-    test('Upcoming catches undated tasks so they are never orphaned', () {
-      final undated = _task('a');
-      expect(_ids(filterTasks([undated], TaskFilter.upcoming, _now)), ['a']);
+    test('excludes undated tasks — there is no due date to be due today', () {
+      expect(todayTasks([_task('a')], _now), isEmpty);
     });
 
-    test('a task due at 23:59 today is Today, not Upcoming', () {
+    test('a task due at 23:59 today still counts as today', () {
       final tonight = _task('a', due: DateTime(2026, 9, 1, 23, 59));
-      expect(_ids(filterTasks([tonight], TaskFilter.today, _now)), ['a']);
-      expect(filterTasks([tonight], TaskFilter.upcoming, _now), isEmpty);
+      expect(_ids(todayTasks([tonight], _now)), ['a']);
     });
 
-    test('Completed holds only completed tasks', () {
-      final tasks = [_task('a', completed: true), _task('b')];
-      expect(_ids(filterTasks(tasks, TaskFilter.completed, _now)), ['a']);
-    });
-
-    test('Priority holds only outstanding high-priority tasks', () {
-      final tasks = [
-        _task('high', priority: TaskPriority.high),
-        _task('med', priority: TaskPriority.medium),
-        _task('done', priority: TaskPriority.high, completed: true),
-      ];
-      expect(_ids(filterTasks(tasks, TaskFilter.priority, _now)), ['high']);
-    });
-
-    test('every incomplete task appears under at least one filter', () {
-      final tasks = [
-        _task('overdue', due: DateTime(2026, 8, 1)),
-        _task('today', due: DateTime(2026, 9, 1, 20)),
-        _task('later', due: DateTime(2026, 12, 1)),
-        _task('undated'),
-      ];
-
-      final covered = <String>{
-        for (final filter in TaskFilter.values)
-          ..._ids(filterTasks(tasks, filter, _now)),
-      };
-
-      expect(covered, containsAll(['overdue', 'today', 'later', 'undated']));
+    test('midnight tomorrow does not', () {
+      final tomorrow = _task('a', due: DateTime(2026, 9, 2));
+      expect(todayTasks([tomorrow], _now), isEmpty);
     });
   });
 

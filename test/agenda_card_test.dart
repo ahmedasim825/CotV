@@ -24,7 +24,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
-import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
@@ -118,14 +117,18 @@ class _InMemoryTaskRepository implements TaskRepository {
   }
 }
 
-/// Replaces the seeded sample reminders with a set the test controls.
-class _Reminders extends ReminderListController {
+/// A fixed reminder list the test controls.
+///
+/// Overrides `build()` rather than standing a Hive box up behind it: the
+/// notifier's only other job is forwarding writes to the repository, and no
+/// test in this file makes one.
+class _Reminders extends ReminderListNotifier {
   _Reminders(this.seed);
 
   final List<Reminder> seed;
 
   @override
-  List<Reminder> build() => seed;
+  Stream<List<Reminder>> build() => Stream.value(seed);
 }
 
 /// Mid-afternoon on the day everything below is dated, so 09:00 is overdue
@@ -169,7 +172,7 @@ void main() {
       Hive.registerAdapters();
     }
     tasks = await Hive.openBox<Task>(HiveBoxes.tasks);
-    await Hive.openBox<Habit>(HiveBoxes.habits);
+    await Hive.openBox<Reminder>(HiveBoxes.reminders);
     await Hive.openBox<UserSettings>(HiveBoxes.userSettings);
   });
 

@@ -1,4 +1,5 @@
-import 'habit_view.dart' show daysInMonth, normalizeDay, weekStartOf;
+import '../ui/format/time_format.dart'
+    show daysInMonth, startOfDay, weekStartOf;
 import 'study_log.dart';
 import 'subject.dart';
 
@@ -69,7 +70,7 @@ class StudySummary {
   /// seven, so a Tuesday reading is not diluted by five days that have not
   /// arrived yet.
   int dailyAverageMinutes(DateTime now) {
-    final daysElapsed = normalizeDay(now).difference(weekStartOf(now)).inDays + 1;
+    final daysElapsed = startOfDay(now).difference(weekStartOf(now)).inDays + 1;
     return weekMinutes ~/ daysElapsed;
   }
 }
@@ -80,7 +81,7 @@ class StudySummary {
 /// transform the summary strip, the subject tiles and Milo's context block
 /// all read the same numbers from.
 StudySummary summarizeStudy(List<StudyLog> logs, DateTime now) {
-  final today = normalizeDay(now);
+  final today = startOfDay(now);
   final weekStart = weekStartOf(now);
 
   var todayMinutes = 0;
@@ -93,7 +94,7 @@ StudySummary summarizeStudy(List<StudyLog> logs, DateTime now) {
   final names = <String, String>{};
 
   for (final log in logs) {
-    final day = normalizeDay(log.timestamp);
+    final day = startOfDay(log.timestamp);
     if (day.isBefore(weekStart)) continue;
 
     // A log dated after today belongs to a later week's reading, not this

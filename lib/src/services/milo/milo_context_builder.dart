@@ -92,7 +92,7 @@ class MiloContextBuilder {
         'a plan, a summary or a breakdown.',
       )
       ..writeln(
-        'Use only the facts under CONTEXT for prayer times, tasks, habits '
+        'Use only the facts under CONTEXT for prayer times, tasks, reminders '
         'and study. If something is not there, say you do not have it '
         'rather than estimating.',
       )

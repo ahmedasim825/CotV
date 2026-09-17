@@ -254,7 +254,7 @@ class _GlassCardState extends State<GlassCard> {
           filterConfig: const ImageFilterConfig.blur(
             sigmaX: _glassBlurSigma,
             sigmaY: _glassBlurSigma,
-            bounded: true,
+            bounded: false,
           ),
           child: card,
         ),

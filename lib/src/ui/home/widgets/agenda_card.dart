@@ -43,7 +43,11 @@ class AgendaCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(todayFocusTasksProvider);
-    final reminders = ref.watch(reminderListProvider);
+    // Defaulted rather than branched on: `tasks.when` below already holds a
+    // spinner over the frame before the Hive streams deliver, and both boxes
+    // are opened before `runApp`, so an empty reminder list here is only ever
+    // visible underneath that spinner.
+    final reminders = ref.watch(reminderListProvider).value ?? const [];
     // Watched, not `DateTime.now()`: a reminder crossing its due instant while
     // the card is on screen has to turn red by itself, which is the same
     // reason `RemindersCard` reads this provider.

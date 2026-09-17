@@ -3,7 +3,7 @@ import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import '../../hive_registrar.g.dart';
 import '../models/active_study_session.dart';
 import '../models/chat_message.dart';
-import '../models/habit.dart';
+import '../models/reminder.dart';
 import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/task.dart';
@@ -16,7 +16,11 @@ class HiveBoxes {
   const HiveBoxes._();
 
   static const String tasks = 'tasks';
-  static const String habits = 'habits';
+  static const String reminders = 'reminders';
+  // No `habits` here any more. The box file is deliberately left on disk
+  // rather than deleted: nothing opens it, its adapter is gone, and an
+  // unopened box costs nothing — where erasing it would destroy data the
+  // user may still have on another device.
   static const String userSettings = 'user_settings';
   static const String subjects = 'subjects';
   static const String studyLogs = 'study_logs';
@@ -34,15 +38,22 @@ bool _initialized = false;
 ///
 /// Idempotent: safe to call more than once (e.g. across tests in the same
 /// isolate) — later calls are a no-op.
-Future<void> initializeLocalStorage() async {
+/// Opens the app's Hive boxes.
+///
+/// [subdirectory] puts them somewhere other than the default location, which
+/// is what `tool/ios_preview.dart` uses. Hive takes a file lock per box, so a
+/// second instance sharing the directory dies on startup with an unhandled
+/// `FileSystemException` — and on this machine the installed build and a
+/// `flutter run` are routinely open at the same time.
+Future<void> initializeLocalStorage({String? subdirectory}) async {
   if (_initialized) return;
 
-  await Hive.initFlutter();
+  await Hive.initFlutter(subdirectory);
   Hive.registerAdapters();
 
   await Future.wait([
     Hive.openBox<Task>(HiveBoxes.tasks),
-    Hive.openBox<Habit>(HiveBoxes.habits),
+    Hive.openBox<Reminder>(HiveBoxes.reminders),
     Hive.openBox<UserSettings>(HiveBoxes.userSettings),
     Hive.openBox<Subject>(HiveBoxes.subjects),
     Hive.openBox<StudyLog>(HiveBoxes.studyLogs),
@@ -56,7 +67,10 @@ Future<void> initializeLocalStorage() async {
   await runHiveMigrations(
     metadata: SyncMetadata(Hive.box<dynamic>(HiveBoxes.syncMeta)),
     tasks: Hive.box<Task>(HiveBoxes.tasks),
-    habits: Hive.box<Habit>(HiveBoxes.habits),
+    // No `reminders:` here on purpose. The migration exists to backfill
+    // sync metadata onto rows written before those fields existed, and the
+    // reminders box is new in this version — every row in it has been
+    // stamped since the moment it was written.
     subjects: Hive.box<Subject>(HiveBoxes.subjects),
     studyLogs: Hive.box<StudyLog>(HiveBoxes.studyLogs),
     userSettings: Hive.box<UserSettings>(HiveBoxes.userSettings),

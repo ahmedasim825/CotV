@@ -82,7 +82,7 @@ class _AccountSheetState extends ConsumerState<_AccountSheet> {
     return StandardBottomSheet(
       title: _isSigningUp ? 'Create account' : 'Sign in',
       subtitle: _isSigningUp
-          ? 'Your tasks, habits, study, chat and settings sync to every '
+          ? 'Your tasks, reminders, study, chat and settings sync to every '
               'device you sign in on.'
           : 'Signing in merges this device with what your account already '
               'holds.',

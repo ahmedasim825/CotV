@@ -27,7 +27,6 @@ import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/src/models/food_models.dart';
-import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
@@ -171,7 +170,7 @@ void main() {
     tasks = await Hive.openBox<Task>(HiveBoxes.tasks);
     studyLogs = await Hive.openBox<StudyLog>(HiveBoxes.studyLogs);
     subjects = await Hive.openBox<Subject>(HiveBoxes.subjects);
-    await Hive.openBox<Habit>(HiveBoxes.habits);
+    await Hive.openBox<Reminder>(HiveBoxes.reminders);
     await Hive.openBox<UserSettings>(HiveBoxes.userSettings);
   });
 
@@ -384,7 +383,14 @@ void main() {
   group('reminders', () {
     testWidgets('the reminders card lists titles with their due labels',
         (tester) async {
-      await pumpCard(tester, const RemindersCard());
+      await pumpCard(
+        tester,
+        const RemindersCard(),
+        overrides: [
+          reminderListProvider
+              .overrideWith(() => _SeededReminders(_sampleReminders)),
+        ],
+      );
 
       expect(find.text('Reminders'), findsOneWidget);
       expect(find.text('Workout'), findsOneWidget);
@@ -392,19 +398,23 @@ void main() {
     });
 
     testWidgets('an overdue reminder is coloured danger', (tester) async {
-      // The dashboard's shared `_now` (17 March) predates both sample
-      // reminders, which are seeded in late July — against it neither would
-      // ever be overdue and this test would pass for the wrong reason. Pin
-      // the clock to the same instant `test/reminders_test.dart` uses to
-      // exercise `Reminder.isOverdue`, which sits after the "Workout"
-      // sample's due time and before "Watch Dr.Bassant's Lecture"'s.
+      // The dashboard's shared `_now` (17 March) predates both fixtures,
+      // which are dated in late July — against it neither would ever be
+      // overdue and this test would pass for the wrong reason. Pin the clock
+      // to the same instant `test/reminders_test.dart` uses to exercise
+      // `Reminder.isOverdue`, which sits after the "Workout" fixture's due
+      // time and before "Watch Dr.Bassant's Lecture"'s.
       await pumpCard(
         tester,
         const RemindersCard(),
         now: DateTime(2026, 7, 28, 12, 0),
+        overrides: [
+          reminderListProvider
+              .overrideWith(() => _SeededReminders(_sampleReminders)),
+        ],
       );
 
-      // The sample "Workout" is dated in the past.
+      // The "Workout" fixture is dated in the past.
       final due =
           tester.widget<Text>(find.byKey(const ValueKey('due-sample-1')));
       expect(due.style?.color, kPalette.danger);
@@ -476,10 +486,17 @@ void main() {
     });
 
     testWidgets('no divider renders under the last reminder', (tester) async {
-      await pumpCard(tester, const RemindersCard());
+      await pumpCard(
+        tester,
+        const RemindersCard(),
+        overrides: [
+          reminderListProvider
+              .overrideWith(() => _SeededReminders(_sampleReminders)),
+        ],
+      );
 
-      // Two sample reminders, seeded by ReminderListController.build(): one
-      // separator between them, and none trailing the last row.
+      // Two reminders: one separator between them, and none trailing the
+      // last row.
       expect(find.byType(Divider), findsOneWidget);
     });
   });
@@ -548,7 +565,31 @@ void main() {
   });
 }
 
-class _EmptyReminders extends ReminderListController {
+class _EmptyReminders extends ReminderListNotifier {
   @override
-  List<Reminder> build() => const [];
+  Stream<List<Reminder>> build() => Stream.value(const []);
 }
+
+/// A fixed reminder list the test controls.
+///
+/// These used to be seeded inside `ReminderListController.build()`, so every
+/// reminder test read them without saying so. Reminders are a Hive box now
+/// and start empty, which is what a real install looks like — so the fixture
+/// is stated here instead.
+class _SeededReminders extends ReminderListNotifier {
+  _SeededReminders(this.seed);
+
+  final List<Reminder> seed;
+
+  @override
+  Stream<List<Reminder>> build() => Stream.value(seed);
+}
+
+final _sampleReminders = [
+  Reminder(id: 'sample-1', title: 'Workout', dueAt: DateTime(2026, 7, 27, 3)),
+  Reminder(
+    id: 'sample-2',
+    title: "Watch Dr.Bassant's Lecture",
+    dueAt: DateTime(2026, 7, 28, 20),
+  ),
+];

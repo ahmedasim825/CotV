@@ -9,6 +9,7 @@ import '../../providers/notification_providers.dart';
 import '../../providers/prayer_providers.dart';
 import '../../services/calendar_sync_service.dart';
 import '../components/components.dart';
+import '../format/time_format.dart';
 import '../theme/app_theme.dart';
 import '../widgets/floating_header.dart';
 import '../widgets/ph_light_icons.dart';

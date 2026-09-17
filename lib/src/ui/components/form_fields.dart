@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// The shared decoration for every text input in the app, so a habit's
+/// The shared decoration for every text input in the app, so a reminder's
 /// title field, a subject name field and a task's description all read as
 /// the same control.
 InputDecoration appInputDecoration(

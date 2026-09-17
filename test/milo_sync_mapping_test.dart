@@ -7,7 +7,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/sync_stamped.dart';
@@ -24,10 +24,6 @@ void main() {
           ['low', 'medium', 'high']);
     });
 
-    test('habit frequency', () {
-      expect(HabitFrequency.values.map((f) => f.name).toList(),
-          ['daily', 'weekly']);
-    });
 
     test('an unknown value from a newer build falls back rather than throws',
         () {
@@ -94,40 +90,52 @@ void main() {
     });
   });
 
-  group('habits', () {
-    test('completed dates do not shift a day in either direction', () {
-      // The trap this guards: a local midnight converted to UTC lands on the
-      // previous day for anyone east of Greenwich, moving every check-in.
-      final dates = [
-        DateTime(2026, 9, 14),
-        DateTime(2026, 9, 15),
-        DateTime(2026, 1, 1),
-        DateTime(2026, 12, 31),
-      ];
-      final row = habitToRow(
-        Habit(id: 'h1', title: 'Fajr on time', completedDates: dates)
-            .stampUpdated(1700),
-      );
+  group('reminders', () {
+    test('round-trips through a row', () {
+      final reminder = Reminder(
+        id: 'r1',
+        title: 'Watch the lecture',
+        dueAt: DateTime(2026, 9, 17, 18, 0),
+        isCompleted: true,
+        priority: TaskPriority.high,
+      ).stampUpdated(1700);
 
-      expect(row['completed_dates'],
-          ['2026-09-14', '2026-09-15', '2026-01-01', '2026-12-31']);
-      expect(habitFromRow(_asServerRow(row)).completedDates, dates);
+      final back = reminderFromRow(_asServerRow(reminderToRow(reminder)));
+
+      expect(back.id, 'r1');
+      expect(back.title, 'Watch the lecture');
+      expect(back.dueAt, DateTime(2026, 9, 17, 18, 0));
+      expect(back.isCompleted, isTrue);
+      expect(back.priority, TaskPriority.high);
+      expect(back.updatedAtMillis, 1700);
     });
 
-    test('streak is not carried over the wire', () {
-      final row = habitToRow(
-        Habit(id: 'h1', title: 'Fajr', streakCount: 9).stampUpdated(1),
+    test('priority travels as the enum name, same as a task', () {
+      final row = reminderToRow(
+        Reminder(id: 'r1', title: 'x', dueAt: DateTime(2026, 9, 17))
+            .stampUpdated(1),
       );
-      // Derived from the dates, and recomputed by the merge from the union
-      // of both devices — a stored count would arrive disagreeing with them.
-      expect(row.containsKey('streak_count'), isFalse);
-      expect(habitFromRow(_asServerRow(row)).streakCount, 0);
+      expect(row['priority'], 'medium');
     });
 
-    test('an empty date list round-trips', () {
-      final row = habitToRow(Habit(id: 'h1', title: 'New').stampUpdated(1));
-      expect(row['completed_dates'], isEmpty);
-      expect(habitFromRow(_asServerRow(row)).completedDates, isEmpty);
+    test('a pulled record reads as clean', () {
+      final row = reminderToRow(
+        Reminder(id: 'r1', title: 'x', dueAt: DateTime(2026, 9, 17))
+            .stampUpdated(1),
+      );
+      final back = reminderFromRow(_asServerRow(row));
+      // Not dirty: a pulled record stamped as a local edit would be pushed
+      // straight back, and the two devices would trade it forever.
+      expect(back.isDirty, isFalse);
+      expect(back.syncedAtMillis, back.updatedAtMillis);
+    });
+
+    test('a tombstone survives the round trip', () {
+      final row = reminderToRow(
+        Reminder(id: 'r1', title: 'x', dueAt: DateTime(2026, 9, 17))
+            .markDeleted(9),
+      );
+      expect(reminderFromRow(_asServerRow(row)).isDeleted, isTrue);
     });
   });
 

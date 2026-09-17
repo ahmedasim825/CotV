@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../models/habit.dart';
+import '../models/reminder.dart';
 import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/task.dart';
@@ -41,8 +41,8 @@ abstract class MiloSyncService {
   Future<List<RemoteRecord<Task>>> fetchTasks(String? since);
   Future<void> pushTasks(Iterable<Task> tasks);
 
-  Future<List<RemoteRecord<Habit>>> fetchHabits(String? since);
-  Future<void> pushHabits(Iterable<Habit> habits);
+  Future<List<RemoteRecord<Reminder>>> fetchReminders(String? since);
+  Future<void> pushReminders(Iterable<Reminder> reminders);
 
   Future<List<RemoteRecord<Subject>>> fetchSubjects(String? since);
   Future<void> pushSubjects(Iterable<Subject> subjects);
@@ -114,16 +114,16 @@ class SupabaseMiloSyncService implements MiloSyncService {
       _push('tasks', tasks.map(taskToRow));
 
   // ---------------------------------------------------------------------
-  // Habits
+  // Reminders
   // ---------------------------------------------------------------------
 
   @override
-  Future<List<RemoteRecord<Habit>>> fetchHabits(String? since) =>
-      _fetch('habits', since, habitFromRow);
+  Future<List<RemoteRecord<Reminder>>> fetchReminders(String? since) =>
+      _fetch('reminders', since, reminderFromRow);
 
   @override
-  Future<void> pushHabits(Iterable<Habit> habits) =>
-      _push('habits', habits.map(habitToRow));
+  Future<void> pushReminders(Iterable<Reminder> reminders) =>
+      _push('reminders', reminders.map(reminderToRow));
 
   // ---------------------------------------------------------------------
   // Study
@@ -324,32 +324,28 @@ Task taskFromRow(Map<String, dynamic> row) {
   );
 }
 
-Map<String, Object?> habitToRow(Habit habit) => {
-      'id': habit.id,
-      'title': habit.title,
-      'frequency': habit.frequency.name,
-      // Calendar dates, formatted rather than sent as instants. A local
-      // midnight converted to UTC lands on the previous day for anyone east
-      // of Greenwich, which would move every check-in by a day.
-      'completed_dates': habit.completedDates.map(_dateOnly).toList(),
-      'color_hex': habit.colorHex,
-      ..._syncColumns(habit.updatedAtMillis, habit.isDeleted),
+Map<String, Object?> reminderToRow(Reminder reminder) => {
+      'id': reminder.id,
+      'title': reminder.title,
+      'due_at': _instant(reminder.dueAt),
+      'is_completed': reminder.isCompleted,
+      // The enum's name, not its index — same as tasks, and for the same
+      // reason: reordering `TaskPriority` must not silently re-rank every
+      // row the server already holds.
+      'priority': reminder.priority.name,
+      ..._syncColumns(reminder.updatedAtMillis, reminder.isDeleted),
     };
 
-Habit habitFromRow(Map<String, dynamic> row) {
+Reminder reminderFromRow(Map<String, dynamic> row) {
   final millis = _millis(row);
-  final dates = (row['completed_dates'] as List?) ?? const [];
-  return Habit(
+  return Reminder(
     id: row['id'] as String,
     title: row['title'] as String,
-    frequency: _frequency(row['frequency'] as String?),
-    completedDates: [
-      for (final date in dates) _calendarDate(date as String),
-    ],
-    // streakCount is not a column: it is recomputed from the dates by the
-    // merge, since a stored count can disagree with the set beneath it.
-    streakCount: 0,
-    colorHex: (row['color_hex'] as String?) ?? '#D8A657',
+    // Non-null where a task's due date is nullable: a reminder with no
+    // moment attached is not a reminder, and the column is NOT NULL.
+    dueAt: _dateTime(row['due_at'])!,
+    isCompleted: (row['is_completed'] as bool?) ?? false,
+    priority: _priority(row['priority'] as String?),
     updatedAtMillis: millis,
     isDeleted: (row['deleted'] as bool?) ?? false,
     syncedAtMillis: millis,
@@ -473,33 +469,9 @@ String? _instant(DateTime? value) => value?.toUtc().toIso8601String();
 DateTime? _dateTime(Object? value) =>
     value == null ? null : DateTime.parse(value as String).toLocal();
 
-/// A calendar date on the wire — no time, no zone.
-String _dateOnly(DateTime day) =>
-    '${day.year.toString().padLeft(4, '0')}-'
-    '${day.month.toString().padLeft(2, '0')}-'
-    '${day.day.toString().padLeft(2, '0')}';
-
-/// The inverse: local midnight on that calendar day, which is the form
-/// every completion is stored and compared in.
-DateTime _calendarDate(String value) {
-  final parts = value.split('-');
-  return DateTime(
-    int.parse(parts[0]),
-    int.parse(parts[1]),
-    int.parse(parts[2]),
-  );
-}
-
 TaskPriority _priority(String? name) {
   for (final value in TaskPriority.values) {
     if (value.name == name) return value;
   }
   return TaskPriority.medium;
-}
-
-HabitFrequency _frequency(String? name) {
-  for (final value in HabitFrequency.values) {
-    if (value.name == name) return value;
-  }
-  return HabitFrequency.daily;
 }

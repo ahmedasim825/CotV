@@ -18,7 +18,7 @@ import 'package:cotv/hive_registrar.g.dart';
 import 'package:cotv/main.dart';
 import 'package:cotv/src/models/active_study_session.dart';
 import 'package:cotv/src/models/chat_message.dart';
-import 'package:cotv/src/models/habit.dart';
+import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/task.dart';
@@ -91,7 +91,7 @@ void main() {
     }
     await Future.wait([
       Hive.openBox<Task>(HiveBoxes.tasks),
-      Hive.openBox<Habit>(HiveBoxes.habits),
+      Hive.openBox<Reminder>(HiveBoxes.reminders),
       Hive.openBox<UserSettings>(HiveBoxes.userSettings),
       // The shell reconciles a leftover study session on launch, and
       // Milo's context reads the durable transcript, so these have to
@@ -332,15 +332,39 @@ void main() {
     await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
 
+    // The two segments, and the day section that always renders because it
+    // carries the inline add control.
+    expect(find.text('Tasks'), findsWidgets);
+    expect(find.text('Reminders'), findsWidgets);
     expect(find.text('Today'), findsWidgets);
-    expect(find.text('Upcoming'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
-    expect(find.text('Priority'), findsWidgets);
+    expect(find.bySemanticsLabel('Add task'), findsOneWidget);
 
-    await tester.tap(find.text('Task'));
-    await pumpUntil(tester, () => find.text('New task').evaluate().isNotEmpty);
+    // The full sheet is reached by tapping a row — this screen has no other
+    // way in, now that adding is inline. Seeded through the notifier rather
+    // than through that inline control: its write is a real Hive one and has
+    // to happen outside the fake async zone, and
+    // `reminder_edit_delete_test.dart` already covers the control itself
+    // against an in-memory repository.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(TaskListView)),
+    );
+    await tester.runAsync(
+      () => container
+          .read(taskListProvider.notifier)
+          .addTask(Task(id: 'sheet-task', title: 'Read tafsir')),
+    );
+    await pumpUntil(
+      tester,
+      () => find.text('Read tafsir').evaluate().isNotEmpty,
+    );
 
-    expect(find.text('New task'), findsOneWidget);
+    await tester.tap(find.text('Read tafsir'));
+    await pumpUntil(tester, () => find.text('Edit task').evaluate().isNotEmpty);
+
+    // 'Edit task', not 'New task': the latter is also the inline control's
+    // hint text, so it is on screen either way and would not prove the sheet
+    // opened.
+    expect(find.text('Edit task'), findsOneWidget);
     expect(find.text('What needs doing?'), findsOneWidget);
   });
 
@@ -351,10 +375,8 @@ void main() {
     await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
 
-    // An undated task lands under Upcoming.
-    await tester.tap(find.text('Upcoming'));
-    await tester.pumpAndSettle();
-
+    // An undated task falls back to its `createdAt`, so it lands under
+    // Today — the section the list opens on.
     expect(find.text('Read tafsir'), findsNothing);
 
     final container = ProviderScope.containerOf(
@@ -373,7 +395,7 @@ void main() {
     );
 
     // Nothing re-read the box by hand: the write travelled repository ->
-    // Hive -> watchAll() -> visibleTasksProvider -> this list.
+    // Hive -> watchAll() -> taskListProvider -> this list.
     expect(find.text('Read tafsir'), findsOneWidget);
 
     await tester.runAsync(() => tasks.deleteTask(task.id));

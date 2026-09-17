@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../models/habit.dart';
 import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/task.dart';
@@ -35,7 +34,6 @@ class HiveMigrations {
 Future<void> runHiveMigrations({
   required SyncMetadata metadata,
   required Box<Task> tasks,
-  required Box<Habit> habits,
   required Box<Subject> subjects,
   required Box<StudyLog> studyLogs,
   required Box<UserSettings> userSettings,
@@ -54,7 +52,6 @@ Future<void> runHiveMigrations({
   if (from < HiveMigrations._syncMetadataVersion) {
     await backfillSyncMetadata(
       tasks: tasks,
-      habits: habits,
       subjects: subjects,
       studyLogs: studyLogs,
       userSettings: userSettings,
@@ -71,10 +68,10 @@ Future<void> runHiveMigrations({
 ///
 /// Where the record already carries a timestamp of its own that is used,
 /// so a task created last March sorts as older than one created today.
-/// Habits and settings carry none, and those fall back to
+/// Settings carry none, and those fall back to
 /// [migratedAtMillis] — **not** to zero. Zero means "older than anything",
 /// which on the first sync would make the device holding all the real data
-/// lose every habit to an empty remote.
+/// lose everything to an empty remote.
 ///
 /// `syncedAtMillis` is deliberately left null: every existing record is
 /// then dirty, and the first sync pushes all of it, which is correct
@@ -83,7 +80,6 @@ Future<void> runHiveMigrations({
 /// Idempotent — the null test skips records a previous run already stamped.
 Future<void> backfillSyncMetadata({
   required Box<Task> tasks,
-  required Box<Habit> habits,
   required Box<Subject> subjects,
   required Box<StudyLog> studyLogs,
   required Box<UserSettings> userSettings,
@@ -118,11 +114,6 @@ Future<void> backfillSyncMetadata({
     (log) => log.updatedAtMillis,
     (log) => log.stampUpdated(log.timestamp.millisecondsSinceEpoch),
   );
-  await stamp<Habit>(
-    habits,
-    (habit) => habit.updatedAtMillis,
-    (habit) => habit.stampUpdated(migratedAtMillis),
-  );
   await stamp<UserSettings>(
     userSettings,
     (settings) => settings.updatedAtMillis,
@@ -151,7 +142,6 @@ Future<void> backupLocalStores() async {
     final sources = <File>[
       for (final name in const [
         HiveBoxes.tasks,
-        HiveBoxes.habits,
         HiveBoxes.userSettings,
         HiveBoxes.subjects,
         HiveBoxes.studyLogs,

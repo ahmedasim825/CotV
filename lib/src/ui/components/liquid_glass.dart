@@ -83,6 +83,7 @@ class LiquidGlass extends StatelessWidget {
     this.spec = LiquidGlassSpec.control,
     this.clipBorderRadius,
     this.fill,
+    this.gradient,
     this.blurSigma = 30,
     this.debugCalibrate = false,
   });
@@ -111,6 +112,14 @@ class LiquidGlass extends StatelessWidget {
   /// content and needs more separation than a card resting on the ground.
   final Color? fill;
 
+  /// A gradient laid over the refracted backdrop instead of [fill].
+  ///
+  /// A flat tint is right for a small control, but across a wide capsule it
+  /// reads as a grey slab: real glass is brighter where the light strikes it
+  /// and falls to almost nothing at the far corner. Takes precedence over
+  /// [fill] when both are given.
+  final Gradient? gradient;
+
   /// How far the backdrop is blurred before it is refracted.
   final double blurSigma;
 
@@ -129,31 +138,31 @@ class LiquidGlass extends StatelessWidget {
     // Null off Impeller, in a widget test, or with the kill switch thrown.
     final ui.FragmentProgram? program = LiquidGlassScope.maybeOf(context);
 
-    Widget surface = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: clip,
-        color: effectiveFill,
-        border: Border.all(color: palette.hairline),
+    // A gradient rim, not a flat hairline: a real glass edge catches light
+    // along the side facing it and falls away on the opposite one, so the
+    // stroke runs bright at the top-leading corner to nearly nothing at the
+    // bottom-trailing one. It traces the whole shape rather than laying a
+    // straight line across the top, which is what used to read as a seam.
+    //
+    // Drawn on *both* paths. It is what defines the edge when there is no
+    // shader, and under one it sits beneath a specular that is directional
+    // and per-pixel, so the two describe the same light rather than fighting.
+    final Widget surface = CustomPaint(
+      foregroundPainter: _GradientRim(
+        radius: clip,
+        from: palette.rimLit,
+        to: palette.rimShade,
       ),
-      child: child,
-    );
-
-    // The drawn bevel is the shader's understudy and never its colleague:
-    // with a shader present the rim specular is computed per-pixel around the
-    // whole perimeter, and laying a straight lit line over the top of that
-    // reads as a seam. This is the *only* place the two paths differ — if a
-    // second `program == null` appears in this decoration, the fallback has
-    // started drifting into a parallel implementation.
-    if (program == null) {
-      surface = DecoratedBox(
-        position: DecorationPosition.foreground,
+      child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: clip,
-          border: Border(top: BorderSide(color: palette.innerHighlight)),
+          // BoxDecoration takes one or the other, never both.
+          color: gradient == null ? effectiveFill : null,
+          gradient: gradient,
         ),
-        child: surface,
-      );
-    }
+        child: child,
+      ),
+    );
 
     // Two nested filters rather than one composed one, and the reason is
     // measured rather than stylistic.
@@ -253,19 +262,29 @@ class LiquidGlassSpec {
 
   /// The default: a floating control over a dark, softly lit page.
   ///
-  /// Tuned against the preview rather than guessed. The first pass used a band
-  /// a third of the capsule's half-height with a soft specular over all of it,
-  /// which read as a vignette — a smudge around the edge rather than an edge.
-  /// What makes it glass is a *thin* bevel doing steep work: a shallow band, a
-  /// tight specular lobe, a crisp rim line, and barely any darkening.
+  /// These are the design's Figma Glass settings, carried across rather than
+  /// eyeballed. Figma states each on a 0-100 scale; the mapping is:
+  ///
+  ///   Light -45deg, 80%  ->  lightDirection (-1,-1) normalised, specular
+  ///   Refraction 80      ->  refraction
+  ///   Depth 20           ->  edge  (how far in the bevel reaches)
+  ///   Dispersion 50      ->  aberration
+  ///   Frost 4            ->  the surface's blurSigma, set at the call site
+  ///   Splay 0            ->  not modelled; nothing spreads outward
+  ///
+  /// Frost 4 is the one that matters most and the one most easily got wrong:
+  /// it is nearly *no* blur. A heavy blur is what makes glass read as a grey
+  /// slab instead of something you can see through.
   static const LiquidGlassSpec control = LiquidGlassSpec(
-    edge: 0.18,
-    refraction: 0.12,
-    aberration: 0.005,
-    lightDirection: Offset(-0.35, -1),
-    specular: 0.30,
+    edge: 0.20,
+    refraction: 0.20,
+    aberration: 0.015,
+    // -45 degrees: up and to the left, so the rim lights along the top and
+    // leading edges and falls away at the bottom-trailing corner.
+    lightDirection: Offset(-1, -1),
+    specular: 0.45,
     rimWidth: 0.30,
-    rimGain: 0.17,
+    rimGain: 0.12,
     specularPower: 6,
     edgeDarken: 0.04,
   );
@@ -275,11 +294,11 @@ class LiquidGlassSpec {
   static const LiquidGlassSpec sheet = LiquidGlassSpec(
     edge: 0.05,
     refraction: 0.05,
-    aberration: 0.004,
-    lightDirection: Offset(-0.35, -1),
-    specular: 0.22,
+    aberration: 0.006,
+    lightDirection: Offset(-1, -1),
+    specular: 0.30,
     rimWidth: 0.34,
-    rimGain: 0.13,
+    rimGain: 0.08,
     specularPower: 6,
     edgeDarken: 0.03,
   );
@@ -592,4 +611,51 @@ class _RenderLiquidGlassBackdrop extends RenderProxyBox {
     );
     properties.add(DoubleProperty('radius', _radius));
   }
+}
+
+/// The lit edge of a pane of glass.
+///
+/// [BoxDecoration] has no gradient border and [ShapeDecoration] no gradient
+/// side, so the rim is stroked by hand. A stroke sits astride the path, so the
+/// rect is inset by half the width to keep all of it inside the clip — an
+/// un-inset stroke loses its outer half and reads as a half-width, half-bright
+/// line.
+class _GradientRim extends CustomPainter {
+  const _GradientRim({
+    required this.radius,
+    required this.from,
+    required this.to,
+  });
+
+  final BorderRadius radius;
+  final Color from;
+  final Color to;
+
+  /// Apple's rim is a hairline at any size — it does not thicken with the
+  /// surface, which is part of why the glass reads as thin.
+  static const double width = 1;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = Offset.zero & size;
+    final RRect rrect = radius
+        .toRRect(rect)
+        .deflate(width / 2);
+
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [from, to],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GradientRim old) =>
+      old.radius != radius || old.from != from || old.to != to;
 }

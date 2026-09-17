@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../providers/milo_providers.dart';
+import '../../components/liquid_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 
@@ -95,21 +96,8 @@ class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
     // always has room for it.
     final glass = context.useLiquidGlass;
 
-    return Container(
-      // A plain Container, not an AnimatedContainer: there is nothing left to
-      // animate between, and an implicit animation with no varying property
-      // still rebuilds on every tick of its controller.
-      //
-      // 48 on glass, not 44. The caret is the only control left on that path
-      // and needs a 44pt target of its own — which a 44pt pill cannot give it,
-      // because its 1pt border takes the content box down to 42.
-      height: glass ? 48 : 44,
+    final Widget content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: _searchFill,
-        borderRadius: BorderRadius.circular(_searchRadius),
-        border: Border.all(color: _searchStroke),
-      ),
       child: Row(
         children: [
           if (!glass) ...[
@@ -195,6 +183,36 @@ class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
         ],
       ),
     );
+
+    // The field is a control, so on iOS it takes the control layer's
+    // material — the same refracting glass as the nav capsule, at a capsule
+    // radius rather than the 10pt corner Windows keeps. This is the one place
+    // the two platforms deliberately stopped matching: a 10pt-cornered slab
+    // reads as a form input, and iOS 26 does not put form inputs on a home
+    // screen.
+    //
+    // 48 tall, not 44: the caret is the only control left on this path and
+    // needs a 44pt target of its own.
+    if (glass) {
+      return LiquidGlass(
+        radius: _glassHeight / 2,
+        blurSigma: 24,
+        child: SizedBox(height: _glassHeight, child: content),
+      );
+    }
+
+    return Container(
+      // A plain Container, not an AnimatedContainer: there is nothing left to
+      // animate between, and an implicit animation with no varying property
+      // still rebuilds on every tick of its controller.
+      height: 44,
+      decoration: BoxDecoration(
+        color: _searchFill,
+        borderRadius: BorderRadius.circular(_searchRadius),
+        border: Border.all(color: _searchStroke),
+      ),
+      child: content,
+    );
   }
 }
 
@@ -204,6 +222,9 @@ class _HomeSearchBarState extends ConsumerState<HomeSearchBar> {
 /// the same three values in every state. The fill used to be `surfaceRaised`,
 /// which is opaque, so the field read as a slab sitting on the ground rather
 /// than a shape cut into it.
+/// The glass pill's height, and so twice its corner radius.
+const double _glassHeight = 48;
+
 const Color _searchFill = Color(0x05D9D9D9);
 const Color _searchStroke = Color(0x1AFFFFFF);
 const double _searchRadius = 10;

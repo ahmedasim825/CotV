@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/chat_session_providers.dart';
@@ -13,6 +12,7 @@ import 'milo/milo_assistant_screen.dart';
 import 'prayers/prayers_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'settings/settings_screen.dart';
+import 'shell/liquid_glass_nav_bar.dart';
 import 'shell/milo_dock.dart';
 import 'shell/sidebar.dart';
 import 'shell/window_chrome.dart';
@@ -152,8 +152,42 @@ class _AppShellState extends ConsumerState<AppShell> {
   AppDestination _destination = AppDestination.home;
   SidebarMode _sidebarMode = SidebarMode.expanded;
 
+  /// Whether the pane under the capsule is being scrolled away from.
+  ///
+  /// A notifier rather than `setState`: this state's build creates the pane,
+  /// so rebuilding on every direction flip would rebuild the whole screen to
+  /// move one capsule. Only the capsule listens.
+  final ValueNotifier<bool> _navCollapsed = ValueNotifier<bool>(false);
+
+  /// Collapses the capsule on a downward drag and restores it on an upward
+  /// one, the way Apple's own floating bars behave.
+  ///
+  /// `depth == 0` keeps a horizontal chip row or a nested list inside a pane
+  /// from driving the bar — only the pane's outermost scrollable counts. The
+  /// notification is not consumed: anything else listening still sees it.
+  bool _onUserScroll(UserScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    if (notification.metrics.axis != Axis.vertical) return false;
+    switch (notification.direction) {
+      case ScrollDirection.reverse:
+        _navCollapsed.value = true;
+      case ScrollDirection.forward:
+        _navCollapsed.value = false;
+      case ScrollDirection.idle:
+        break;
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    _navCollapsed.dispose();
+    super.dispose();
+  }
+
   void _select(AppDestination destination) {
     if (_destination != destination) {
+      _navCollapsed.value = false;
       setState(() => _destination = destination);
     }
   }
@@ -254,9 +288,12 @@ class _AppShellState extends ConsumerState<AppShell> {
                         ),
                       ],
                     )
-                  : AppNavigation(
-                      select: _select,
-                      child: revealedPaneFor(_destination),
+                  : NotificationListener<UserScrollNotification>(
+                      onNotification: _onUserScroll,
+                      child: AppNavigation(
+                        select: _select,
+                        child: revealedPaneFor(_destination),
+                      ),
                     ),
             ),
           ),
@@ -268,7 +305,11 @@ class _AppShellState extends ConsumerState<AppShell> {
           bottomNavigationBar: windowSize.usesNavigationRail
               ? null
               : context.useLiquidGlass
-              ? _LiquidGlassNavBar(destination: _destination, onSelect: _select)
+              ? LiquidGlassNavBar(
+                  destination: _destination,
+                  onSelect: _select,
+                  collapsed: _navCollapsed,
+                )
               : _BottomNavBar(destination: _destination, onSelect: _select),
         );
       },
@@ -355,196 +396,6 @@ class _WithWindowChrome extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// The iOS bar: a capsule of glass floating over the pane, blurring whatever
-/// scrolls beneath it.
-///
-/// **Five destinations, and nothing else.** Settings moved to the gear in the
-/// Home header, and Milo moved into the Home pane — so this iterates
-/// [AppDestinationX.navItems], which is already exactly those five, rather
-/// than `AppDestination.values` plus a launcher the way [_BottomNavBar] does.
-/// That does mean Milo is reachable from Home alone on iOS; the wake word,
-/// armed by the shell for the life of the app, is what still reaches it from
-/// anywhere else.
-///
-/// Its [BackdropFilter] is deliberately **not** `.grouped`. The pill overlaps
-/// the scrolling content by definition — that is what `extendBody` is for —
-/// and two overlapping filters sharing a backdrop key draw as though only one
-/// of them applied.
-class _LiquidGlassNavBar extends StatelessWidget {
-  const _LiquidGlassNavBar({required this.destination, required this.onSelect});
-
-  final AppDestination destination;
-  final ValueChanged<AppDestination> onSelect;
-
-  /// The capsule's own height. 48pt of touch target with 4pt of breathing
-  /// room above and below it.
-  static const double _height = 56;
-
-  /// How far the capsule is inset from the pane's edges. Less than the 20pt
-  /// content gutter, so it reads as floating over the column rather than
-  /// ruled to it.
-  static const double _inset = 16;
-
-  /// Stops the capsule stretching across an iPad. Five glyphs spread over
-  /// 1100pt would put a finger's travel between neighbours.
-  static const double _maxWidth = 420;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final radius = BorderRadius.circular(_height / 2);
-
-    // Apple's floating bars sit *inside* the home-indicator strip, not above
-    // it — reserving the full 34pt leaves an obvious dead band under the
-    // capsule. On a device with no indicator the subtraction floors at 10.
-    final double lift = math.max(10, MediaQuery.paddingOf(context).bottom - 12);
-
-    // `alphaBlend` of the card's fill with itself: the pill is a control laid
-    // over live, moving content and needs more separation than a card resting
-    // on the ground does. Arithmetic rather than a new token, because there is
-    // one surface in the app that wants this and it is this one.
-    final Color fill = Color.alphaBlend(palette.glassFill, palette.glassFill);
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(_inset, 0, _inset, lift),
-      // `Align` with a heightFactor, not `Center`. Scaffold hands the bottom
-      // bar loose constraints — max height the whole screen — and a bare
-      // Center takes all of it, which floats the capsule in the middle of the
-      // page instead of at the foot of it. heightFactor: 1 shrink-wraps the
-      // capsule's own height while still centring it across the width.
-      child: Align(
-        alignment: Alignment.center,
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _maxWidth),
-          child: DecoratedBox(
-            // Outside the clip, so the shadow falls on the page rather than
-            // being clipped away with the blur.
-            decoration: BoxDecoration(
-              borderRadius: radius,
-              boxShadow: [
-                BoxShadow(
-                  color: palette.shadow,
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: radius,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                child: Container(
-                  height: _height,
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    border: Border.all(color: palette.hairline),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color.alphaBlend(palette.glassSpecular, fill),
-                        fill,
-                      ],
-                      stops: const [0.0, 0.45],
-                    ),
-                  ),
-                  foregroundDecoration: BoxDecoration(
-                    borderRadius: radius,
-                    border: Border(
-                      top: BorderSide(color: palette.innerHighlight),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      for (final item in AppDestinationX.navItems)
-                        _GlassNavItem(
-                          destination: item,
-                          isSelected: item == destination,
-                          onTap: () => onSelect(item),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One destination in the glass pill.
-///
-/// Selection reads two ways at once, as it does in the sidebar, because on a
-/// blurred violet-tinted ground neither signal is strong enough alone. The
-/// [_BottomNavBar]'s `accentSoft` pill — the accent at 16% — all but vanishes
-/// against a backdrop already carrying the accent, so it is replaced here by a
-/// second, brighter pane of glass inset in the first: the same move iOS makes
-/// for a selected tab. The glyph then goes `accentBright`, not `accent`, for
-/// the reason recorded on [_BottomNavItem] — at this size #7005BB is under
-/// WCAG AA on this ground.
-class _GlassNavItem extends StatelessWidget {
-  const _GlassNavItem({
-    required this.destination,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final AppDestination destination;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: isSelected,
-        label: destination.label,
-        child: Tooltip(
-          message: destination.label,
-          child: GestureDetector(
-            onTap: onTap,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              height: _LiquidGlassNavBar._height,
-              child: Center(
-                child: AnimatedContainer(
-                  duration: context.motion.fast,
-                  curve: AppMotion.spring,
-                  width: 46,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSelected ? palette.glassFill : Colors.transparent,
-                    border: Border.all(
-                      color: isSelected
-                          ? palette.glassBorder
-                          : Colors.transparent,
-                    ),
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                  child: Icon(
-                    destination.icon,
-                    size: 21,
-                    color: isSelected
-                        ? palette.accentBright
-                        : palette.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

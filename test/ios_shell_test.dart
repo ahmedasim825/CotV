@@ -22,6 +22,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show BackdropFilterLayer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -50,6 +51,8 @@ import 'package:cotv/src/ui/home/widgets/focus_tasks_card.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/home/widgets/music_widget.dart';
 import 'package:cotv/src/ui/home/widgets/reminders_card.dart';
+import 'package:cotv/src/ui/components/liquid_glass.dart';
+import 'package:cotv/src/ui/shell/liquid_glass_nav_bar.dart';
 import 'package:cotv/src/ui/shell/milo_dock.dart';
 import 'package:cotv/src/ui/settings/settings_screen.dart';
 import 'package:cotv/src/ui/shell/sidebar.dart';
@@ -260,23 +263,37 @@ void main() {
       expect(find.byIcon(PhLight.sparkle), findsNothing);
     });
 
-    testWidgets('blurs, and does so outside the home group', (tester) async {
+    testWidgets('is glass, and keeps its own backdrop', (tester) async {
       await pumpApp(tester);
 
-      final barFilter = find.descendant(
-        of: find.byTooltip('Home'),
-        matching: find.byType(BackdropFilter),
+      // Non-vacuity first. This assertion is the whole reason the test is
+      // written this way round: the pill used to be a bare `BackdropFilter`,
+      // and a finder looking for one now matches nothing at all — so the
+      // ancestor check below would pass on an empty set and keep passing if
+      // the glass were deleted outright.
+      // Scoped to the capsule: the search field is control-layer glass too,
+      // so an unscoped finder would match two and this would fail for a
+      // reason that has nothing to do with the bar.
+      final glass = find.descendant(
+        of: find.byType(LiquidGlassNavBar),
+        matching: find.byType(LiquidGlass),
       );
+      expect(glass, findsOneWidget);
+
       // The pill's filter must not sit under HomeScreen's BackdropGroup:
       // overlapping filters sharing a backdrop key render as though only one
       // applied, and `extendBody` makes them overlap by definition.
-      expect(
-        find.ancestor(
-          of: barFilter,
-          matching: find.byType(HomeScreen),
-        ),
-        findsNothing,
-      );
+      expect(find.ancestor(of: glass, matching: find.byType(HomeScreen)),
+          findsNothing);
+
+      // And the property that actually enforces it. Every card on Home goes
+      // through `BackdropFilter.grouped`, so each of their layers carries the
+      // group's key; a backdrop layer with no key at all can only be the
+      // pill's.
+      final ungrouped = tester.layers
+          .whereType<BackdropFilterLayer>()
+          .where((layer) => layer.backdropKey == null);
+      expect(ungrouped, isNotEmpty);
     });
 
     testWidgets('floats inside the home-indicator strip rather than above it',
@@ -310,6 +327,82 @@ void main() {
 
       expect(find.byType(HomeScreen), findsNothing);
       expect(find.text('Upcoming'), findsOneWidget);
+    });
+
+    testWidgets('leaves no Opacity between itself and its glass',
+        (tester) async {
+      await pumpApp(tester);
+
+      // The sibling of the HomeScreen guard above, for the other filter. A
+      // save layer anywhere over a backdrop filter leaves it sampling that
+      // buffer instead of the page, and the capsule is about to grow fades —
+      // which is why its glyphs tween colour rather than cross-fading.
+      expect(
+        find.descendant(
+          of: find.byType(LiquidGlassNavBar),
+          matching: find.byType(Opacity),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(LiquidGlassNavBar),
+          matching: find.byType(FadeTransition),
+        ),
+        findsNothing,
+      );
+    });
+
+    testWidgets('collapses on a downward scroll and comes back on an upward '
+        'one', (tester) async {
+      await pumpApp(tester, viewPadding: const EdgeInsets.only(bottom: 34));
+
+      double capsuleHeight() =>
+          tester.getRect(find.byTooltip('Home')).height;
+
+      final double resting = capsuleHeight();
+      expect(resting, 54);
+
+      await tester.fling(find.byType(HomeScreen), const Offset(0, -220), 900);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(capsuleHeight(), lessThan(resting));
+
+      await tester.fling(find.byType(HomeScreen), const Offset(0, 220), 900);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(capsuleHeight(), resting);
+    });
+
+    testWidgets('collapsing does not move the padding every pane reads',
+        (tester) async {
+      await pumpApp(tester, viewPadding: const EdgeInsets.only(bottom: 34));
+
+      double bodyPadding() => MediaQuery.paddingOf(
+            tester.element(
+              find
+                  .descendant(
+                    of: find.byType(AppShell),
+                    matching: find.byType(SafeArea),
+                  )
+                  .first,
+            ),
+          ).bottom;
+
+      // The whole reason the capsule shrinks inside a fixed box. Scaffold
+      // republishes the bar's measured height as body padding through a
+      // LayoutBuilder, so a footprint that moved mid-animation would rebuild
+      // every pane's subtree during layout, once a frame, and jerk anything
+      // pinned at its maximum scroll extent.
+      final double before = bodyPadding();
+
+      await tester.fling(find.byType(HomeScreen), const Offset(0, -220), 900);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 160));
+      expect(bodyPadding(), before, reason: 'mid-collapse');
+
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(bodyPadding(), before, reason: 'fully collapsed');
     });
 
     testWidgets('every pane clears the pill rather than scrolling under it',

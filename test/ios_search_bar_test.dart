@@ -1,15 +1,17 @@
 // The search pill on the iOS path.
 //
-// `home_header_test.dart` pins the Windows shape — magnifier, "Search..", and
-// the mode spelled out beside the caret. This file pins the mock's shape, and
-// the one structural rule both share: exactly one AnimatedContainer, because
-// that is what the halo assertion addresses by type.
+// `home_header_test.dart` pins the Windows shape — magnifier, "Search..", the
+// mode spelled out beside the caret, and a 10pt-cornered slab. This file pins
+// the mock's shape, and the place the two paths deliberately diverge: the
+// field is a control, so on iOS it wears the control layer's material rather
+// than Windows' cut-out rectangle.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cotv/src/providers/clock_providers.dart';
+import 'package:cotv/src/ui/components/liquid_glass.dart';
 import 'package:cotv/src/ui/home/widgets/home_search_bar.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 import 'package:cotv/src/ui/widgets/ph_light_icons.dart';
@@ -87,43 +89,63 @@ void main() {
     expect(find.text('Search with Milo'), findsNothing);
   });
 
-  testWidgets('the pill is the same shape and fill the Windows path uses', (
-    tester,
-  ) async {
+  testWidgets('the pill takes the control material rather than the Windows '
+      'slab', (tester) async {
     await _pump(tester);
 
-    // Two tests used to live here: one pinning a single AnimatedContainer for
-    // the halo assertion to address by type, and one checking the halo lit
-    // under the caret. The halo and the animation are both gone, so what is
-    // worth pinning now is that iOS did not keep its own appearance — the pill
-    // is one set of values on both paths.
-    final box = tester.widget<Container>(
+    // This assertion used to say the opposite — that iOS kept no appearance
+    // of its own and the pill was one set of values on both paths. That was
+    // right while the app had one material. It has two now: a search field is
+    // something you operate, so it goes in the control layer with the nav
+    // capsule, and a 10pt-cornered rectangle is the one shape iOS 26 does not
+    // put on a home screen. Windows keeps the slab; `home_header_test.dart`
+    // still pins it there.
+    expect(
+      find.descendant(
+        of: find.byType(HomeSearchBar),
+        matching: find.byType(LiquidGlass),
+      ),
+      findsOneWidget,
+    );
+    expect(
       find.descendant(
         of: find.byType(HomeSearchBar),
         matching: find.byType(Container),
       ),
+      findsNothing,
     );
-    final decor = box.decoration! as BoxDecoration;
 
-    expect(decor.boxShadow, anyOf(isNull, isEmpty));
-    expect(decor.color, const Color(0x05D9D9D9));
-    expect((decor.border! as Border).top.color, const Color(0x1AFFFFFF));
-    expect(decor.borderRadius, BorderRadius.circular(10));
+    // A capsule, which on a 48pt field means a 24pt radius.
+    final glass = tester.widget<LiquidGlass>(find.byType(LiquidGlass));
+    final Size size = tester.getSize(find.byType(LiquidGlass));
+    expect(size.height, 48);
+    expect(glass.radius, size.height / 2);
+  });
+
+  testWidgets('the pill still looks the same focused as at rest',
+      (tester) async {
+    await _pump(tester);
+
+    BoxDecoration fill() => tester
+        .widgetList<DecoratedBox>(
+          find.descendant(
+            of: find.byType(LiquidGlass),
+            matching: find.byType(DecoratedBox),
+          ),
+        )
+        .map((box) => box.decoration as BoxDecoration)
+        .firstWhere((decoration) => decoration.color != null);
+
+    final BoxDecoration resting = fill();
+    expect(resting.boxShadow, anyOf(isNull, isEmpty));
 
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    final lit =
-        tester
-                .widget<Container>(
-                  find.descendant(
-                    of: find.byType(HomeSearchBar),
-                    matching: find.byType(Container),
-                  ),
-                )
-                .decoration!
-            as BoxDecoration;
-    expect(lit.boxShadow, anyOf(isNull, isEmpty), reason: 'no halo any more');
+    // The halo is long gone and the glass does not light under a caret
+    // either: the field reads as the same object whether or not it has focus.
+    expect(fill().color, resting.color);
+    expect(fill().boxShadow, anyOf(isNull, isEmpty), reason: 'no halo');
   });
 }

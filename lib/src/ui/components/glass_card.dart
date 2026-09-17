@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -12,6 +10,8 @@ const double _hoverGlowBlur = 4;
 /// Below [GlassShell]'s 28, which is tuned for a fixed hero surface. A card
 /// sits over the orb field, which is already soft, and over-blurring it
 /// flattens the orbs into a single wash — the thing the card is meant to show.
+///
+/// Sampled *bounded* — see the filter at the foot of `build`.
 const double _glassBlurSigma = 24;
 
 /// The panel the dashboard is built from.
@@ -170,40 +170,24 @@ class _GlassCardState extends State<GlassCard> {
       rimColor = Colors.transparent;
     }
 
+    // Flat fill on both paths, and no specular wash or lit bevel on either.
+    //
+    // A card is *content*, and the two-tier split puts content under the
+    // quieter of the app's two materials: blur, fill, rim, nothing else. The
+    // specular gradient and the top bevel this card used to carry are what
+    // make a surface read as a lit, floating pane, and that read now belongs
+    // to the control layer alone — [LiquidGlass]. Leaving it on the cards is
+    // what made the whole page look like one undifferentiated sheet of glass
+    // with a bar drawn on it.
     Widget card = AnimatedContainer(
       duration: motion.hover,
       curve: Curves.easeOut,
       padding: widget.padding,
       decoration: BoxDecoration(
         borderRadius: radius,
-        // A gradient rather than a flat colour on glass — the specular wash
-        // down the top 45%, lifted verbatim from [GlassShell]. BoxDecoration
-        // takes one or the other, so the flat path keeps `color`.
-        color: widget.glass ? null : fill,
-        gradient: widget.glass
-            ? LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color.alphaBlend(palette.glassSpecular, fill),
-                  fill,
-                ],
-                stops: const [0.0, 0.45],
-              )
-            : null,
+        color: fill,
         border: Border.all(color: rimColor, width: widget.selected ? 1.5 : 1),
       ),
-      // The bevel: a single lit edge along the top, so the pane reads as
-      // having a thickness that catches light. Foreground, so it lands over
-      // the fill rather than under it.
-      foregroundDecoration: widget.glass
-          ? BoxDecoration(
-              borderRadius: radius,
-              border: Border(
-                top: BorderSide(color: palette.innerHighlight),
-              ),
-            )
-          : null,
       child: widget.child,
     );
 
@@ -260,9 +244,17 @@ class _GlassCardState extends State<GlassCard> {
       card = ClipRRect(
         borderRadius: radius,
         child: BackdropFilter.grouped(
-          filter: ImageFilter.blur(
+          // `bounded`, which is the sampling model Apple's own frosted
+          // surfaces use: the kernel reads only from inside this card's
+          // rect, treats everything outside as transparent, and renormalises
+          // by the weight it actually gathered. An unbounded blur instead
+          // drags whatever sits next to the card in under its edge and fades
+          // its own corners out — two artefacts that are invisible one card
+          // at a time and obvious in a column of them.
+          filterConfig: const ImageFilterConfig.blur(
             sigmaX: _glassBlurSigma,
             sigmaY: _glassBlurSigma,
+            bounded: true,
           ),
           child: card,
         ),

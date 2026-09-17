@@ -123,6 +123,12 @@ flutter:
   assets:
     - assets/kws/
 
+  # The Liquid Glass refraction shader for the iOS control layer. Compiled to
+  # IPLR at build time and loaded once from main(); the app falls back to a
+  # plain bounded blur wherever Impeller cannot run it.
+  shaders:
+    - shaders/liquid_glass.frag
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

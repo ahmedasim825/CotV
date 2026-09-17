@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +8,7 @@ import '../../models/milo_models.dart';
 import '../../providers/milo_providers.dart';
 import '../../providers/user_settings_providers.dart';
 import '../components/components.dart';
+import '../components/liquid_glass.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ph_light_icons.dart';
 import 'milo_keys_sheet.dart';
@@ -31,7 +31,10 @@ class MiloAssistantScreen extends ConsumerWidget {
     final palette = context.palette;
     final conversation = ref.watch(miloConversationProvider);
 
-    const borderRadius = BorderRadius.horizontal(left: Radius.circular(32));
+    const panelRadius = 32.0;
+    const borderRadius = BorderRadius.horizontal(
+      left: Radius.circular(panelRadius),
+    );
 
     return Drawer(
       width: math.min(maxWidth, MediaQuery.sizeOf(context).width - 24),
@@ -43,27 +46,37 @@ class MiloAssistantScreen extends ConsumerWidget {
       // the shell's scrim, so the transcript keeps its contrast.
       backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(borderRadius: borderRadius),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.surface.withValues(alpha: 0.72),
-              border: Border(left: BorderSide(color: palette.glassBorder)),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  const _PanelHeader(),
-                  Expanded(
-                    child: conversation.isEmpty
-                        ? const _EmptyState()
-                        : _Transcript(messages: conversation.messages),
-                  ),
-                  _Composer(isBusy: conversation.isBusy),
-                ],
-              ),
+      // A sheet is a control surface, so it takes the control layer's
+      // material. It refracts the page it slides over — already dimmed by the
+      // shell's scrim, which paints first — so the transcript keeps its
+      // contrast while the edge still reads as glass.
+      //
+      // The shader rounds all four corners off one radius; the two on the
+      // right are flush with the screen edge and clipped away, so passing the
+      // left radius as the shape costs nothing visible. `LiquidGlassSpec.sheet`
+      // rather than `.control` because a panel this size under the capsule's
+      // numbers reads as a thick bottle rim.
+      child: LiquidGlass(
+        radius: panelRadius,
+        clipBorderRadius: borderRadius,
+        spec: LiquidGlassSpec.sheet,
+        blurSigma: 28,
+        fill: palette.surface.withValues(alpha: 0.72),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: palette.glassBorder)),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                const _PanelHeader(),
+                Expanded(
+                  child: conversation.isEmpty
+                      ? const _EmptyState()
+                      : _Transcript(messages: conversation.messages),
+                ),
+                _Composer(isBusy: conversation.isBusy),
+              ],
             ),
           ),
         ),

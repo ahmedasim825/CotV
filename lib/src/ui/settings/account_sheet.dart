@@ -82,8 +82,10 @@ class _AccountSheetState extends ConsumerState<_AccountSheet> {
     return StandardBottomSheet(
       title: _isSigningUp ? 'Create account' : 'Sign in',
       subtitle: _isSigningUp
-          ? 'Your food log and recipes sync to every device you sign in on.'
-          : 'Signing in loads the food log and recipes from your account.',
+          ? 'Your tasks, habits, study, chat and settings sync to every '
+              'device you sign in on.'
+          : 'Signing in merges this device with what your account already '
+              'holds.',
       actions: Row(
         children: [
           Expanded(

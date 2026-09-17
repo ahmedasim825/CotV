@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
@@ -128,6 +131,11 @@ class SyncController extends Notifier<SyncStatus> {
       await _syncHabits(service);
       await _syncSettings(service);
       await _syncChat(service);
+
+      // Only after a clean cycle, and only while signed in. A device that
+      // drops its tombstones before pushing them resurrects those rows on
+      // the next pull.
+      await _purgeTombstones();
 
       ref.read(syncErrorProvider.notifier).clear();
       state = SyncStatus(lastSyncedAt: DateTime.now());
@@ -281,6 +289,27 @@ class SyncController extends Notifier<SyncStatus> {
     // agreement that never reached the server would make the next merge
     // treat this device's unsent changes as already shared, and drop them.
     await metadata.setSettingsBase(result.base);
+  }
+
+  /// How long a tombstone is kept after the server has acknowledged it.
+  ///
+  /// Long enough that a device offline for a normal stretch still learns
+  /// about the deletion. The hazard at the far end is a device offline
+  /// longer than this pushing its live copy back and resurrecting the row —
+  /// unlikely on a two-device personal setup, and the failure is a
+  /// reappearing row rather than a lost one.
+  static const Duration tombstoneRetention = Duration(days: 30);
+
+  Future<void> _purgeTombstones() async {
+    final cutoff = DateTime.now().subtract(tombstoneRetention);
+    for (final repository in [
+      _syncable<Subject>(ref.read(subjectRepositoryProvider)),
+      _syncable<StudyLog>(ref.read(studyLogRepositoryProvider)),
+      _syncable<Task>(ref.read(taskRepositoryProvider)),
+      _syncable<Habit>(ref.read(habitRepositoryProvider)),
+    ]) {
+      await repository?.purgeTombstonesBefore(cutoff.millisecondsSinceEpoch);
+    }
   }
 
   /// Threads and their messages.
@@ -460,3 +489,78 @@ SyncableRepository<T>? _syncable<T extends SyncStamped>(Object repository) =>
 
 final syncControllerProvider =
     NotifierProvider<SyncController, SyncStatus>(SyncController.new);
+
+/// Decides when [SyncController.syncAll] runs.
+///
+/// Kept alive by `ref.watch(syncSchedulerProvider)` in [AppShell], beside
+/// the other notifiers watched there for the reason that file documents: a
+/// Riverpod notifier nothing listens to is never constructed.
+///
+/// Its own [AppLifecycleListener] rather than borrowing `StudyNotifier`'s
+/// or `SecurityGate`'s — two unrelated concerns sharing one observer is how
+/// one of them ends up silently not running.
+class SyncScheduler extends Notifier<void> {
+  /// Long enough that a burst of edits — checking off four tasks in a row —
+  /// is one cycle rather than four.
+  static const Duration writeDebounce = Duration(seconds: 4);
+
+  /// The backstop, and on Windows the main one.
+  ///
+  /// A desktop window is seldom "paused", so `resumed` rarely fires there
+  /// and resume alone would mean a laptop left open never pulls at all.
+  static const Duration pollInterval = Duration(minutes: 5);
+
+  Timer? _debounce;
+  Timer? _poll;
+  AppLifecycleListener? _lifecycle;
+
+  SyncController get _sync => ref.read(syncControllerProvider.notifier);
+
+  @override
+  void build() {
+    final signedIn = ref.watch(isSignedInProvider);
+
+    ref.onDispose(() {
+      _debounce?.cancel();
+      _poll?.cancel();
+      _lifecycle?.dispose();
+    });
+
+    if (!signedIn) {
+      // Not a sign-out hook — this also runs on first build while signed
+      // out. Cursors are reset by the sign-out path itself.
+      return;
+    }
+
+    // Signing in is the one trigger that must pull everything: the cursors
+    // start empty, so this is the full download.
+    Future.microtask(_sync.syncAll);
+
+    _lifecycle = AppLifecycleListener(onResume: _sync.syncAll);
+    _poll = Timer.periodic(pollInterval, (_) => _sync.syncAll());
+
+    // Driven off the domain streams rather than wrapping every write: a
+    // write is a write however it got made, Siri and Milo's tools included.
+    for (final listenable in [
+      taskListProvider,
+      habitListProvider,
+      subjectListProvider,
+      studyLogListProvider,
+    ]) {
+      ref.listen(listenable, (_, _) => _onLocalWrite());
+    }
+    ref.listen(userSettingsControllerProvider, (_, _) => _onLocalWrite());
+  }
+
+  void _onLocalWrite() {
+    // The write that just landed may be one sync itself applied. Debounce
+    // and idempotence would terminate that loop anyway; this saves the
+    // round trip.
+    if (_sync.isApplyingRemote) return;
+    _debounce?.cancel();
+    _debounce = Timer(writeDebounce, _sync.syncAll);
+  }
+}
+
+final syncSchedulerProvider =
+    NotifierProvider<SyncScheduler, void>(SyncScheduler.new);

@@ -236,7 +236,11 @@ class _Device {
 
   /// Advanced by hand so "A wrote before B" is a fact of the test rather
   /// than a race between two real clocks.
-  int clock = 1000;
+  ///
+  /// Real epoch milliseconds, not small integers: the tombstone purge
+  /// measures against the actual wall clock, and a record stamped `2000`
+  /// is fifty-six years old to it and gets swept the moment it is pushed.
+  int clock = _now;
 
   late final _RecordingNotifications notifications;
 
@@ -413,8 +417,8 @@ void main() {
       await b.syncNow();
 
       // Both offline, both editing the same record.
-      a.clock = 2000;
-      b.clock = 3000;
+      a.clock = _now + 2000;
+      b.clock = _now + 3000;
       await a.subjects.update(_subject('s1', 'Physio (A)'));
       await b.subjects.update(_subject('s1', 'Physio (B)'));
 
@@ -433,8 +437,8 @@ void main() {
       await a.syncNow();
       await b.syncNow();
 
-      a.clock = 3000;
-      b.clock = 2000;
+      a.clock = _now + 3000;
+      b.clock = _now + 2000;
       await a.subjects.update(_subject('s1', 'Physio (A)'));
       await b.subjects.update(_subject('s1', 'Physio (B)'));
 
@@ -457,7 +461,7 @@ void main() {
       await b.syncNow();
       expect(b.subjects.getAll(), hasLength(1));
 
-      a.clock = 2000;
+      a.clock = _now + 2000;
       await a.subjects.delete('s1');
       await a.syncNow();
       await b.syncNow();
@@ -476,7 +480,7 @@ void main() {
       await b.syncNow();
 
       // A deletes and syncs while B is away.
-      a.clock = 5000;
+      a.clock = _now + 5000;
       await a.subjects.delete('s1');
       await a.syncNow();
 
@@ -487,6 +491,24 @@ void main() {
       expect(b.subjects.getAll(), isEmpty);
       expect(a.subjects.getAll(), isEmpty,
           reason: 'B must not have pushed its live copy back over the delete');
+    });
+
+    test('a fresh tombstone survives the purge at the end of a cycle',
+        () async {
+      final a = await device('a');
+      await a.subjects.add(_subject('s1', 'Physiology'));
+      await a.syncNow();
+
+      a.clock = _now + 2000;
+      await a.subjects.delete('s1');
+      await a.syncNow();
+
+      // The purge only sweeps tombstones the server has acknowledged *and*
+      // that are older than the retention window. Sweeping a fresh one
+      // would drop the record locally while the other device still holds
+      // it live — and the next pull would hand it straight back.
+      expect(a.boxes.subjects.get('s1'), isNotNull);
+      expect(a.boxes.subjects.get('s1')!.isDeleted, isTrue);
     });
 
     test('a fresh install cannot push its emptiness over the other device',
@@ -560,7 +582,7 @@ void main() {
       await a.syncNow();
       await b.syncNow();
 
-      a.clock = 2000;
+      a.clock = _now + 2000;
       await a.tasks.delete('t1');
       await a.syncNow();
       await b.syncNow();
@@ -583,7 +605,7 @@ void main() {
       await b.syncNow();
       b.notifications.scheduled.clear();
 
-      a.clock = 2000;
+      a.clock = _now + 2000;
       await a.tasks.toggleCompleted('t1');
       await a.syncNow();
       await b.syncNow();
@@ -606,8 +628,8 @@ void main() {
       await b.syncNow();
 
       // Both offline, each ticking a different day.
-      a.clock = 2000;
-      b.clock = 3000;
+      a.clock = _now + 2000;
+      b.clock = _now + 3000;
       await a.habits.toggleCompletedOn('h1', wednesday);
       await b.habits.toggleCompletedOn('h1', thursday);
 
@@ -644,8 +666,8 @@ void main() {
       final a = await device('a');
       final b = await device('b');
 
-      a.clock = 2000;
-      b.clock = 3000;
+      a.clock = _now + 2000;
+      b.clock = _now + 3000;
       await a.settings.update(a.settings.get().copyWith(voiceName: 'Zoe'));
       await b.settings
           .update(b.settings.get().copyWith(preAdhanNotificationMinutes: 25));
@@ -834,6 +856,9 @@ void main() {
 Subject _subject(String id, String name) =>
     Subject(id: id, name: name, colorValue: 0xFFD8A657,
         createdAt: DateTime(2026, 3, 2));
+
+/// A plausible "now" for the device clocks, fixed so a run is repeatable.
+final int _now = DateTime(2026, 9, 17, 12).millisecondsSinceEpoch;
 
 ChatMessage _chatMessage(
   String id,

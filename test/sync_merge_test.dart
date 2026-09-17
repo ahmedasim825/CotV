@@ -193,34 +193,92 @@ void main() {
       expect(settingsToRows(UserSettings()).keys.toSet(), syncedSettingKeys);
     });
 
-    test('a newer remote key is taken', () {
+    test('a key only the other device changed is taken', () {
       final local = UserSettings(voiceName: 'Ava').stampUpdated(1000);
-      final merged = applyRemoteSettings(local, {
-        'voiceName': const RemoteSetting('Zoe', 2000),
-      });
-      expect(merged.voiceName, 'Zoe');
+      final result = mergeSettings(
+        local: local,
+        remote: {'voiceName': const RemoteSetting('Zoe', 2000)},
+        base: settingsToRows(local),
+      );
+      expect(result.merged.voiceName, 'Zoe');
+      expect(result.toPush, isEmpty, reason: 'the server already has it');
     });
 
-    test('an older remote key is ignored', () {
-      final local = UserSettings(voiceName: 'Ava').stampUpdated(3000);
-      final merged = applyRemoteSettings(local, {
-        'voiceName': const RemoteSetting('Zoe', 2000),
-      });
-      expect(merged.voiceName, 'Ava');
+    test('a key only this device changed is kept and pushed', () {
+      final base = settingsToRows(UserSettings(voiceName: 'Ava'));
+      final local = UserSettings(voiceName: 'Zoe').stampUpdated(3000);
+
+      final result = mergeSettings(
+        local: local,
+        remote: {'voiceName': const RemoteSetting('Ava', 500)},
+        base: base,
+      );
+
+      expect(result.merged.voiceName, 'Zoe');
+      expect(result.toPush, {'voiceName': 'Zoe'});
     });
 
-    test('untouched keys are left alone', () {
-      final local = UserSettings(
-        voiceName: 'Ava',
-        preAdhanNotificationMinutes: 20,
-      ).stampUpdated(1000);
+    test('a preference this device never touched is not pushed over', () {
+      // The case a per-key clock alone gets wrong: there is one timestamp
+      // for the whole record, so a device that changed *anything* recently
+      // would otherwise shadow every key the other device sent, then push
+      // its own stale values back over them.
+      final base = settingsToRows(UserSettings());
+      final local = UserSettings(preAdhanNotificationMinutes: 25)
+          .stampUpdated(3000);
 
-      final merged = applyRemoteSettings(local, {
-        'voiceName': const RemoteSetting('Zoe', 2000),
-      });
+      final result = mergeSettings(
+        local: local,
+        remote: {'voiceName': const RemoteSetting('Zoe', 2000)},
+        base: base,
+      );
 
-      expect(merged.preAdhanNotificationMinutes, 20);
-      expect(merged.updatedAtMillis, 1000, reason: 'the stamp is the caller\'s');
+      expect(result.merged.voiceName, 'Zoe', reason: 'theirs, untouched here');
+      expect(result.merged.preAdhanNotificationMinutes, 25, reason: 'ours');
+      expect(result.toPush, {'preAdhanNotificationMinutes': 25});
+    });
+
+    test('a key both devices changed goes to the later write', () {
+      final base = settingsToRows(UserSettings(voiceName: 'Ava'));
+      final local = UserSettings(voiceName: 'Ours').stampUpdated(1000);
+
+      final result = mergeSettings(
+        local: local,
+        remote: {'voiceName': const RemoteSetting('Theirs', 2000)},
+        base: base,
+      );
+
+      expect(result.merged.voiceName, 'Theirs');
+      expect(result.toPush, isEmpty);
+    });
+
+    test('with no ancestor, the factory defaults stand in for one', () {
+      // A first sync. A preference still at its default is one this device
+      // has never set, so the other device's value takes it — which is what
+      // stops a first sync flattening their settings with our defaults.
+      final result = mergeSettings(
+        local: UserSettings(preAdhanNotificationMinutes: 25)
+            .stampUpdated(3000),
+        remote: {
+          'voiceName': const RemoteSetting('Zoe', 2000),
+          'preAdhanNotificationMinutes': const RemoteSetting(15, 2000),
+        },
+        base: const {},
+      );
+
+      expect(result.merged.voiceName, 'Zoe', reason: 'never set here');
+      expect(result.merged.preAdhanNotificationMinutes, 25, reason: 'set here');
+      expect(result.toPush, {'preAdhanNotificationMinutes': 25});
+    });
+
+    test('with no ancestor, a set value still beats an older remote one', () {
+      final result = mergeSettings(
+        local: UserSettings(voiceName: 'Ours').stampUpdated(1000),
+        remote: {'voiceName': const RemoteSetting('Theirs', 500)},
+        base: const {},
+      );
+      expect(result.merged.voiceName, 'Ours');
+      expect(result.toPush, {'voiceName': 'Ours'});
     });
 
     test('a cleared setting propagates', () {
@@ -229,34 +287,54 @@ void main() {
       final local = UserSettings(latitude: 24.7, longitude: 46.6)
           .stampUpdated(1000);
 
-      final merged = applyRemoteSettings(local, {
-        'latitude': const RemoteSetting(null, 2000),
-        'longitude': const RemoteSetting(null, 2000),
-      });
+      final result = mergeSettings(
+        local: local,
+        remote: {
+          'latitude': const RemoteSetting(null, 2000),
+          'longitude': const RemoteSetting(null, 2000),
+        },
+        base: settingsToRows(local),
+      );
 
-      expect(merged.latitude, isNull);
-      expect(merged.hasLocation, isFalse);
+      expect(result.merged.latitude, isNull);
+      expect(result.merged.hasLocation, isFalse);
     });
 
     test('a key outside the allowlist is ignored however it arrives', () {
       final local = UserSettings(isBiometricEnabled: false).stampUpdated(1000);
-      final merged = applyRemoteSettings(local, {
-        'isBiometricEnabled': const RemoteSetting(true, 9000),
-      });
-      expect(merged.isBiometricEnabled, isFalse);
+      final result = mergeSettings(
+        local: local,
+        remote: {'isBiometricEnabled': const RemoteSetting(true, 9000)},
+        base: settingsToRows(local),
+      );
+      expect(result.merged.isBiometricEnabled, isFalse);
+      expect(result.toPush, isEmpty);
+      expect(result.base.keys, isNot(contains('isBiometricEnabled')));
     });
 
     test('jsonb numerics coerce rather than throw', () {
       // Postgres hands a whole double back as an int.
-      final merged = applyRemoteSettings(
-        UserSettings().stampUpdated(1000),
-        {
+      final local = UserSettings().stampUpdated(1000);
+      final result = mergeSettings(
+        local: local,
+        remote: {
           'latitude': const RemoteSetting(24, 2000),
           'dailyCalorieTarget': const RemoteSetting(2100, 2000),
         },
+        base: settingsToRows(local),
       );
-      expect(merged.latitude, 24.0);
-      expect(merged.dailyCalorieTarget, 2100);
+      expect(result.merged.latitude, 24.0);
+      expect(result.merged.dailyCalorieTarget, 2100);
+    });
+
+    test('the record stamp is the caller\'s to move, not the merge\'s', () {
+      final local = UserSettings(voiceName: 'Ava').stampUpdated(1000);
+      final result = mergeSettings(
+        local: local,
+        remote: {'voiceName': const RemoteSetting('Zoe', 2000)},
+        base: settingsToRows(local),
+      );
+      expect(result.merged.updatedAtMillis, 1000);
     });
   });
 

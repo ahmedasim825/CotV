@@ -13,6 +13,7 @@ class SyncMetadata {
   static const String _schemaVersionKey = 'hive_schema_version';
   static const String _syncedUserKey = 'last_synced_user_id';
   static const String _pulledPrefix = 'last_pulled_';
+  static const String _settingsBaseKey = 'settings_base';
 
   final Box<dynamic> _box;
 
@@ -43,13 +44,35 @@ class SyncMetadata {
   Future<void> setLastSyncedUserId(String userId) =>
       _box.put(_syncedUserKey, userId);
 
+  /// The settings values this device last agreed with the server about.
+  ///
+  /// The common ancestor the settings merge is three-way against: without
+  /// it, "this key changed here" and "that key changed there" are not
+  /// separately answerable, and a device shadows every preference it did
+  /// not touch. Empty before the first settings sync.
+  Map<String, Object?> get settingsBase {
+    final stored = _box.get(_settingsBaseKey);
+    if (stored is! Map) return const {};
+    return {
+      for (final entry in stored.entries) entry.key as String: entry.value,
+    };
+  }
+
+  Future<void> setSettingsBase(Map<String, Object?> base) =>
+      _box.put(_settingsBaseKey, base);
+
   /// Forgets every pull cursor, so the next sync re-reads each entity from
   /// the beginning. Called on sign-out and on an account switch.
+  ///
+  /// The settings ancestor goes too: it describes an agreement with a
+  /// server state this device is about to stop trusting, and keeping it
+  /// would make the next merge treat another account's values as ones this
+  /// device had already seen.
   Future<void> resetCursors() async {
     final cursors = _box.keys
         .whereType<String>()
         .where((key) => key.startsWith(_pulledPrefix))
         .toList(growable: false);
-    await _box.deleteAll(cursors);
+    await _box.deleteAll([...cursors, _settingsBaseKey]);
   }
 }

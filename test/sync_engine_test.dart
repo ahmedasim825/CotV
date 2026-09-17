@@ -16,17 +16,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
+import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
 import 'package:cotv/src/models/sync_stamped.dart';
+import 'package:cotv/src/models/task.dart';
+import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/auth_providers.dart';
+import 'package:cotv/src/providers/habit_providers.dart';
+import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/nutrition_providers.dart'
     show syncErrorProvider;
 import 'package:cotv/src/providers/study_providers.dart';
 import 'package:cotv/src/providers/sync_providers.dart';
+import 'package:cotv/src/providers/task_providers.dart';
+import 'package:cotv/src/providers/user_settings_providers.dart';
+import 'package:cotv/src/repositories/habit_repository.dart';
 import 'package:cotv/src/repositories/study_log_repository.dart';
 import 'package:cotv/src/repositories/subject_repository.dart';
+import 'package:cotv/src/repositories/task_repository.dart';
+import 'package:cotv/src/repositories/user_settings_repository.dart';
 import 'package:cotv/src/services/milo_sync_service.dart';
+import 'package:cotv/src/services/notification_service.dart';
+import 'package:cotv/src/services/sync_merge.dart';
 import 'package:cotv/src/storage/sync_metadata.dart';
 
 /// A stand-in server that stores rows, not models.
@@ -93,8 +105,82 @@ class _FakeRemote implements MiloSyncService {
       _push('study_logs', logs.map(studyLogToRow));
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not synced yet');
+  Future<List<RemoteRecord<Task>>> fetchTasks(String? since) async =>
+      _fetch('tasks', since, taskFromRow);
+
+  @override
+  Future<void> pushTasks(Iterable<Task> tasks) async =>
+      _push('tasks', tasks.map(taskToRow));
+
+  @override
+  Future<List<RemoteRecord<Habit>>> fetchHabits(String? since) async =>
+      _fetch('habits', since, habitFromRow);
+
+  @override
+  Future<void> pushHabits(Iterable<Habit> habits) async =>
+      _push('habits', habits.map(habitToRow));
+
+  /// Settings live in their own shape: one row per key, not per record.
+  final Map<String, ({Object? value, int millis, String cursor})> settings = {};
+
+  @override
+  Future<(Map<String, RemoteSetting>, String?)> fetchSettings(
+    String? since,
+  ) async {
+    fetchCalls++;
+    final out = <String, RemoteSetting>{};
+    String? cursor;
+    final ordered = settings.entries.toList()
+      ..sort((a, b) => a.value.cursor.compareTo(b.value.cursor));
+    for (final entry in ordered) {
+      if (since != null && entry.value.cursor.compareTo(since) <= 0) continue;
+      cursor = entry.value.cursor;
+      out[entry.key] = RemoteSetting(entry.value.value, entry.value.millis);
+    }
+    return (out, cursor);
+  }
+
+  @override
+  Future<void> pushSettings(
+    Map<String, Object?> values,
+    int clientUpdatedAtMillis,
+  ) async {
+    for (final entry in values.entries) {
+      pushedRows++;
+      settings[entry.key] = (
+        value: entry.value,
+        millis: clientUpdatedAtMillis,
+        cursor: _stamp(),
+      );
+    }
+  }
+}
+
+/// Notifications are a device-local side effect, so the reminder test
+/// watches what was asked for rather than what fired.
+class _RecordingNotifications extends NotificationService {
+  final List<String> scheduled = [];
+  final List<String> cancelled = [];
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> requestPermissions() async {}
+
+  @override
+  Future<bool> scheduleReminder({
+    required String key,
+    required DateTime when,
+    required String title,
+    required String body,
+  }) async {
+    scheduled.add(key);
+    return true;
+  }
+
+  @override
+  Future<void> cancelReminder(String key) async => cancelled.add(key);
 }
 
 /// A remote that refuses every push, to prove a failed cycle leaves local
@@ -114,6 +200,9 @@ class _Device {
   final ({
     Box<Subject> subjects,
     Box<StudyLog> logs,
+    Box<Task> tasks,
+    Box<Habit> habits,
+    Box<UserSettings> settings,
     Box<dynamic> meta,
   }) boxes;
   final ProviderContainer container;
@@ -123,10 +212,16 @@ class _Device {
   /// than a race between two real clocks.
   int clock = 1000;
 
+  late final _RecordingNotifications notifications;
+
   SyncController get sync => container.read(syncControllerProvider.notifier);
   SubjectRepository get subjects =>
       container.read(subjectRepositoryProvider);
   StudyLogRepository get logs => container.read(studyLogRepositoryProvider);
+  TaskRepository get tasks => container.read(taskRepositoryProvider);
+  HabitRepository get habits => container.read(habitRepositoryProvider);
+  UserSettingsRepository get settings =>
+      container.read(userSettingsRepositoryProvider);
 
   Future<void> syncNow() => sync.syncAll();
 
@@ -164,9 +259,13 @@ void main() {
     final boxes = (
       subjects: await Hive.openBox<Subject>('${name}_subjects'),
       logs: await Hive.openBox<StudyLog>('${name}_logs'),
+      tasks: await Hive.openBox<Task>('${name}_tasks'),
+      habits: await Hive.openBox<Habit>('${name}_habits'),
+      settings: await Hive.openBox<UserSettings>('${name}_settings'),
       meta: await Hive.openBox<dynamic>('${name}_meta'),
     );
     final metadata = SyncMetadata(boxes.meta);
+    final notifications = _RecordingNotifications();
 
     late _Device built;
     final container = ProviderContainer(
@@ -175,16 +274,27 @@ void main() {
         syncUserIdProvider.overrideWithValue('user-1'),
         miloSyncServiceProvider.overrideWithValue(server),
         syncMetadataProvider.overrideWithValue(metadata),
+        notificationServiceProvider.overrideWithValue(notifications),
         subjectRepositoryProvider.overrideWithValue(
           HiveSubjectRepository(boxes.subjects, () => built.clock),
         ),
         studyLogRepositoryProvider.overrideWithValue(
           HiveStudyLogRepository(boxes.logs, () => built.clock),
         ),
+        taskRepositoryProvider.overrideWithValue(
+          HiveTaskRepository(boxes.tasks, () => built.clock),
+        ),
+        habitRepositoryProvider.overrideWithValue(
+          HiveHabitRepository(boxes.habits, () => built.clock),
+        ),
+        userSettingsRepositoryProvider.overrideWithValue(
+          HiveUserSettingsRepository(boxes.settings, () => built.clock),
+        ),
       ],
     );
 
-    built = _Device(name, server, boxes, container, metadata);
+    built = _Device(name, server, boxes, container, metadata)
+      ..notifications = notifications;
     devices.add(built);
     return built;
   }
@@ -376,6 +486,169 @@ void main() {
           {'study-s1-1', 'study-s1-2'});
       expect(b.logs.getAll().map((l) => l.id).toSet(),
           {'study-s1-1', 'study-s1-2'});
+    });
+  });
+
+  group('tasks', () {
+    test('a task with a reminder schedules one on the other device too',
+        () async {
+      final a = await device('a');
+      final b = await device('b');
+
+      await a.tasks.add(Task(
+        id: 't1',
+        title: 'Read chapter 4',
+        dueDate: DateTime.now().add(const Duration(days: 1)),
+        hasReminder: true,
+      ));
+      await a.syncNow();
+      await b.syncNow();
+
+      // A notification is local to the device that scheduled it. Without
+      // reconciling on pull, a reminder set on the phone never fires on
+      // the laptop.
+      expect(b.notifications.scheduled, ['t1']);
+    });
+
+    test('a task deleted elsewhere drops its reminder here', () async {
+      final a = await device('a');
+      final b = await device('b');
+      await a.tasks.add(Task(
+        id: 't1',
+        title: 'Read chapter 4',
+        dueDate: DateTime.now().add(const Duration(days: 1)),
+        hasReminder: true,
+      ));
+      await a.syncNow();
+      await b.syncNow();
+
+      a.clock = 2000;
+      await a.tasks.delete('t1');
+      await a.syncNow();
+      await b.syncNow();
+
+      expect(b.notifications.cancelled, contains('t1'));
+      expect(b.tasks.getAll(), isEmpty);
+    });
+
+    test('completing on one device clears the reminder on the other',
+        () async {
+      final a = await device('a');
+      final b = await device('b');
+      await a.tasks.add(Task(
+        id: 't1',
+        title: 'Read chapter 4',
+        dueDate: DateTime.now().add(const Duration(days: 1)),
+        hasReminder: true,
+      ));
+      await a.syncNow();
+      await b.syncNow();
+      b.notifications.scheduled.clear();
+
+      a.clock = 2000;
+      await a.tasks.toggleCompleted('t1');
+      await a.syncNow();
+      await b.syncNow();
+
+      // A finished task must not still buzz, on either device.
+      expect(b.tasks.getById('t1')!.isCompleted, isTrue);
+      expect(b.notifications.cancelled, contains('t1'));
+    });
+  });
+
+  group('habits', () {
+    test('a check-in on each device survives the merge', () async {
+      final a = await device('a');
+      final b = await device('b');
+      final wednesday = DateTime(2026, 9, 16);
+      final thursday = DateTime(2026, 9, 17);
+
+      await a.habits.add(Habit(id: 'h1', title: 'Fajr on time'));
+      await a.syncNow();
+      await b.syncNow();
+
+      // Both offline, each ticking a different day.
+      a.clock = 2000;
+      b.clock = 3000;
+      await a.habits.toggleCompletedOn('h1', wednesday);
+      await b.habits.toggleCompletedOn('h1', thursday);
+
+      await a.syncNow();
+      await b.syncNow();
+      await a.syncNow();
+
+      // This is the whole case for unioning rather than taking the later
+      // record: under record-level last-write-wins one of these two days
+      // would simply never have happened.
+      final onA = a.habits.getById('h1')!;
+      final onB = b.habits.getById('h1')!;
+      expect(onA.completedDates, [wednesday, thursday]);
+      expect(onB.completedDates, [wednesday, thursday]);
+      expect(onA.streakCount, onB.streakCount,
+          reason: 'recomputed from the union on both sides, not exchanged');
+    });
+  });
+
+  group('settings', () {
+    test('a preference set on one device reaches the other', () async {
+      final a = await device('a');
+      final b = await device('b');
+
+      await a.settings.update(a.settings.get().copyWith(voiceName: 'Zoe'));
+      await a.syncNow();
+      await b.syncNow();
+
+      expect(b.settings.get().voiceName, 'Zoe');
+    });
+
+    test('two devices changing different preferences both keep theirs',
+        () async {
+      final a = await device('a');
+      final b = await device('b');
+
+      a.clock = 2000;
+      b.clock = 3000;
+      await a.settings.update(a.settings.get().copyWith(voiceName: 'Zoe'));
+      await b.settings
+          .update(b.settings.get().copyWith(preAdhanNotificationMinutes: 25));
+
+      await a.syncNow();
+      await b.syncNow();
+      await a.syncNow();
+
+      // The case per-key sync exists for: under record-level LWW one of
+      // these two unrelated preferences would be lost.
+      expect(b.settings.get().voiceName, 'Zoe');
+      expect(b.settings.get().preAdhanNotificationMinutes, 25);
+      expect(a.settings.get().preAdhanNotificationMinutes, 25);
+    });
+
+    test('the biometric flag never leaves the device', () async {
+      final a = await device('a');
+      final b = await device('b');
+
+      await a.settings.update(
+        a.settings.get().copyWith(isBiometricEnabled: true, voiceName: 'Zoe'),
+      );
+      await a.syncNow();
+      await b.syncNow();
+
+      // The Keychain holds the authoritative copy, and the other device may
+      // not even have the sensor.
+      expect(remote.settings.keys, isNot(contains('isBiometricEnabled')));
+      expect(b.settings.get().isBiometricEnabled, isFalse);
+      expect(b.settings.get().voiceName, 'Zoe',
+          reason: 'the rest of the record still synced');
+    });
+
+    test('untouched settings are not pushed', () async {
+      final a = await device('a');
+      await a.syncNow();
+
+      // A fresh record is synthesised on read with no timestamp, so it is
+      // not dirty — pushing it would overwrite the other device's real
+      // preferences with this one's defaults.
+      expect(remote.settings, isEmpty);
     });
   });
 

@@ -111,7 +111,12 @@ MergeResult<T> resolveRecord<T extends SyncStamped>(T? local, T remote) {
 /// which is the `habit_check_ins` table in the plan — worth doing whole,
 /// later, rather than half-built now.
 MergeResult<Habit> mergeHabit(Habit? local, Habit remote, DateTime now) {
-  final base = resolveRecord<Habit>(local, remote);
+  // `streakCount` is derived from the dates and so is not a column — a
+  // habit off the wire always arrives with zero. Recomputing here, before
+  // anything compares or stores it, is what stops a pulled habit showing a
+  // streak of nothing on the second device.
+  final incoming = _withStreak(remote, now);
+  final base = resolveRecord<Habit>(local, incoming);
 
   // Only a genuine conflict unions. A clean local habit holds exactly what
   // the server last gave it, so the remote strictly supersedes it — and
@@ -121,22 +126,18 @@ MergeResult<Habit> mergeHabit(Habit? local, Habit remote, DateTime now) {
   if (local == null || !local.isDirty) return base;
   if (base.decision == MergeDecision.inSync) return base;
 
-  final union = <DateTime>{
-    ...local.completedDates.map(normalizeDay),
-    ...remote.completedDates.map(normalizeDay),
-  };
-
-  // Nothing to reconcile: one side's dates already contain the other's.
   final localDates = local.completedDates.map(normalizeDay).toSet();
-  final remoteDates = remote.completedDates.map(normalizeDay).toSet();
+  final remoteDates = incoming.completedDates.map(normalizeDay).toSet();
+  final union = {...localDates, ...remoteDates};
+
+  // Nothing to reconcile: the two sides already hold the same days.
   if (union.length == localDates.length && union.length == remoteDates.length) {
     return base;
   }
 
   // Whichever record won on the clock supplies the scalar fields; the dates
   // and the streak come from the union regardless.
-  final winner =
-      base.decision == MergeDecision.keepLocal ? local : remote;
+  final winner = base.decision == MergeDecision.keepLocal ? local : incoming;
   final sorted = union.toList()..sort();
 
   return MergeResult(
@@ -147,6 +148,14 @@ MergeResult<Habit> mergeHabit(Habit? local, Habit remote, DateTime now) {
     ),
   );
 }
+
+Habit _withStreak(Habit habit, DateTime now) => habit.copyWith(
+      streakCount: computeStreak(
+        habit.completedDates.map(normalizeDay).toSet(),
+        habit.frequency,
+        now,
+      ),
+    );
 
 /// The settings keys that leave the device.
 ///
@@ -199,68 +208,134 @@ class RemoteSetting {
   final int clientUpdatedAtMillis;
 }
 
-/// Folds remote settings into [local], key by key.
+/// The outcome of reconciling one device's settings with the server's.
+class SettingsMerge {
+  const SettingsMerge({
+    required this.merged,
+    required this.toPush,
+    required this.base,
+  });
+
+  /// What this device should now hold.
+  final UserSettings merged;
+
+  /// The keys this device changed and the server has not seen. Only these
+  /// are sent, so a device never overwrites a preference it did not touch.
+  final Map<String, Object?> toPush;
+
+  /// [merged]'s values, to be recorded as the new common ancestor once the
+  /// push succeeds.
+  final Map<String, Object?> base;
+}
+
+/// Reconciles settings key by key, against the last state known to be on
+/// the server.
 ///
 /// Settings are the worst case for record-level last-write-wins: one record
 /// holding a dozen unrelated preferences, written by several independent
-/// controllers. Two devices each changing a different preference offline
-/// would lose one of them. Per-key is cheap here precisely because the
-/// model is already a bag of independent scalars.
+/// controllers. Two devices each changing a *different* preference offline
+/// would lose one of them.
 ///
-/// A remote key is taken only when its write is newer than the local
-/// record's own `updatedAtMillis`. That is conservative toward local
-/// recency — the local stamp is the time of the last change to *any* key,
-/// so it may be later than the remote key's and shadow it. It is not
-/// symmetric, and it does converge: both sides end up writing back the
-/// newer value and pushing it, in at most two rounds.
+/// Per-key alone is not enough either, and the reason is worth stating.
+/// There is one timestamp for the whole record — the time of the last
+/// change to any key — so "is this remote key newer than my record?" says
+/// nothing about whether *this device* ever touched that key. A device that
+/// changed one preference a moment ago would shadow every other preference
+/// the other device sent, then push its own stale values back over them.
+/// Both devices converge, on the wrong values.
+///
+/// So the merge is three-way, against [base]: the values this device last
+/// agreed with the server about. A key only counts as changed on a side if
+/// it differs from that ancestor, which makes "I changed this" and "they
+/// changed this" separately answerable, and only a key both sides changed
+/// is a real conflict to resolve on the clock.
 ///
 /// Keys outside [syncedSettingKeys] are ignored, whatever the server sends.
-UserSettings applyRemoteSettings(
-  UserSettings local,
-  Map<String, RemoteSetting> remote,
-) {
+SettingsMerge mergeSettings({
+  required UserSettings local,
+  required Map<String, RemoteSetting> remote,
+  required Map<String, Object?> base,
+}) {
+  final localRows = settingsToRows(local);
   final localMillis = local.updatedAtMillis ?? 0;
 
-  Object? pick(String key, Object? current) {
-    if (!syncedSettingKeys.contains(key)) return current;
+  // With no recorded ancestor — a first sync, or just after an account
+  // switch — the factory defaults stand in for one. A preference still
+  // sitting at its default is one this device has almost certainly never
+  // set, and treating the whole record as locally-changed instead is what
+  // makes a first sync flatten the other device's preferences with this
+  // one's untouched defaults.
+  //
+  // The case it gets wrong is deliberately setting a preference *back* to
+  // its default, on a device that has never synced, while the other device
+  // holds something else. That edit is ignored once; any later edit syncs
+  // normally, because by then there is a real ancestor.
+  final ancestor = base.isEmpty ? settingsToRows(UserSettings()) : base;
+
+  final resolved = <String, Object?>{};
+  final toPush = <String, Object?>{};
+
+  for (final key in syncedSettingKeys) {
+    final localValue = localRows[key];
     final incoming = remote[key];
-    if (incoming == null) return current;
-    return incoming.clientUpdatedAtMillis > localMillis
-        ? incoming.value
-        : current;
+
+    final localChanged = localValue != ancestor[key];
+    final remoteChanged =
+        incoming != null && incoming.value != ancestor[key];
+
+    if (remoteChanged && !localChanged) {
+      resolved[key] = incoming.value;
+    } else if (localChanged && !remoteChanged) {
+      resolved[key] = localValue;
+      toPush[key] = localValue;
+    } else if (localChanged && remoteChanged) {
+      // The only genuine conflict, and the only place a clock is consulted.
+      if (incoming.clientUpdatedAtMillis > localMillis) {
+        resolved[key] = incoming.value;
+      } else {
+        resolved[key] = localValue;
+        toPush[key] = localValue;
+      }
+    } else {
+      resolved[key] = localValue;
+    }
   }
 
-  // Built through the constructor rather than copyWith, because copyWith
-  // reads `value ?? this.value` and so cannot carry a cleared setting
-  // across. Clearing your location on one device has to clear it on the
-  // other.
-  return UserSettings(
-    id: local.id,
-    isBiometricEnabled: local.isBiometricEnabled,
-    preAdhanNotificationMinutes: _int(
-          pick('preAdhanNotificationMinutes', local.preAdhanNotificationMinutes),
-        ) ??
-        local.preAdhanNotificationMinutes,
-    latitude: _double(pick('latitude', local.latitude)),
-    longitude: _double(pick('longitude', local.longitude)),
-    themeId: pick('themeId', local.themeId) as String?,
-    speaksReplies:
-        _bool(pick('speaksReplies', local.speaksReplies)) ?? local.speaksReplies,
-    listensForWakeWord:
-        _bool(pick('listensForWakeWord', local.listensForWakeWord)) ??
-            local.listensForWakeWord,
-    voiceName: pick('voiceName', local.voiceName) as String?,
-    aiMemorySummary: pick('aiMemorySummary', local.aiMemorySummary) as String?,
-    dailyCalorieTarget:
-        _int(pick('dailyCalorieTarget', local.dailyCalorieTarget)),
-    proteinTargetGrams:
-        _int(pick('proteinTargetGrams', local.proteinTargetGrams)),
-    carbTargetGrams: _int(pick('carbTargetGrams', local.carbTargetGrams)),
-    fatTargetGrams: _int(pick('fatTargetGrams', local.fatTargetGrams)),
-    updatedAtMillis: local.updatedAtMillis,
-    syncedAtMillis: local.syncedAtMillis,
+  return SettingsMerge(
+    merged: _settingsFrom(local, resolved),
+    toPush: toPush,
+    base: resolved,
   );
 }
+
+/// [local] with [values] applied over it.
+///
+/// Built through the constructor rather than copyWith, because copyWith
+/// reads `value ?? this.value` and so could never carry a *cleared* setting
+/// across. Clearing your location on one device has to clear it on the
+/// other.
+UserSettings _settingsFrom(UserSettings local, Map<String, Object?> values) =>
+    UserSettings(
+      id: local.id,
+      isBiometricEnabled: local.isBiometricEnabled,
+      preAdhanNotificationMinutes:
+          _int(values['preAdhanNotificationMinutes']) ??
+              local.preAdhanNotificationMinutes,
+      latitude: _double(values['latitude']),
+      longitude: _double(values['longitude']),
+      themeId: values['themeId'] as String?,
+      speaksReplies: _bool(values['speaksReplies']) ?? local.speaksReplies,
+      listensForWakeWord:
+          _bool(values['listensForWakeWord']) ?? local.listensForWakeWord,
+      voiceName: values['voiceName'] as String?,
+      aiMemorySummary: values['aiMemorySummary'] as String?,
+      dailyCalorieTarget: _int(values['dailyCalorieTarget']),
+      proteinTargetGrams: _int(values['proteinTargetGrams']),
+      carbTargetGrams: _int(values['carbTargetGrams']),
+      fatTargetGrams: _int(values['fatTargetGrams']),
+      updatedAtMillis: local.updatedAtMillis,
+      syncedAtMillis: local.syncedAtMillis,
+    );
 
 // jsonb round-trips an integer as an int but a whole double as an int too,
 // so every numeric read goes through `num` rather than casting.

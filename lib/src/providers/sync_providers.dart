@@ -1,17 +1,25 @@
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
+import '../models/habit.dart';
 import '../models/study_log.dart';
 import '../models/subject.dart';
 import '../models/sync_stamped.dart';
+import '../models/task.dart';
+import '../models/user_settings.dart';
 import '../repositories/syncable_repository.dart';
 import '../services/milo_sync_service.dart';
 import '../services/sync_merge.dart';
 import '../storage/local_storage.dart';
 import '../storage/sync_metadata.dart';
 import 'auth_providers.dart';
+import 'habit_providers.dart';
 import 'nutrition_providers.dart' show syncErrorProvider;
 import 'study_providers.dart';
+import 'task_providers.dart';
+import 'task_reminder_providers.dart';
+import 'user_settings_providers.dart';
 
 /// The sync layer, or null when there is no backend or nobody signed in.
 ///
@@ -109,8 +117,14 @@ class SyncController extends Notifier<SyncStatus> {
     state = state.copyWith(isSyncing: true);
     _applyingRemote = true;
     try {
+      // Subjects before study logs, so a log that arrives for a subject
+      // made on the other device has something to point at by the time
+      // anything renders it.
       await _syncSubjects(service);
       await _syncStudyLogs(service);
+      await _syncTasks(service);
+      await _syncHabits(service);
+      await _syncSettings(service);
 
       ref.read(syncErrorProvider.notifier).clear();
       state = SyncStatus(lastSyncedAt: DateTime.now());
@@ -185,15 +199,100 @@ class SyncController extends Notifier<SyncStatus> {
         push: service.pushStudyLogs,
       );
 
+  Future<void> _syncTasks(MiloSyncService service) => _syncEntity<Task>(
+        name: 'tasks',
+        repository: _syncable<Task>(ref.read(taskRepositoryProvider)),
+        fetch: service.fetchTasks,
+        push: service.pushTasks,
+        onApplied: _reconcileReminder,
+      );
+
+  /// A notification is local to the device that scheduled it, so a task
+  /// pulled from the phone has no reminder on the laptop until one is
+  /// scheduled here. Without this, a reminder set on one device simply
+  /// never fires on the other.
+  ///
+  /// Best-effort, following the convention the write paths already use: a
+  /// refused notification permission must not fail the sync that carried
+  /// the task.
+  Future<void> _reconcileReminder(Task task) async {
+    final reminders = ref.read(taskReminderControllerProvider);
+    if (task.isDeleted) {
+      await reminders.cancel(task.id);
+    } else {
+      // Handles both directions — it cancels when the task no longer wants
+      // a reminder, which is what a completed-elsewhere task looks like.
+      await reminders.sync(task);
+    }
+  }
+
+  Future<void> _syncHabits(MiloSyncService service) => _syncEntity<Habit>(
+        name: 'habits',
+        repository: _syncable<Habit>(ref.read(habitRepositoryProvider)),
+        fetch: service.fetchHabits,
+        push: service.pushHabits,
+        // The one entity that does not take the default rule: see
+        // [mergeHabit] for why record-level LWW loses a check-in here.
+        merge: (local, remote) => mergeHabit(local, remote, DateTime.now()),
+      );
+
+  /// Settings, which sync per key rather than per record.
+  ///
+  /// Different enough in shape from the others to be worth its own method:
+  /// there is exactly one record, it is never deleted, and the unit that
+  /// travels is a key rather than a row.
+  Future<void> _syncSettings(MiloSyncService service) async {
+    final domain = ref.read(userSettingsRepositoryProvider);
+    final repository = _syncable<UserSettings>(domain);
+    if (repository == null) return;
+    final metadata = _metadata;
+
+    const name = 'user_settings';
+    final (incoming, cursor) =
+        await service.fetchSettings(metadata.lastPulled(name));
+
+    final local = domain.get();
+    final result = mergeSettings(
+      local: local,
+      remote: incoming,
+      base: metadata.settingsBase,
+    );
+
+    // Written only when something actually changed: the settings box is
+    // watched by key, and a no-op write would rebuild every screen that
+    // reads a preference on every sync tick.
+    if (!mapEquals(settingsToRows(local), settingsToRows(result.merged))) {
+      await repository.applyRemote(result.merged);
+    }
+    if (cursor != null) await metadata.setLastPulled(name, cursor);
+
+    if (result.toPush.isNotEmpty) {
+      // Only the keys this device actually changed, so it never writes a
+      // preference it did not touch over the other device's.
+      final stamp = local.updatedAtMillis ?? DateTime.now().millisecondsSinceEpoch;
+      await service.pushSettings(result.toPush, stamp);
+      await repository.markSynced(result.merged.id, stamp);
+    }
+
+    // Recorded only once the push has succeeded: an ancestor claiming
+    // agreement that never reached the server would make the next merge
+    // treat this device's unsent changes as already shared, and drop them.
+    await metadata.setSettingsBase(result.base);
+  }
+
   /// Pull, merge, push for one entity.
   ///
   /// [merge] defaults to [resolveRecord]; only habits override it.
+  /// [onApplied] runs for each record a pull actually changed, for the side
+  /// effects a local write would have performed — scheduling a task's
+  /// notification, in the one case that has any.
   Future<void> _syncEntity<T extends SyncStamped>({
     required String name,
     required SyncableRepository<T>? repository,
     required Future<List<RemoteRecord<T>>> Function(String?) fetch,
     required Future<void> Function(Iterable<T>) push,
     MergeResult<T> Function(T? local, T remote)? merge,
+    Future<void> Function(T record)? onApplied,
   }) async {
     if (repository == null) return;
     final resolve = merge ?? resolveRecord<T>;
@@ -221,9 +320,11 @@ class SyncController extends Notifier<SyncStatus> {
           // pull fires no box events and rebuilds nothing. Hive notifies
           // per key written, not per batch.
           await repository.applyRemote(result.value as T);
+          await onApplied?.call(result.value as T);
         case MergeDecision.applyAndPush:
           final value = result.value as T;
           await repository.applyRemote(value);
+          await onApplied?.call(value);
           // Neither side held this value, so the other device has not seen
           // it either — it has to go up as well as down.
           merged[value.id] = value;

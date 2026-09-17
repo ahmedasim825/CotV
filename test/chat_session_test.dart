@@ -148,11 +148,34 @@ void main() {
       await repository.deleteSession(session.id);
 
       expect(repository.findById(session.id), isNull);
-      final orphans = database.raw.select(
-        'SELECT COUNT(*) AS n FROM chat_messages WHERE session_id = ?',
+      expect(repository.messageCount(session.id), 0);
+      expect(repository.messages(session.id), isEmpty);
+
+      // The rows are still there, tombstoned. ON DELETE CASCADE used to do
+      // this and cannot any more: nothing is deleted, so the cascade never
+      // fires and deleteSession marks the messages by hand. They have to
+      // survive — a deletion the other device never hears about is a thread
+      // that comes back.
+      final tombstoned = database.raw.select(
+        'SELECT COUNT(*) AS n FROM chat_messages '
+        'WHERE session_id = ? AND deleted = 1',
         [session.id],
       );
-      expect(orphans.first['n'], 0, reason: 'ON DELETE CASCADE');
+      expect(tombstoned.first['n'], 2);
+    });
+
+    test('a deleted thread does not come back as a search result', () async {
+      final session = await repository.createSession(title: 'Cardiology');
+      await repository.append(
+        _message('m1', sessionId: session.id, text: 'about cardiology'),
+      );
+
+      await repository.deleteSession(session.id);
+
+      // The failure this guards: live orphan messages left behind by a
+      // session-only tombstone still match the EXISTS subquery, and the
+      // thread reappears in search.
+      expect(repository.search('cardiology'), isEmpty);
     });
 
     test('search matches a title or anything said in the thread', () async {

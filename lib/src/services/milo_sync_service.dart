@@ -58,6 +58,22 @@ abstract class MiloSyncService {
     Map<String, Object?> values,
     int clientUpdatedAtMillis,
   );
+
+  // Chat travels as rows rather than models, matching ChatSyncRepository:
+  // the sync columns live on the SQLite tables, not on ChatSession or
+  // ChatMessage, and putting them on the models would add sync metadata to
+  // a Hive type only the legacy box still uses.
+  Future<List<RemoteRecord<Map<String, Object?>>>> fetchChatSessions(
+    String? since,
+  );
+
+  Future<void> pushChatSessions(Iterable<Map<String, Object?>> rows);
+
+  Future<List<RemoteRecord<Map<String, Object?>>>> fetchChatMessages(
+    String? since,
+  );
+
+  Future<void> pushChatMessages(Iterable<Map<String, Object?>> rows);
 }
 
 /// [MiloSyncService] against Supabase.
@@ -190,6 +206,30 @@ class SupabaseMiloSyncService implements MiloSyncService {
       'Could not save your settings.',
     );
   }
+
+  // ---------------------------------------------------------------------
+  // Chat
+  // ---------------------------------------------------------------------
+
+  @override
+  Future<List<RemoteRecord<Map<String, Object?>>>> fetchChatSessions(
+    String? since,
+  ) =>
+      _fetch('chat_sessions', since, chatSessionFromRow);
+
+  @override
+  Future<void> pushChatSessions(Iterable<Map<String, Object?>> rows) =>
+      _push('chat_sessions', rows.map(chatSessionToRow));
+
+  @override
+  Future<List<RemoteRecord<Map<String, Object?>>>> fetchChatMessages(
+    String? since,
+  ) =>
+      _fetch('chat_messages', since, chatMessageFromRow);
+
+  @override
+  Future<void> pushChatMessages(Iterable<Map<String, Object?>> rows) =>
+      _push('chat_messages', rows.map(chatMessageToRow));
 
   // ---------------------------------------------------------------------
   // Shared plumbing
@@ -359,6 +399,59 @@ StudyLog studyLogFromRow(Map<String, dynamic> row) {
     syncedAtMillis: millis,
   );
 }
+
+// Chat rows, mapped between the SQLite shape and the Postgres one. The
+// local `updated_at` is already device milliseconds, so it *is*
+// `client_updated_at`; SQLite has no boolean, so `deleted` is 0/1 there and
+// a bool here.
+
+Map<String, Object?> chatSessionToRow(Map<String, Object?> local) => {
+      'id': local['id'],
+      'title': local['title'],
+      'created_at': _instantFromMillis(local['created_at']),
+      'client_updated_at': (local['client_updated_at'] as num?)?.toInt() ?? 0,
+      'deleted': _flag(local['deleted']),
+    };
+
+Map<String, Object?> chatSessionFromRow(Map<String, dynamic> row) => {
+      'id': row['id'],
+      'title': row['title'],
+      'created_at': _millisFromInstant(row['created_at']),
+      'client_updated_at': (row['client_updated_at'] as num).toInt(),
+      'deleted': (row['deleted'] as bool?) ?? false ? 1 : 0,
+    };
+
+Map<String, Object?> chatMessageToRow(Map<String, Object?> local) => {
+      'id': local['id'],
+      'session_id': local['session_id'],
+      'role': local['role'],
+      'content': local['content'],
+      'timestamp': _instantFromMillis(local['timestamp']),
+      'tokens_used': local['tokens_used'],
+      'client_updated_at': (local['client_updated_at'] as num?)?.toInt() ?? 0,
+      'deleted': _flag(local['deleted']),
+    };
+
+Map<String, Object?> chatMessageFromRow(Map<String, dynamic> row) => {
+      'id': row['id'],
+      'session_id': row['session_id'],
+      'role': row['role'],
+      'content': row['content'],
+      'timestamp': _millisFromInstant(row['timestamp']),
+      'tokens_used': (row['tokens_used'] as num?)?.toInt(),
+      'client_updated_at': (row['client_updated_at'] as num).toInt(),
+      'deleted': (row['deleted'] as bool?) ?? false ? 1 : 0,
+    };
+
+bool _flag(Object? value) => (value as num?)?.toInt() == 1;
+
+String? _instantFromMillis(Object? millis) => millis == null
+    ? null
+    : DateTime.fromMillisecondsSinceEpoch((millis as num).toInt(), isUtc: true)
+        .toIso8601String();
+
+int _millisFromInstant(Object? value) =>
+    DateTime.parse(value as String).millisecondsSinceEpoch;
 
 Map<String, Object?> _syncColumns(int? updatedAtMillis, bool isDeleted) => {
       // Never null on the wire. A record reaching the push path without a

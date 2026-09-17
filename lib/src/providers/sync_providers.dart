@@ -8,12 +8,14 @@ import '../models/subject.dart';
 import '../models/sync_stamped.dart';
 import '../models/task.dart';
 import '../models/user_settings.dart';
+import '../repositories/chat_session_repository.dart';
 import '../repositories/syncable_repository.dart';
 import '../services/milo_sync_service.dart';
 import '../services/sync_merge.dart';
 import '../storage/local_storage.dart';
 import '../storage/sync_metadata.dart';
 import 'auth_providers.dart';
+import 'chat_session_providers.dart';
 import 'habit_providers.dart';
 import 'nutrition_providers.dart' show syncErrorProvider;
 import 'study_providers.dart';
@@ -125,6 +127,7 @@ class SyncController extends Notifier<SyncStatus> {
       await _syncTasks(service);
       await _syncHabits(service);
       await _syncSettings(service);
+      await _syncChat(service);
 
       ref.read(syncErrorProvider.notifier).clear();
       state = SyncStatus(lastSyncedAt: DateTime.now());
@@ -278,6 +281,102 @@ class SyncController extends Notifier<SyncStatus> {
     // agreement that never reached the server would make the next merge
     // treat this device's unsent changes as already shared, and drop them.
     await metadata.setSettingsBase(result.base);
+  }
+
+  /// Threads and their messages.
+  ///
+  /// Its own method rather than two calls to [_syncEntity], because the two
+  /// tables are not independent: a message has a foreign key to its
+  /// session, so sessions are applied first on the way down and pushed
+  /// first on the way up, and the whole pull batch goes inside one
+  /// [ChatSessionRepository.transaction] — which notifies exactly once at
+  /// COMMIT. Applying a fifty-message thread outside one would re-query the
+  /// session list fifty times and rebuild the drawer with it.
+  Future<void> _syncChat(MiloSyncService service) async {
+    final domain = ref.read(chatSessionRepositoryProvider);
+    if (domain is! ChatSyncRepository) return;
+    final repository = domain as ChatSyncRepository;
+    final metadata = _metadata;
+
+    final sessions =
+        await service.fetchChatSessions(metadata.lastPulled('chat_sessions'));
+    final messages =
+        await service.fetchChatMessages(metadata.lastPulled('chat_messages'));
+
+    String? sessionCursor;
+    String? messageCursor;
+
+    if (sessions.isNotEmpty || messages.isNotEmpty) {
+      final touched = <String>{};
+
+      await domain.transaction(() async {
+        for (final incoming in sessions) {
+          final id = incoming.record['id'] as String;
+          final decision = resolveChatRow(
+            local: repository.sessionRow(id),
+            remote: incoming.record,
+          );
+          if (decision == MergeDecision.applyRemote) {
+            repository.applyRemoteSession(incoming.record);
+            touched.add(id);
+          }
+          sessionCursor = incoming.cursor;
+        }
+
+        for (final incoming in messages) {
+          final sessionId = incoming.record['session_id'] as String;
+          // The foreign key would refuse it, and the cursor must not move
+          // past a row that was never applied — the session will arrive on
+          // a later cycle and this message with it.
+          if (repository.sessionRow(sessionId) == null) break;
+
+          final id = incoming.record['id'] as String;
+          final decision = resolveChatRow(
+            local: repository.messageRow(id),
+            remote: incoming.record,
+          );
+          if (decision == MergeDecision.applyRemote) {
+            repository.applyRemoteMessage(incoming.record);
+            touched.add(sessionId);
+          }
+          messageCursor = incoming.cursor;
+        }
+
+        // A thread both devices appended to has a transcript neither side's
+        // stored timestamp describes. Recomputing also re-touches the
+        // session row, which is what makes sessionMessagesProvider — a
+        // plain Provider keyed off the session *list* — re-read the
+        // messages that just arrived.
+        for (final id in touched) {
+          repository.refreshSessionTimestamp(id);
+        }
+      });
+    }
+
+    if (sessionCursor != null) {
+      await metadata.setLastPulled('chat_sessions', sessionCursor!);
+    }
+    if (messageCursor != null) {
+      await metadata.setLastPulled('chat_messages', messageCursor!);
+    }
+
+    // Sessions before messages here too, so the server's foreign key sees
+    // the parent first.
+    final pendingSessions = repository.pendingSessions();
+    if (pendingSessions.isNotEmpty) {
+      await service.pushChatSessions(pendingSessions);
+      repository.markSessionsSynced(
+        pendingSessions.map((row) => row['id'] as String),
+      );
+    }
+
+    final pendingMessages = repository.pendingMessages();
+    if (pendingMessages.isNotEmpty) {
+      await service.pushChatMessages(pendingMessages);
+      repository.markMessagesSynced(
+        pendingMessages.map((row) => row['id'] as String),
+      );
+    }
   }
 
   /// Pull, merge, push for one entity.

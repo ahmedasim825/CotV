@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 
 import 'package:cotv/hive_registrar.g.dart';
+import 'package:cotv/src/models/chat_message.dart';
 import 'package:cotv/src/models/habit.dart';
 import 'package:cotv/src/models/study_log.dart';
 import 'package:cotv/src/models/subject.dart';
@@ -23,6 +24,7 @@ import 'package:cotv/src/models/sync_stamped.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/models/user_settings.dart';
 import 'package:cotv/src/providers/auth_providers.dart';
+import 'package:cotv/src/providers/chat_session_providers.dart';
 import 'package:cotv/src/providers/habit_providers.dart';
 import 'package:cotv/src/providers/notification_providers.dart';
 import 'package:cotv/src/providers/nutrition_providers.dart'
@@ -31,6 +33,7 @@ import 'package:cotv/src/providers/study_providers.dart';
 import 'package:cotv/src/providers/sync_providers.dart';
 import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/providers/user_settings_providers.dart';
+import 'package:cotv/src/repositories/chat_session_repository.dart';
 import 'package:cotv/src/repositories/habit_repository.dart';
 import 'package:cotv/src/repositories/study_log_repository.dart';
 import 'package:cotv/src/repositories/subject_repository.dart';
@@ -39,6 +42,7 @@ import 'package:cotv/src/repositories/user_settings_repository.dart';
 import 'package:cotv/src/services/milo_sync_service.dart';
 import 'package:cotv/src/services/notification_service.dart';
 import 'package:cotv/src/services/sync_merge.dart';
+import 'package:cotv/src/storage/app_database.dart';
 import 'package:cotv/src/storage/sync_metadata.dart';
 
 /// A stand-in server that stores rows, not models.
@@ -141,6 +145,26 @@ class _FakeRemote implements MiloSyncService {
   }
 
   @override
+  Future<List<RemoteRecord<Map<String, Object?>>>> fetchChatSessions(
+    String? since,
+  ) async =>
+      _fetch('chat_sessions', since, chatSessionFromRow);
+
+  @override
+  Future<void> pushChatSessions(Iterable<Map<String, Object?>> rows) async =>
+      _push('chat_sessions', rows.map(chatSessionToRow));
+
+  @override
+  Future<List<RemoteRecord<Map<String, Object?>>>> fetchChatMessages(
+    String? since,
+  ) async =>
+      _fetch('chat_messages', since, chatMessageFromRow);
+
+  @override
+  Future<void> pushChatMessages(Iterable<Map<String, Object?>> rows) async =>
+      _push('chat_messages', rows.map(chatMessageToRow));
+
+  @override
   Future<void> pushSettings(
     Map<String, Object?> values,
     int clientUpdatedAtMillis,
@@ -207,6 +231,8 @@ class _Device {
   }) boxes;
   final ProviderContainer container;
   final SyncMetadata metadata;
+  late final AppDatabase database;
+  late final SqliteChatSessionRepository chat;
 
   /// Advanced by hand so "A wrote before B" is a fact of the test rather
   /// than a race between two real clocks.
@@ -225,7 +251,11 @@ class _Device {
 
   Future<void> syncNow() => sync.syncAll();
 
-  void dispose() => container.dispose();
+  void dispose() {
+    container.dispose();
+    chat.dispose();
+    database.dispose();
+  }
 }
 
 void main() {
@@ -266,6 +296,10 @@ void main() {
     );
     final metadata = SyncMetadata(boxes.meta);
     final notifications = _RecordingNotifications();
+    // Chat is SQL, so each device gets its own in-memory database rather
+    // than another differently-named box.
+    final database = AppDatabase.openAt(':memory:');
+    final chat = SqliteChatSessionRepository(database);
 
     late _Device built;
     final container = ProviderContainer(
@@ -290,11 +324,15 @@ void main() {
         userSettingsRepositoryProvider.overrideWithValue(
           HiveUserSettingsRepository(boxes.settings, () => built.clock),
         ),
+        appDatabaseProvider.overrideWithValue(database),
+        chatSessionRepositoryProvider.overrideWithValue(chat),
       ],
     );
 
     built = _Device(name, server, boxes, container, metadata)
-      ..notifications = notifications;
+      ..notifications = notifications
+      ..database = database
+      ..chat = chat;
     devices.add(built);
     return built;
   }
@@ -652,6 +690,118 @@ void main() {
     });
   });
 
+  group('chat', () {
+    test('a thread started on one device arrives whole on the other',
+        () async {
+      final a = await device('a');
+      final b = await device('b');
+
+      final session = await a.chat.createSession(title: 'Cardiology');
+      await a.chat.append(_chatMessage('m1', session.id, 'what about ACE-Is'));
+      await a.chat.append(_chatMessage('m2', session.id, 'they lower BP', 1));
+
+      await a.syncNow();
+      await b.syncNow();
+
+      expect(b.chat.listSessions().map((s) => s.title), ['Cardiology']);
+      expect(
+        b.chat.messages(session.id).map((m) => m.text),
+        ['what about ACE-Is', 'they lower BP'],
+      );
+    });
+
+    test('a message added on each device leaves one merged transcript',
+        () async {
+      final a = await device('a');
+      final b = await device('b');
+      final session = await a.chat.createSession(title: 'Cardiology');
+      await a.syncNow();
+      await b.syncNow();
+
+      await a.chat.append(_chatMessage('m-a', session.id, 'from the laptop'));
+      await b.chat.append(_chatMessage('m-b', session.id, 'from the phone', 1));
+
+      await a.syncNow();
+      await b.syncNow();
+      await a.syncNow();
+
+      // Messages are immutable and uniquely identified, so there is nothing
+      // to resolve — only a union.
+      expect(a.chat.messages(session.id).map((m) => m.text),
+          ['from the laptop', 'from the phone']);
+      expect(b.chat.messages(session.id).map((m) => m.text),
+          ['from the laptop', 'from the phone']);
+    });
+
+    test('a rename propagates', () async {
+      final a = await device('a');
+      final b = await device('b');
+      final session = await a.chat.createSession(title: 'Untitled thread');
+      await a.syncNow();
+      await b.syncNow();
+
+      await a.chat.rename(session.id, 'Cardiology');
+      await a.syncNow();
+      await b.syncNow();
+
+      expect(b.chat.findById(session.id)!.title, 'Cardiology');
+    });
+
+    test('a deleted thread stays deleted on both devices', () async {
+      final a = await device('a');
+      final b = await device('b');
+      final session = await a.chat.createSession(title: 'Cardiology');
+      await a.chat.append(_chatMessage('m1', session.id, 'hello'));
+      await a.syncNow();
+      await b.syncNow();
+      expect(b.chat.listSessions(), hasLength(1));
+
+      await a.chat.deleteSession(session.id);
+      await a.syncNow();
+      await b.syncNow();
+      // And once more, to prove B does not push its stale live copy back.
+      await a.syncNow();
+
+      expect(b.chat.listSessions(), isEmpty);
+      expect(b.chat.search('cardiology'), isEmpty);
+      expect(a.chat.listSessions(), isEmpty);
+    });
+
+    test('forgetting on one device does not un-forget from the other',
+        () async {
+      final a = await device('a');
+      final b = await device('b');
+      final session = await a.chat.createSession(title: 'Cardiology');
+      await a.chat.append(_chatMessage('m1', session.id, 'private'));
+      await a.syncNow();
+      await b.syncNow();
+
+      // What MiloConversation.forget() calls. With a hard delete here the
+      // rows would simply be absent locally and present remotely, and the
+      // next pull would hand the whole transcript back.
+      await a.chat.clear();
+      await a.syncNow();
+      await b.syncNow();
+      await a.syncNow();
+
+      expect(a.chat.listSessions(), isEmpty);
+      expect(b.chat.listSessions(), isEmpty);
+      expect(b.chat.messages(session.id), isEmpty);
+    });
+
+    test('a steady-state cycle pushes nothing', () async {
+      final a = await device('a');
+      final session = await a.chat.createSession(title: 'Cardiology');
+      await a.chat.append(_chatMessage('m1', session.id, 'hello'));
+      await a.syncNow();
+      final after = remote.pushedRows;
+
+      await a.syncNow();
+
+      expect(remote.pushedRows, after);
+    });
+  });
+
   group('account switching', () {
     test('sync refuses when the device belongs to another account', () async {
       final a = await device('a');
@@ -684,6 +834,20 @@ void main() {
 Subject _subject(String id, String name) =>
     Subject(id: id, name: name, colorValue: 0xFFD8A657,
         createdAt: DateTime(2026, 3, 2));
+
+ChatMessage _chatMessage(
+  String id,
+  String sessionId,
+  String text, [
+  int minute = 0,
+]) =>
+    ChatMessage(
+      id: id,
+      sessionId: sessionId,
+      isUser: true,
+      text: text,
+      timestamp: DateTime.utc(2026, 9, 14, 20, minute),
+    );
 
 StudyLog _log(String id, String subject, int minutes) => StudyLog(
       id: id,

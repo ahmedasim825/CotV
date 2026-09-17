@@ -157,6 +157,44 @@ Habit _withStreak(Habit habit, DateTime now) => habit.copyWith(
       ),
     );
 
+/// [resolveRecord]'s rule, over a chat row rather than a model.
+///
+/// The same three cases, read off SQLite columns instead of [SyncStamped]:
+/// `sync_state` carries dirtiness — a row the server has not seen is
+/// `pending_upload` — and `client_updated_at` is device milliseconds.
+///
+/// Note `client_updated_at`, never `updated_at`. On a session the latter
+/// means *last activity* and a rename deliberately does not move it, so
+/// comparing it would make a renamed thread tie with the server's copy
+/// forever.
+///
+/// Sessions carry a title that can be renamed on either device, so they
+/// genuinely conflict. Messages are immutable in content and only ever move
+/// to be tombstoned, so for them this decides a deletion and nothing else.
+MergeDecision resolveChatRow({
+  required Map<String, Object?>? local,
+  required Map<String, Object?> remote,
+}) {
+  if (local == null) return MergeDecision.applyRemote;
+
+  final localMillis = (local['client_updated_at'] as num?)?.toInt() ?? 0;
+  final remoteMillis = (remote['client_updated_at'] as num?)?.toInt() ?? 0;
+
+  if (local['sync_state'] != pendingUploadWire) {
+    return localMillis == remoteMillis
+        ? MergeDecision.inSync
+        : MergeDecision.applyRemote;
+  }
+
+  return remoteMillis >= localMillis
+      ? MergeDecision.applyRemote
+      : MergeDecision.keepLocal;
+}
+
+/// `SyncState.pendingUpload.wire`, repeated rather than imported so this
+/// file stays free of the storage layer and testable without a database.
+const String pendingUploadWire = 'pending_upload';
+
 /// The settings keys that leave the device.
 ///
 /// An allowlist, not a denylist: the next field added to [UserSettings]

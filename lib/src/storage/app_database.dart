@@ -17,7 +17,7 @@ class AppDatabase {
   AppDatabase(this._db);
 
   /// Bumped whenever [_migrate] gains a step.
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   static const String fileName = 'milo.db';
 
@@ -54,6 +54,14 @@ class AppDatabase {
     return database;
   }
 
+  /// Runs the migration steps against an already-open database.
+  ///
+  /// [openAt] does this for itself. This exists for the same reason
+  /// [openAt] is separate from [open]: a test that builds an older schema
+  /// by hand and watches it walk forward is testing the step, where one
+  /// that opens a fresh database only ever exercises the newest `CREATE`.
+  void migrateForTest() => _migrate();
+
   /// Brings the schema up to [schemaVersion].
   ///
   /// Driven by SQLite's own `user_version` rather than a table of our own,
@@ -67,6 +75,7 @@ class AppDatabase {
     _db.execute('BEGIN');
     try {
       if (current < 1) _createV1();
+      if (current < 2) _createV2();
       _db.execute('PRAGMA user_version = $schemaVersion');
       _db.execute('COMMIT');
     } on Object {
@@ -115,18 +124,59 @@ class AppDatabase {
     );
   }
 
+  /// v2: soft deletes, so a thread deleted on one device stays deleted.
+  ///
+  /// `deleted` is a separate column from [SyncState] rather than a state
+  /// within it, because deleted-ness and pushed-ness are orthogonal: a
+  /// deleted row still has to be pushed, and until it has been it is both.
+  ///
+  /// Both tables also gain a `client_updated_at`, and it is emphatically
+  /// not a duplicate of `updated_at`. On `chat_sessions`, `updated_at`
+  /// means *last activity* — it follows the newest message, and `rename`
+  /// deliberately leaves it alone so retitling a thread does not jump it to
+  /// the top of the drawer. Sync needs *last modified*, which a rename does
+  /// move; reusing the activity column would mean a renamed thread tied
+  /// with the server's copy on every comparison and could never win.
+  ///
+  /// On `chat_messages` it is the same distinction against `timestamp`: a
+  /// message is immutable in content, but tombstoning one modifies it, and
+  /// without a column to move there would be nothing for the other device
+  /// to notice.
+  void _createV2() {
+    for (final table in const ['chat_sessions', 'chat_messages']) {
+      _db.execute(
+        'ALTER TABLE $table ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
+      );
+      _db.execute(
+        'ALTER TABLE $table '
+        'ADD COLUMN client_updated_at INTEGER NOT NULL DEFAULT 0',
+      );
+      _db.execute('CREATE INDEX idx_${table}_pending ON $table(sync_state)');
+    }
+
+    // Nothing has been edited before now, so when each row was last written
+    // is when it last changed. Zero would sort as older than everything and
+    // lose every pre-v2 row to whatever the other device holds.
+    _db.execute('UPDATE chat_sessions SET client_updated_at = updated_at');
+    _db.execute('UPDATE chat_messages SET client_updated_at = timestamp');
+  }
+
   void dispose() => _db.close();
 }
 
 /// Where a row has got to on its way to the server.
 ///
-/// Written from the first version so the sync engine has something to
-/// select on when it arrives. Until then every row is born
-/// [SyncState.pendingUpload] and nothing reads it.
+/// Written from the first version so the sync engine had something to
+/// select on when it arrived; the engine now does.
+///
+/// There was a third member, `deleted`. It never made sense alongside the
+/// other two and nothing ever wrote it: deleted-ness and pushed-ness are
+/// orthogonal, and a deleted row still has to be pushed. Deletion lives in
+/// its own `deleted` column as of schema v2. No stored value is stranded by
+/// dropping it, and [fromWire] would forgive one anyway.
 enum SyncState {
   synced,
-  pendingUpload,
-  deleted;
+  pendingUpload;
 
   /// The stored form. Snake case because it is a database value and will
   /// be compared against one written by another client.
@@ -136,8 +186,6 @@ enum SyncState {
         return 'synced';
       case SyncState.pendingUpload:
         return 'pending_upload';
-      case SyncState.deleted:
-        return 'deleted';
     }
   }
 

@@ -42,12 +42,24 @@ jobs:
 
       - run: flutter pub get
 
-      # No API keys are injected here on purpose. A build artifact from a
-      # public repository is downloadable by anyone, and a --dart-define is
-      # recoverable from the binary. Milo asks for its keys once on device
-      # and keeps them in the Keychain.
+      # Groq and Gemini keys are still not injected: a --dart-define is
+      # recoverable from the binary with `strings`, and Milo asks for those
+      # once on device and keeps them in the Keychain.
+      #
+      # The two Supabase values are different in kind, not just in degree.
+      # The publishable key is designed to ship inside clients — every table
+      # it can reach is behind row-level security — and without them
+      # SupabaseConfig.isConfigured is false, main() skips
+      # Supabase.initialize entirely, and the artifact cannot sync at all.
+      # An IPA that cannot sign in is not a build of this app.
+      #
+      # Written as one folded line rather than a shell continuation so the
+      # step reads the same on both runners.
       - name: Build unsigned iOS app
-        run: flutter build ios --no-codesign --release
+        run: >
+          flutter build ios --no-codesign --release
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Package payload for SideStore
         run: |
@@ -74,8 +86,12 @@ jobs:
 
       - run: flutter pub get
 
+      # Same two defines as the iOS job, for the same reason.
       - name: Build Windows release
-        run: flutter build windows --release
+        run: >
+          flutter build windows --release
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       # --build-windows false packages the build above rather than running a
       # second one. --install-certificate false because a runner has no

@@ -1,7 +1,10 @@
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
 import '../models/habit.dart';
+import '../models/habit_view.dart';
+import '../models/sync_stamped.dart';
 import 'hive_repository_utils.dart';
+import 'syncable_repository.dart';
 
 /// CRUD access to [Habit]s, plus completion toggling that keeps
 /// [Habit.streakCount] correct.
@@ -24,38 +27,50 @@ abstract class HabitRepository {
   Future<void> toggleCompletedOn(String id, DateTime date);
 }
 
-class HiveHabitRepository implements HabitRepository {
-  HiveHabitRepository(this._box);
+class HiveHabitRepository
+    implements HabitRepository, SyncableRepository<Habit> {
+  HiveHabitRepository(this._box, [this._clock = systemSyncClock]);
 
   final Box<Habit> _box;
+  final SyncClock _clock;
 
   @override
-  Stream<List<Habit>> watchAll() => watchBoxValues(_box);
+  Stream<List<Habit>> watchAll() => watchLiveBoxValues(_box);
 
   @override
-  List<Habit> getAll() => _box.values.toList(growable: false);
+  List<Habit> getAll() => liveValues(_box.values);
 
   @override
-  Habit? getById(String id) => _box.get(id);
+  Habit? getById(String id) {
+    final habit = _box.get(id);
+    return habit == null || habit.isDeleted ? null : habit;
+  }
 
   @override
-  Future<void> add(Habit habit) => _box.put(habit.id, habit);
+  Future<void> add(Habit habit) =>
+      _box.put(habit.id, habit.stampUpdated(_clock()));
 
   @override
-  Future<void> update(Habit habit) => _box.put(habit.id, habit);
+  Future<void> update(Habit habit) =>
+      _box.put(habit.id, habit.stampUpdated(_clock()));
 
+  /// Tombstones [id] rather than removing it — see [HiveTaskRepository.delete].
   @override
-  Future<void> delete(String id) => _box.delete(id);
+  Future<void> delete(String id) async {
+    final habit = _box.get(id);
+    if (habit == null) return;
+    await _box.put(id, habit.markDeleted(_clock()));
+  }
 
   @override
   Future<void> toggleCompletedOn(String id, DateTime date) async {
-    final habit = _box.get(id);
+    final habit = getById(id);
     if (habit == null) {
       throw StateError('Habit "$id" not found.');
     }
 
-    final normalizedDate = _normalizeDate(date);
-    final dates = habit.completedDates.map(_normalizeDate).toSet();
+    final normalizedDate = normalizeDay(date);
+    final dates = habit.completedDates.map(normalizeDay).toSet();
     if (!dates.remove(normalizedDate)) {
       dates.add(normalizedDate);
     }
@@ -63,51 +78,38 @@ class HiveHabitRepository implements HabitRepository {
     final sortedDates = dates.toList()..sort();
     await _box.put(
       id,
-      habit.copyWith(
-        completedDates: sortedDates,
-        streakCount: _computeStreak(dates, habit.frequency),
-      ),
+      habit
+          .copyWith(
+            completedDates: sortedDates,
+            streakCount: computeStreak(dates, habit.frequency, DateTime.now()),
+          )
+          .stampUpdated(_clock()),
     );
   }
-}
 
-DateTime _normalizeDate(DateTime date) => DateTime(date.year, date.month, date.day);
+  @override
+  List<Habit> allIncludingDeleted() => _box.values.toList(growable: false);
 
-/// Consecutive-period streak ending at "now", counting backward.
-///
-/// A grace period of one period is allowed: for a daily habit, the streak
-/// still counts as active if yesterday (not just today) was completed, so
-/// a user isn't shown a broken streak before they've had a chance to
-/// complete today's instance. Same idea for weekly habits, one week back.
-int _computeStreak(Set<DateTime> normalizedDates, HabitFrequency frequency) {
-  if (normalizedDates.isEmpty) return 0;
+  @override
+  Future<void> applyRemote(Habit record) => _box.put(record.id, record);
 
-  final step = frequency == HabitFrequency.daily
-      ? const Duration(days: 1)
-      : const Duration(days: 7);
-
-  final periods = frequency == HabitFrequency.daily
-      ? normalizedDates
-      : normalizedDates.map(_weekStart).toSet();
-
-  final currentPeriod = frequency == HabitFrequency.daily
-      ? _normalizeDate(DateTime.now())
-      : _weekStart(DateTime.now());
-
-  var cursor =
-      periods.contains(currentPeriod) ? currentPeriod : currentPeriod.subtract(step);
-  if (!periods.contains(cursor)) return 0;
-
-  var streak = 0;
-  while (periods.contains(cursor)) {
-    streak++;
-    cursor = cursor.subtract(step);
+  @override
+  Future<void> markSynced(String id, int millis) async {
+    final habit = _box.get(id);
+    if (habit == null || habit.updatedAtMillis != millis) return;
+    await _box.put(id, habit.markSynced(millis));
   }
-  return streak;
-}
 
-/// Monday-start week bucket for [date].
-DateTime _weekStart(DateTime date) {
-  final normalized = _normalizeDate(date);
-  return normalized.subtract(Duration(days: normalized.weekday - 1));
+  @override
+  Future<int> purgeTombstonesBefore(int millis) async {
+    final stale = _box.values
+        .where((habit) =>
+            habit.isDeleted &&
+            !habit.isDirty &&
+            (habit.updatedAtMillis ?? 0) < millis)
+        .map((habit) => habit.id)
+        .toList(growable: false);
+    await _box.deleteAll(stale);
+    return stale.length;
+  }
 }

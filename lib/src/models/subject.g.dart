@@ -21,13 +21,16 @@ class SubjectAdapter extends TypeAdapter<Subject> {
       name: fields[1] as String,
       colorValue: (fields[2] as num).toInt(),
       createdAt: fields[3] as DateTime?,
+      updatedAtMillis: (fields[4] as num?)?.toInt(),
+      isDeleted: fields[5] == null ? false : fields[5] as bool,
+      syncedAtMillis: (fields[6] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Subject obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -35,7 +38,13 @@ class SubjectAdapter extends TypeAdapter<Subject> {
       ..writeByte(2)
       ..write(obj.colorValue)
       ..writeByte(3)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(4)
+      ..write(obj.updatedAtMillis)
+      ..writeByte(5)
+      ..write(obj.isDeleted)
+      ..writeByte(6)
+      ..write(obj.syncedAtMillis);
   }
 
   @override

@@ -11,6 +11,47 @@ DateTime weekStartOf(DateTime date) {
   return day.subtract(Duration(days: day.weekday - 1));
 }
 
+/// Consecutive-period streak ending at [now], counting backward.
+///
+/// A grace period of one period is allowed: for a daily habit, the streak
+/// still counts as active if yesterday (not just today) was completed, so
+/// a user isn't shown a broken streak before they've had a chance to
+/// complete today's instance. Same idea for weekly habits, one week back.
+///
+/// Lives here rather than in `HabitRepository` because sync needs it too:
+/// merging two devices' completion dates produces a set neither device has
+/// seen, and the streak on it has to be recomputed rather than taken from
+/// either side. One function, so the toggled value and the merged value
+/// can never disagree.
+int computeStreak(
+  Set<DateTime> normalizedDates,
+  HabitFrequency frequency,
+  DateTime now,
+) {
+  if (normalizedDates.isEmpty) return 0;
+
+  final step = frequency.period;
+  final periods = frequency == HabitFrequency.daily
+      ? normalizedDates
+      : normalizedDates.map(weekStartOf).toSet();
+
+  final currentPeriod = frequency == HabitFrequency.daily
+      ? normalizeDay(now)
+      : weekStartOf(now);
+
+  var cursor = periods.contains(currentPeriod)
+      ? currentPeriod
+      : currentPeriod.subtract(step);
+  if (!periods.contains(cursor)) return 0;
+
+  var streak = 0;
+  while (periods.contains(cursor)) {
+    streak++;
+    cursor = cursor.subtract(step);
+  }
+  return streak;
+}
+
 /// How many days [date]'s month has.
 ///
 /// Day zero of the following month is the last day of this one, which is how

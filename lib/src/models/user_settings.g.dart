@@ -33,13 +33,15 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       proteinTargetGrams: (fields[11] as num?)?.toInt(),
       carbTargetGrams: (fields[12] as num?)?.toInt(),
       fatTargetGrams: (fields[13] as num?)?.toInt(),
+      updatedAtMillis: (fields[14] as num?)?.toInt(),
+      syncedAtMillis: (fields[15] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, UserSettings obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -67,7 +69,11 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       ..writeByte(12)
       ..write(obj.carbTargetGrams)
       ..writeByte(13)
-      ..write(obj.fatTargetGrams);
+      ..write(obj.fatTargetGrams)
+      ..writeByte(14)
+      ..write(obj.updatedAtMillis)
+      ..writeByte(15)
+      ..write(obj.syncedAtMillis);
   }
 
   @override

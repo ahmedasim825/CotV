@@ -31,8 +31,36 @@ class RemoteRecord<T> {
   final String cursor;
 }
 
-/// Reads and writes tasks, habits, subjects and study logs against
-/// Supabase.
+/// Reads and writes the synced entities against a backend.
+///
+/// Abstract for the same reason the repositories are: it is the seam the
+/// engine's tests stand two devices up against one shared fake remote
+/// through, which is the only way to exercise a conflict without two
+/// machines and a stopwatch.
+abstract class MiloSyncService {
+  Future<List<RemoteRecord<Task>>> fetchTasks(String? since);
+  Future<void> pushTasks(Iterable<Task> tasks);
+
+  Future<List<RemoteRecord<Habit>>> fetchHabits(String? since);
+  Future<void> pushHabits(Iterable<Habit> habits);
+
+  Future<List<RemoteRecord<Subject>>> fetchSubjects(String? since);
+  Future<void> pushSubjects(Iterable<Subject> subjects);
+
+  Future<List<RemoteRecord<StudyLog>>> fetchStudyLogs(String? since);
+  Future<void> pushStudyLogs(Iterable<StudyLog> logs);
+
+  /// Every synced setting the server holds, with the newest server cursor
+  /// across the batch.
+  Future<(Map<String, RemoteSetting>, String?)> fetchSettings(String? since);
+
+  Future<void> pushSettings(
+    Map<String, Object?> values,
+    int clientUpdatedAtMillis,
+  );
+}
+
+/// [MiloSyncService] against Supabase.
 ///
 /// Every method assumes a signed-in user and passes `user_id` explicitly.
 /// That is belt and braces: row-level security would reject a mismatched
@@ -44,8 +72,8 @@ class RemoteRecord<T> {
 /// set to match so a pulled record reads as clean. A pulled record stamped
 /// with the local clock instead would look edited forever, and the two
 /// devices would push it back and forth indefinitely.
-class MiloSyncService {
-  MiloSyncService(this._client);
+class SupabaseMiloSyncService implements MiloSyncService {
+  SupabaseMiloSyncService(this._client);
 
   final SupabaseClient _client;
 
@@ -61,9 +89,11 @@ class MiloSyncService {
   // Tasks
   // ---------------------------------------------------------------------
 
+  @override
   Future<List<RemoteRecord<Task>>> fetchTasks(String? since) =>
       _fetch('tasks', since, taskFromRow);
 
+  @override
   Future<void> pushTasks(Iterable<Task> tasks) =>
       _push('tasks', tasks.map(taskToRow));
 
@@ -71,9 +101,11 @@ class MiloSyncService {
   // Habits
   // ---------------------------------------------------------------------
 
+  @override
   Future<List<RemoteRecord<Habit>>> fetchHabits(String? since) =>
       _fetch('habits', since, habitFromRow);
 
+  @override
   Future<void> pushHabits(Iterable<Habit> habits) =>
       _push('habits', habits.map(habitToRow));
 
@@ -81,15 +113,19 @@ class MiloSyncService {
   // Study
   // ---------------------------------------------------------------------
 
+  @override
   Future<List<RemoteRecord<Subject>>> fetchSubjects(String? since) =>
       _fetch('subjects', since, subjectFromRow);
 
+  @override
   Future<void> pushSubjects(Iterable<Subject> subjects) =>
       _push('subjects', subjects.map(subjectToRow));
 
+  @override
   Future<List<RemoteRecord<StudyLog>>> fetchStudyLogs(String? since) =>
       _fetch('study_logs', since, studyLogFromRow);
 
+  @override
   Future<void> pushStudyLogs(Iterable<StudyLog> logs) =>
       _push('study_logs', logs.map(studyLogToRow));
 
@@ -99,6 +135,7 @@ class MiloSyncService {
 
   /// Every synced setting the server holds, keyed as [syncedSettingKeys]
   /// names them, with the newest server cursor across the batch.
+  @override
   Future<(Map<String, RemoteSetting>, String?)> fetchSettings(
     String? since,
   ) async {
@@ -130,6 +167,7 @@ class MiloSyncService {
     return (settings, cursor);
   }
 
+  @override
   Future<void> pushSettings(
     Map<String, Object?> values,
     int clientUpdatedAtMillis,

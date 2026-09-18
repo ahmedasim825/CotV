@@ -141,6 +141,8 @@ class _InlineAddRowState extends State<InlineAddRow> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                _InfoButton(palette: palette),
               ],
             )
           : Semantics(
@@ -165,6 +167,42 @@ class _InlineAddRowState extends State<InlineAddRow> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// The ⓘ at the end of the open add row.
+///
+/// Deliberately inert. The sheet it will open — the one that turns a typed
+/// line into a task with a date, a priority and the rest — is still being
+/// designed, and the control is here first so the row's layout is settled
+/// before that lands. It is a button in the semantics tree for the same
+/// reason: a screen reader should find the same affordance a sighted user
+/// does, including its not doing anything yet.
+class _InfoButton extends StatelessWidget {
+  const _InfoButton({required this.palette});
+
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'About this task',
+      child: GestureDetector(
+        // A no-op rather than a null handler: `HitTestBehavior.opaque` with no
+        // callback would swallow the tap and let it fall through to the row
+        // behind, which would close the field the user is typing in.
+        onTap: () {},
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: Center(
+            child: Icon(PhLight.info, size: 16, color: palette.textMuted),
+          ),
+        ),
+      ),
     );
   }
 }

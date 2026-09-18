@@ -332,11 +332,11 @@ void main() {
     await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
 
-    // The two segments, and the day section that always renders because it
-    // carries the inline add control.
-    expect(find.text('Tasks'), findsWidgets);
-    expect(find.text('Reminders'), findsWidgets);
+    // The day section that always renders because it carries the inline add
+    // control, and the filter button beside its heading. No segments: tasks
+    // and reminders share one list now.
     expect(find.text('Today'), findsWidgets);
+    expect(find.text('All'), findsWidgets);
     expect(find.bySemanticsLabel('Add task'), findsOneWidget);
 
     // The full sheet is reached by tapping a row — this screen has no other

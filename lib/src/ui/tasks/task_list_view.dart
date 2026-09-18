@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/day_groups.dart';
-import '../../models/reminder.dart';
 import '../../models/task.dart';
-import '../../models/task_view.dart';
+import '../../models/task_list_entry.dart';
+import '../../models/task_list_filter.dart';
 import '../../providers/clock_providers.dart';
 import '../../providers/reminder_providers.dart';
 import '../../providers/task_providers.dart';
@@ -18,30 +18,36 @@ import 'task_form_sheet.dart';
 import 'widgets/bento_section.dart';
 import 'widgets/checkable_row.dart';
 import 'widgets/inline_add_row.dart';
-import 'widgets/segment_switcher.dart';
+import 'widgets/task_filter_menu.dart';
 
 const _uuid = Uuid();
 
-/// Which of the two lists the segmented control is showing.
-enum _TaskSegment { tasks, reminders }
-
-/// The Tasks destination: a segmented control over the task list and the
-/// reminder list, each grouped into Today / Yesterday / Last 7 days.
+/// The Tasks destination: tasks and reminders in one list, grouped by day,
+/// narrowed by the menu at the head of the first section.
+///
+/// ## One list, two boxes
+///
+/// The screen used to split into Tasks and Reminders segments. It does not any
+/// more — both kinds interleave, ordered by when they are due, and the only
+/// thing distinguishing them on screen is that a reminder carries a due line
+/// under its title and a task does not. The dashboard's agenda card solves the
+/// same problem with ring colour instead; this screen cannot, because a row's
+/// trailing dot is already spoken for by priority.
 ///
 /// ## What this screen does not show
 ///
-/// Anything dated after today. [groupByDay] drops it — there is no section a
-/// future item could land in, and the design has none. A task due next week
-/// exists, syncs and fires its notification; it simply is not on this screen
-/// until the day arrives. The form sheet reached from the dashboard can still
-/// create one, so this is a real way to set something and not see it here.
+/// Whatever the active filter's [DayRange] excludes, and nothing is clamped
+/// into view to compensate: under the default range an item dated after today
+/// is absent until the day arrives, and under [TaskListFilter.upcoming] the
+/// past is. The form sheets can still create either, so a due date set far
+/// out is a real way to put something where this screen will not show it.
 ///
 /// Tasks with no due date fall back to [Task.createdAt], so a quick capture
-/// made today sits under Today rather than vanishing for want of a date.
+/// sits under Today rather than vanishing for want of a date.
 ///
-/// Segment selection is local UI state, not app state — nothing outside this
-/// widget cares which of the two is showing, and it resets on rebuild the way
-/// a `TabBar`'s selection would.
+/// Filter selection is local UI state, not app state — nothing outside this
+/// widget cares which filter is active, and it resets on rebuild the way the
+/// segmented control's selection used to.
 class TaskListView extends ConsumerStatefulWidget {
   const TaskListView({super.key});
 
@@ -50,65 +56,94 @@ class TaskListView extends ConsumerStatefulWidget {
 }
 
 class _TaskListViewState extends ConsumerState<TaskListView> {
-  _TaskSegment _segment = _TaskSegment.tasks;
+  TaskListFilter _filter = TaskListFilter.all;
 
   @override
   Widget build(BuildContext context) {
     return AdaptiveLayout(
       builder: (context, windowSize) {
+        final tasksAsync = ref.watch(taskListProvider);
+        final remindersAsync = ref.watch(reminderListProvider);
+        // Watched rather than read off the wall clock, so a row crossing
+        // midnight moves from Today to Yesterday without waiting for an
+        // unrelated rebuild — and so a reminder's due line turns red on its
+        // own the minute it passes.
+        final now = ref.watch(currentMinuteProvider);
         final padding = windowSize.pagePadding;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(padding, 18, padding, 0),
-              child: SegmentSwitcher(
-                labels: const ['Tasks', 'Reminders'],
-                selectedIndex: _segment.index,
-                onSelected: (index) => setState(
-                  () => _segment = _TaskSegment.values[index],
-                ),
-              ),
-            ),
-            const SizedBox(height: 26),
-            Expanded(
-              child: switch (_segment) {
-                _TaskSegment.tasks => _TaskSections(padding: padding),
-                _TaskSegment.reminders => _ReminderSections(padding: padding),
-              },
-            ),
-          ],
+        final error = tasksAsync.error ?? remindersAsync.error;
+        if (error != null) {
+          return _Error(
+            message: 'Could not load your list: $error',
+            padding: padding,
+          );
+        }
+
+        final tasks = tasksAsync.value;
+        final reminders = remindersAsync.value;
+        // Both boxes have to answer before anything can render: a list drawn
+        // from one of them would show a partial day and then reshuffle when
+        // the other arrived.
+        if (tasks == null || reminders == null) return const _Loading();
+
+        final kind = _filter.kind;
+        final entries = mergeTaskList(tasks, reminders)
+            .where((entry) => kind == null || entry.kind == kind)
+            .toList(growable: false);
+
+        final sections = groupByDay<TaskListEntry>(
+          entries,
+          dateOf: (entry) => entry.bucketDate,
+          now: now,
+          range: _filter.range,
+        ).where((section) {
+          // `groupByDay` always emits Today so the add row has a home. Under
+          // the Past filter that is wrong — a list called Past that opens on
+          // today is not past — so it is dropped here rather than teaching the
+          // grouping about filters it should not know about.
+          return !(_filter.hidesToday && section.bucket == DayBucket.today);
+        }).toList(growable: false);
+
+        return _Sections(
+          sections: sections,
+          now: now,
+          padding: padding,
+          filter: _filter,
+          onFilterChanged: (filter) => setState(() => _filter = filter),
         );
       },
     );
   }
 }
 
-/// The day-grouped list both segments render into.
-///
-/// Generic over the row type so the two segments share their whole layout —
-/// the scroll padding, the section spacing, the inline add in Today — and
-/// differ only in what a row is and what adding one means.
-class _SectionList<T> extends StatelessWidget {
-  const _SectionList({
+class _Sections extends ConsumerWidget {
+  const _Sections({
     required this.sections,
+    required this.now,
     required this.padding,
-    required this.rowBuilder,
-    required this.addHint,
-    required this.addLabel,
-    required this.onAdd,
+    required this.filter,
+    required this.onFilterChanged,
   });
 
-  final List<DaySection<T>> sections;
+  final List<DaySection<TaskListEntry>> sections;
+  final DateTime now;
   final double padding;
-  final Widget Function(T item) rowBuilder;
-  final String addHint;
-  final String addLabel;
-  final ValueChanged<String> onAdd;
+  final TaskListFilter filter;
+  final ValueChanged<TaskListFilter> onFilterChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (sections.isEmpty) {
+      // Only reachable under a filter whose range came back empty — the
+      // default range always has Today. Still a heading, so the menu that got
+      // you here stays reachable.
+      return _EmptyRange(
+        padding: padding,
+        filter: filter,
+        onFilterChanged: onFilterChanged,
+      );
+    }
+
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
         padding,
@@ -128,139 +163,124 @@ class _SectionList<T> extends StatelessWidget {
         return BentoSection(
           title: section.title,
           isPast: section.isPast,
-          rows: [for (final item in section.items) rowBuilder(item)],
+          // The design sets the menu level with the first heading rather than
+          // in a bar of its own, so it belongs to whichever section leads.
+          trailing: index == 0
+              ? TaskFilterMenu(active: filter, onSelected: onFilterChanged)
+              : null,
+          rows: [
+            for (final entry in section.items) _row(context, ref, entry),
+          ],
           // Only Today takes new items. Adding to a past day would mean
-          // back-dating, which is a different gesture than the one this
-          // control offers.
+          // back-dating, and to a future one would mean asking for a date this
+          // control has no room to ask for.
           footer: section.bucket == DayBucket.today
               ? InlineAddRow(
-                  hint: addHint,
-                  semanticLabel: addLabel,
-                  onSubmit: onAdd,
+                  hint: 'New task',
+                  semanticLabel: 'Add task',
+                  onSubmit: (title) => ref
+                      .read(taskListProvider.notifier)
+                      // A task, not a reminder: a merged list needs one
+                      // default, and a task is the lighter of the two — a
+                      // reminder cannot exist without a moment, and this row
+                      // has nowhere to ask for one. Undated, so `groupByDay`
+                      // files it under Today through `createdAt`.
+                      .addTask(Task(id: _uuid.v4(), title: title)),
                 )
               : null,
         );
       },
     );
   }
-}
 
-class _TaskSections extends ConsumerWidget {
-  const _TaskSections({required this.padding});
+  Widget _row(BuildContext context, WidgetRef ref, TaskListEntry entry) {
+    final isReminder = entry.kind == TaskListKind.reminder;
+    final due = entry.dueAt;
 
-  final double padding;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(taskListProvider);
-    // Watched rather than read off the wall clock, so a row crossing midnight
-    // moves from Today to Yesterday without waiting for an unrelated rebuild.
-    final now = ref.watch(currentMinuteProvider);
-
-    return tasksAsync.when(
-      data: (tasks) {
-        final sections = groupByDay<Task>(
-          // Sorted before grouping, so each section comes out in due-time
-          // order without every section re-sorting its own slice.
-          sortTasks(tasks, TaskSort.dueTime),
-          dateOf: (task) => task.dueDate ?? task.createdAt,
-          now: now,
-        );
-
-        return _SectionList<Task>(
-          sections: sections,
-          padding: padding,
-          addHint: 'New task',
-          addLabel: 'Add task',
-          onAdd: (title) => ref.read(taskListProvider.notifier).addTask(
-                // No due date: `groupByDay` falls back to `createdAt`, which
-                // is now, so it lands in Today without this control having to
-                // ask for a date it has no room to ask for.
-                Task(id: _uuid.v4(), title: title),
-              ),
-          rowBuilder: (task) => CheckableRow(
-            key: ValueKey(task.id),
-            title: task.title,
-            isCompleted: task.isCompleted,
-            priority: task.priority,
-            onToggle: () =>
-                ref.read(taskListProvider.notifier).toggleCompleted(task.id),
-            onTap: () => showTaskFormSheet(context, existing: task),
-          ),
-        );
-      },
-      loading: () => _Loading(),
-      error: (error, _) => _Error(message: 'Could not load tasks: $error',
-          padding: padding),
+    return CheckableRow(
+      key: ValueKey(entry.id),
+      title: entry.title,
+      isCompleted: entry.isCompleted,
+      priority: entry.priority,
+      // The one thing separating the two kinds on screen. A task's due date is
+      // carried by the section it sits in; a reminder's exact moment is the
+      // point of it, so it gets a line of its own.
+      dueLine: isReminder && due != null
+          ? formatReminderDueLine(due, now)
+          : null,
+      dueOverdue: entry.isOverdue(now),
+      onToggle: () => isReminder
+          ? ref
+              .read(reminderListProvider.notifier)
+              .toggleCompleted(entry.sourceId)
+          : ref.read(taskListProvider.notifier).toggleCompleted(entry.sourceId),
+      onTap: () => _openSheet(context, ref, entry),
     );
+  }
+
+  void _openSheet(BuildContext context, WidgetRef ref, TaskListEntry entry) {
+    switch (entry.kind) {
+      case TaskListKind.task:
+        final task = ref.read(taskRepositoryProvider).getById(entry.sourceId);
+        if (task != null) showTaskFormSheet(context, existing: task);
+      case TaskListKind.reminder:
+        final reminder =
+            ref.read(reminderRepositoryProvider).getById(entry.sourceId);
+        if (reminder != null) {
+          showReminderFormSheet(context, existing: reminder);
+        }
+    }
   }
 }
 
-class _ReminderSections extends ConsumerWidget {
-  const _ReminderSections({required this.padding});
+/// A range with nothing in it — Upcoming before anything has been scheduled.
+class _EmptyRange extends StatelessWidget {
+  const _EmptyRange({
+    required this.padding,
+    required this.filter,
+    required this.onFilterChanged,
+  });
 
   final double padding;
+  final TaskListFilter filter;
+  final ValueChanged<TaskListFilter> onFilterChanged;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final remindersAsync = ref.watch(reminderListProvider);
-    // Also drives the overdue colour: a reminder passing its due instant
-    // while this segment is on screen has to turn red by itself.
-    final now = ref.watch(currentMinuteProvider);
-
-    return remindersAsync.when(
-      data: (reminders) {
-        final sorted = [...reminders]
-          ..sort((a, b) => a.dueAt.compareTo(b.dueAt));
-        final sections = groupByDay<Reminder>(
-          sorted,
-          dateOf: (reminder) => reminder.dueAt,
-          now: now,
-        );
-
-        return _SectionList<Reminder>(
-          sections: sections,
-          padding: padding,
-          addHint: 'New reminder',
-          addLabel: 'Add reminder',
-          onAdd: (title) =>
-              ref.read(reminderListProvider.notifier).addReminder(
-                    Reminder(
-                      id: _uuid.v4(),
-                      title: title,
-                      // End of today. A reminder must have a moment, and this
-                      // control has no room to ask for one: the last minute of
-                      // the day puts the row in Today without it arriving
-                      // already overdue. Tapping the row opens the sheet to
-                      // set a real time.
-                      dueAt: _endOfDay(now),
-                    ),
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(padding, 0, padding, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  filter.label,
+                  style: context.typography.display(
+                    size: 28,
+                    weight: FontWeight.w700,
+                    letterSpacing: -0.8,
+                    color: context.palette.textPrimary,
                   ),
-          rowBuilder: (reminder) => CheckableRow(
-            key: ValueKey(reminder.id),
-            title: reminder.title,
-            isCompleted: reminder.isCompleted,
-            priority: reminder.priority,
-            dueLine: formatReminderDueLine(reminder.dueAt, now),
-            dueOverdue: reminder.isOverdue(now),
-            onToggle: () => ref
-                .read(reminderListProvider.notifier)
-                .toggleCompleted(reminder.id),
-            onTap: () => showReminderFormSheet(context, existing: reminder),
+                ),
+              ),
+              TaskFilterMenu(active: filter, onSelected: onFilterChanged),
+            ],
           ),
-        );
-      },
-      loading: () => _Loading(),
-      error: (error, _) => _Error(
-        message: 'Could not load reminders: $error',
-        padding: padding,
+          const SizedBox(height: 18),
+          Text(
+            'Nothing here yet.',
+            style: context.typography.ui(
+              size: 13.5,
+              color: context.palette.textMuted,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-
-DateTime _endOfDay(DateTime now) =>
-    DateTime(now.year, now.month, now.day, 23, 59);
 
 class _Loading extends StatelessWidget {
   const _Loading();

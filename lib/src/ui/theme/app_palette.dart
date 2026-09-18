@@ -144,11 +144,6 @@ class AppPalette {
   /// separates from the card it sits on without needing a heavier rim.
   Color get checkboxFill => textPrimary.withValues(alpha: 0.04);
 
-  /// The pill behind the selected segment. Accent at 20% rather than flat
-  /// [accent]: the control is a location indicator, not a button, and a solid
-  /// fill reads as something to press.
-  Color get segmentActive => accent.withValues(alpha: 0.20);
-
   /// A reminder's due line once the moment has passed. Hotter than [danger]
   /// on purpose — [danger] marks a failure the app is reporting, this marks a
   /// time the user has missed.

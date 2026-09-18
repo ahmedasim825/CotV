@@ -25,6 +25,13 @@ Map<String, List<String>> _shape(List<DaySection<_Item>> sections) => {
         section.title: section.items.map((i) => i.id).toList(),
     };
 
+List<DaySection<_Item>> _groupUpcoming(List<_Item> items) => groupByDay(
+      items,
+      dateOf: (item) => item.date,
+      now: _now,
+      range: DayRange.upcoming,
+    );
+
 void main() {
   group('bucket boundaries', () {
     test('today lands under Today', () {
@@ -118,5 +125,73 @@ void main() {
       now: DateTime(2026, 3, 30, 12, 0),
     );
     expect(_shape(sections), {'Today': <String>[], 'Yesterday': ['a']});
+  });
+
+  group('the upcoming range', () {
+    test('tomorrow gets its own section', () {
+      final sections = _groupUpcoming([_Item('a', DateTime(2026, 9, 18, 8))]);
+      expect(_shape(sections), {'Tomorrow': ['a']});
+    });
+
+    test('two days out falls into This week, not Tomorrow', () {
+      final sections = _groupUpcoming([_Item('a', DateTime(2026, 9, 19))]);
+      expect(_shape(sections), {'This week': ['a']});
+    });
+
+    test('seven days out is the last day This week holds', () {
+      final sections = _groupUpcoming([_Item('a', DateTime(2026, 9, 24))]);
+      expect(_shape(sections), {'This week': ['a']});
+    });
+
+    test('eight days out goes to Later rather than being dropped', () {
+      final sections = _groupUpcoming([_Item('a', DateTime(2026, 9, 25))]);
+      expect(_shape(sections), {'Later': ['a']});
+    });
+
+    test('Later has no far edge — the future is open-ended', () {
+      final sections = _groupUpcoming([_Item('a', DateTime(2031, 1, 1))]);
+      expect(_shape(sections), {'Later': ['a']});
+    });
+
+    test('today and the past are dropped, not clamped into Tomorrow', () {
+      final sections = _groupUpcoming([
+        _Item('now', DateTime(2026, 9, 17, 23, 59)),
+        _Item('past', DateTime(2026, 9, 10)),
+      ]);
+      expect(sections, isEmpty);
+    });
+
+    test('it comes back empty rather than inventing a section', () {
+      // Unlike the past range, which always emits Today for the add row.
+      expect(_groupUpcoming([]), isEmpty);
+    });
+
+    test('sections run soonest first', () {
+      final sections = _groupUpcoming([
+        _Item('far', DateTime(2026, 10, 30)),
+        _Item('soon', DateTime(2026, 9, 18)),
+        _Item('mid', DateTime(2026, 9, 21)),
+      ]);
+      expect(sections.map((s) => s.title), ['Tomorrow', 'This week', 'Later']);
+    });
+
+    test('nothing ahead of us is dimmed', () {
+      final sections = _groupUpcoming([
+        _Item('a', DateTime(2026, 9, 18)),
+        _Item('b', DateTime(2026, 9, 21)),
+        _Item('c', DateTime(2026, 10, 30)),
+      ]);
+      expect(sections.map((s) => s.isPast), [false, false, false]);
+    });
+  });
+
+  test("the two ranges never show each other's items", () {
+    final items = [
+      _Item('past', DateTime(2026, 9, 16)),
+      _Item('today', DateTime(2026, 9, 17)),
+      _Item('future', DateTime(2026, 9, 20)),
+    ];
+    expect(_shape(_group(items)), {'Today': ['today'], 'Yesterday': ['past']});
+    expect(_shape(_groupUpcoming(items)), {'This week': ['future']});
   });
 }

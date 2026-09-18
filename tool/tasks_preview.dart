@@ -105,6 +105,27 @@ final _tasks = <Task>[
     dueDate: _at(4, 9, 0),
     priority: TaskPriority.medium,
   ),
+  // Ahead of today, so the Upcoming filter has something to show. Negative
+  // days, because `_at` counts backwards — one per future section, so all
+  // three headings appear.
+  Task(
+    id: 't8',
+    title: 'Anatomy lab',
+    dueDate: _at(-1, 10, 0),
+    priority: TaskPriority.high,
+  ),
+  Task(
+    id: 't9',
+    title: 'Pharmacology quiz',
+    dueDate: _at(-4, 9, 0),
+    priority: TaskPriority.medium,
+  ),
+  Task(
+    id: 't10',
+    title: 'End of block exam',
+    dueDate: _at(-21, 9, 0),
+    priority: TaskPriority.high,
+  ),
 ];
 
 final _reminders = <Reminder>[
@@ -142,6 +163,15 @@ final _reminders = <Reminder>[
     dueAt: _at(1, 20, 0),
     priority: TaskPriority.high,
     isCompleted: true,
+  ),
+  // One in the future too, so Upcoming shows the merge rather than a list of
+  // tasks — the due line under a reminder is the only thing telling the two
+  // kinds apart, and it has to be visible in every section that can hold one.
+  Reminder(
+    id: 'r6',
+    title: 'Call the clinic',
+    dueAt: _at(-2, 11, 30),
+    priority: TaskPriority.medium,
   ),
 ];
 

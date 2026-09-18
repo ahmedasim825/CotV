@@ -1,6 +1,4 @@
 
-import 'dart:io' show Platform;
-
 import 'package:cupertino_native_better/cupertino_native_better.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +11,7 @@ import 'food/food_search_screen.dart';
 import 'home/home_screen.dart';
 import 'milo/milo_assistant_screen.dart';
 import 'prayers/prayers_screen.dart';
+import 'platform/sf_symbols.dart';
 import 'responsive/breakpoints.dart';
 import 'settings/settings_screen.dart';
 import 'shell/milo_dock.dart';
@@ -145,23 +144,6 @@ extension AppDestinationX on AppDestination {
     }
   }
 }
-
-/// Whether SF Symbol names will resolve to glyphs rather than to nothing.
-///
-/// Off Apple platforms the tab bar falls back to a Flutter `CupertinoTabBar`,
-/// and a `CNSymbol` handed to it has no font to come from — every tab renders
-/// an empty placeholder circle. So the Phosphor glyph is supplied instead, and
-/// the bar has icons everywhere.
-///
-/// Gated on `dart:io` rather than [ThemeData.platform], which is the rule
-/// everywhere else in this file and is documented at [useLiquidGlass]. It has
-/// to be, and the exception is the whole point: the package decides which of
-/// its two paths to take from `Platform.isIOS` itself, so a gate reading the
-/// theme would disagree with it exactly where the theme is faked — under
-/// `flutter_test`, and in `tool/tasks_preview.dart`, which forces the iOS look
-/// onto a Windows window. That disagreement is what puts the placeholders on
-/// screen.
-final bool _hasSFSymbols = Platform.isIOS || Platform.isMacOS;
 
 /// A way for anything under the shell to move to another destination.
 ///
@@ -421,17 +403,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                     for (final item in AppDestinationX.navItems)
                       CNTabBarItem(
                         label: item.label,
-                        icon: _hasSFSymbols ? CNSymbol(item.sfSymbol) : null,
-                        activeIcon: _hasSFSymbols
+                        icon: hasSFSymbols ? CNSymbol(item.sfSymbol) : null,
+                        activeIcon: hasSFSymbols
                             ? CNSymbol(item.sfSymbolFilled)
                             : null,
                         // Phosphor stands in where SF Symbols do not exist.
                         // The package renders `customIcon` itself, so this
                         // path works on every platform; it just gives up the
                         // system icon set where there is one to give up.
-                        customIcon: _hasSFSymbols ? null : item.icon,
+                        customIcon: hasSFSymbols ? null : item.icon,
                         activeCustomIcon:
-                            _hasSFSymbols ? null : item.selectedIcon,
+                            hasSFSymbols ? null : item.selectedIcon,
                       ),
                   ],
                   // Clamped, because `settings` is reachable but is not a tab:

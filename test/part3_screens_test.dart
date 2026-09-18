@@ -247,10 +247,10 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Navigate to reminders segment.
+        // Straight to the Tasks pane. There is no Reminders segment to tap
+        // into any more — the list is merged, so a reminder is simply one of
+        // the rows.
         await tester.tap(find.byTooltip('Tasks'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Reminders'));
         await tester.pumpAndSettle();
 
         // At 12pm, the reminder due at 3pm is NOT yet overdue.
@@ -286,10 +286,10 @@ void main() {
         );
         await tester.pump();
 
-        // Navigate to reminders segment.
+        // Straight to the Tasks pane. There is no Reminders segment to tap
+        // into any more — the list is merged, so a reminder is simply one of
+        // the rows.
         await tester.tap(find.byTooltip('Tasks'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Reminders'));
         await tester.pumpAndSettle();
 
         // At 4pm, the reminder due at 3pm is now overdue per the pinned

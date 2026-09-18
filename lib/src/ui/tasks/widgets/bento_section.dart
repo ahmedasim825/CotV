@@ -17,6 +17,7 @@ class BentoSection extends StatelessWidget {
     required this.title,
     required this.rows,
     this.footer,
+    this.trailing,
     this.isPast = false,
   });
 
@@ -29,6 +30,14 @@ class BentoSection extends StatelessWidget {
   /// Pinned under the last row, below a rule of its own. The inline add
   /// control on the Today section, and nothing anywhere else.
   final Widget? footer;
+
+  /// Sits at the right of the heading, on its baseline.
+  ///
+  /// The screen's filter menu, and only on the first section — the design puts
+  /// it level with the first heading rather than in a bar of its own, so which
+  /// section carries it depends on which one comes first. Under the Past
+  /// filter that is Yesterday.
+  final Widget? trailing;
 
   /// Dims the whole section — heading and card together — to 60%.
   final bool isPast;
@@ -52,14 +61,22 @@ class BentoSection extends StatelessWidget {
     final section = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: context.typography.display(
-            size: 28,
-            weight: FontWeight.w700,
-            letterSpacing: -0.8,
-            color: palette.textPrimary,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: context.typography.display(
+                  size: 28,
+                  weight: FontWeight.w700,
+                  letterSpacing: -0.8,
+                  color: palette.textPrimary,
+                ),
+              ),
+            ),
+            ?trailing,
+          ],
         ),
         const SizedBox(height: 14),
         if (children.isNotEmpty)

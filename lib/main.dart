@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:cupertino_native_better/cupertino_native_better.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,6 +70,12 @@ class PrayerLockoutApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Milo',
       debugShowCheckedModeBanner: false,
+      // What `autoHideOnModal` on every CN widget needs in order to know a
+      // sheet is up. Without it the package cannot tell which route is on top,
+      // and falls back to destroying every native control on the page under
+      // any modal — including the tab bar, while the task sheet's own switches
+      // are open above it.
+      navigatorObservers: [CNTabBarRouteObserver()],
       // No `background:` override: the ground is one fixed colour now, so it
       // comes straight off `kPalette.background`. The parameter stays on
       // [buildAppTheme] as a general escape hatch — see its doc.

@@ -72,7 +72,10 @@ class _CheckableRowState extends State<CheckableRow> {
       onTap: widget.onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        // The card's horizontal inset lives here rather than on the card, so
+        // that a swipe panel behind this row reaches the card's inner edge.
+        // See the note on [BentoSection].
+        padding: const EdgeInsets.fromLTRB(12, 6, 14, 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -99,9 +102,9 @@ class _CheckableRowState extends State<CheckableRow> {
                           curve: AppMotion.spring,
                           style: context.typography
                               .ui(
-                                size: 13.5,
+                                size: 16,
                                 weight: FontWeight.w500,
-                                height: 1.35,
+                                height: 1.3,
                                 color: palette.textPrimary,
                               )
                               .copyWith(
@@ -123,7 +126,7 @@ class _CheckableRowState extends State<CheckableRow> {
                       ),
                       const SizedBox(width: 8),
                       Padding(
-                        padding: const EdgeInsets.only(top: 5),
+                        padding: const EdgeInsets.only(top: 7),
                         child: _PriorityDot(priority: widget.priority),
                       ),
                     ],
@@ -133,7 +136,7 @@ class _CheckableRowState extends State<CheckableRow> {
                     Text(
                       dueLine,
                       style: context.typography.ui(
-                        size: 11.5,
+                        size: 13,
                         weight: FontWeight.w500,
                         color: widget.dueOverdue
                             ? palette.dueOverdue
@@ -199,11 +202,7 @@ class _CompletionBox extends StatelessWidget {
                 child: AnimatedOpacity(
                   opacity: isCompleted ? 1 : 0,
                   duration: context.motion.fast,
-                  child: Icon(
-                    PhLight.check,
-                    size: 13,
-                    color: palette.onAccent,
-                  ),
+                  child: Icon(PhLight.check, size: 13, color: palette.onAccent),
                 ),
               ),
             ),

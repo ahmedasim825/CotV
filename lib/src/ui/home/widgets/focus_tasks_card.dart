@@ -6,7 +6,7 @@ import '../../../providers/task_providers.dart';
 import '../../../providers/task_view_providers.dart';
 import '../../components/components.dart';
 import '../../app_shell.dart';
-import '../../tasks/task_form_sheet.dart';
+import '../../tasks/new_task_sheet.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 import 'home_card_note.dart';
@@ -36,7 +36,7 @@ class FocusTasksCard extends ConsumerWidget {
 
     return HomeCardFrame(
       title: 'Tasks',
-      onEdit: () => showTaskFormSheet(context),
+      onEdit: () => showNewTaskSheet(context),
       onTap: () => AppNavigation.maybeOf(context)?.call(AppDestination.tasks),
       semanticLabel: 'Tasks. Open the task list.',
       // The rows inside are each their own control and win the gesture arena

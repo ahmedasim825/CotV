@@ -11,6 +11,15 @@ import '../../theme/app_theme.dart';
 ///
 /// [Border.all] is an *inside* stroke in Flutter, which is what the design
 /// means by a 1px rim drawn inside the shape.
+///
+/// ## Who pads what
+///
+/// The card pads itself vertically and **not** horizontally; each row pads its
+/// own sides. That split exists so a row can be swiped: a delete panel sliding
+/// out behind one has to reach the card's inner edge, and it cannot if the
+/// card holds the inset. The rules and the footer are padded here instead,
+/// since neither is ever swiped, which is what keeps their inset identical to
+/// what it was when the card owned it.
 class BentoSection extends StatelessWidget {
   const BentoSection({
     super.key,
@@ -44,6 +53,10 @@ class BentoSection extends StatelessWidget {
 
   static const double _radius = 16;
 
+  /// The inset rows, rules and the footer share. Applied per-child rather than
+  /// to the card — see the class doc.
+  static const EdgeInsets _inset = EdgeInsets.only(left: 12, right: 14);
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -55,7 +68,7 @@ class BentoSection extends StatelessWidget {
     }
     if (footer != null) {
       if (children.isNotEmpty) children.add(_rule(palette));
-      children.add(footer!);
+      children.add(Padding(padding: _inset, child: footer!));
     }
 
     final section = Column(
@@ -80,17 +93,24 @@ class BentoSection extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         if (children.isNotEmpty)
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.bentoFill,
-              borderRadius: BorderRadius.circular(_radius),
-              border: Border.all(color: palette.bentoBorder),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: children,
+          // Clipped so a swiped row's delete panel is cut by the card's own
+          // corners instead of squaring them off. `Clip.antiAlias` is the
+          // default and pushes no save layer, which is what keeps the note on
+          // [isPast] below true.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(_radius),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: palette.bentoFill,
+                borderRadius: BorderRadius.circular(_radius),
+                border: Border.all(color: palette.bentoBorder),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: children,
+                ),
               ),
             ),
           ),
@@ -105,9 +125,8 @@ class BentoSection extends StatelessWidget {
     return isPast ? Opacity(opacity: 0.6, child: section) : section;
   }
 
-  Widget _rule(AppPalette palette) => Divider(
-        height: 1,
-        thickness: 1,
-        color: palette.bentoBorder,
-      );
+  Widget _rule(AppPalette palette) => Padding(
+    padding: _inset,
+    child: Divider(height: 1, thickness: 1, color: palette.bentoBorder),
+  );
 }

@@ -274,7 +274,7 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
 
     // The ⓘ only exists while the field is open.
-    expect(find.bySemanticsLabel('About this task'), findsOneWidget);
+    expect(find.bySemanticsLabel('Task details'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Stretch');
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -302,5 +302,35 @@ void main() {
       tester.element(find.text('Workout')),
     ).style.merge(title.style);
     expect(style.decoration, TextDecoration.lineThrough);
+  });
+
+  testWidgets('swiping a row and confirming deletes it', (tester) async {
+    final repository = await _pumpReminders(tester, reminders: [_workout]);
+
+    await tester.drag(find.text('Workout'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete reminder?'), findsOneWidget);
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    // The row goes because the write landed, not because the gesture
+    // animated it away — `confirmDismiss` reports false either way, so a row
+    // still on screen here would mean the delete never reached the box.
+    expect(repository.getAll(), isEmpty);
+    expect(find.text('Workout'), findsNothing);
+  });
+
+  testWidgets('swiping a row and cancelling leaves it alone', (tester) async {
+    final repository = await _pumpReminders(tester, reminders: [_workout]);
+
+    await tester.drag(find.text('Workout'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(repository.getAll(), hasLength(1));
+    expect(find.text('Workout'), findsOneWidget);
   });
 }

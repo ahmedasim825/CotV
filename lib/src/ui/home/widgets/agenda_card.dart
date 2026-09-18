@@ -9,8 +9,8 @@ import '../../../providers/task_providers.dart';
 import '../../../providers/task_view_providers.dart';
 import '../../app_shell.dart';
 import '../../format/time_format.dart';
+import '../../tasks/new_task_sheet.dart';
 import '../../tasks/reminder_form_sheet.dart';
-import '../../tasks/task_form_sheet.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ph_light_icons.dart';
 import 'home_card_note.dart';
@@ -59,7 +59,7 @@ class AgendaCard extends ConsumerWidget {
       // action here, and a chooser sheet in front of it would put two taps
       // between the user and the common case; the Tasks screen this card opens
       // has a reminder segment for the other one.
-      onEdit: () => showTaskFormSheet(context),
+      onEdit: () => showNewTaskSheet(context),
       onTap: () => AppNavigation.maybeOf(context)?.call(AppDestination.tasks),
       semanticLabel: 'Tasks and reminders. Open the task list.',
       // The rows are each their own control and win the gesture arena for taps

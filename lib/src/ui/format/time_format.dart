@@ -27,7 +27,12 @@ const List<String> _monthNames = [
   'December',
 ];
 
-String _two(int value) => value.toString().padLeft(2, '0');
+/// Zero-pads a clock component to two digits: `padTwo(5)` is `05`.
+///
+/// Public because the time wheel labels its columns one number at a time and
+/// has no [DateTime] to hand to [formatClock]. Everything that renders a time
+/// in this app pads it, and this is the one place that decides how.
+String padTwo(int value) => value.toString().padLeft(2, '0');
 
 /// The name of a month, 1-based: `monthName(9)` is `September`.
 ///
@@ -36,10 +41,10 @@ String _two(int value) => value.toString().padLeft(2, '0');
 String monthName(int month) => _monthNames[month - 1];
 
 /// 24-hour clock time, e.g. `05:42`. Matches the prayer cards from Part 1.
-String formatClock(DateTime time) => '${_two(time.hour)}:${_two(time.minute)}';
+String formatClock(DateTime time) => '${padTwo(time.hour)}:${padTwo(time.minute)}';
 
 /// An hour label for the timeline gutter, e.g. `05` for 05:00.
-String formatHourLabel(int hour) => _two(hour);
+String formatHourLabel(int hour) => padTwo(hour);
 
 /// A time span, e.g. `12:15 – 12:45`.
 String formatTimeRange(DateTime start, DateTime end) =>
@@ -105,8 +110,8 @@ String formatCountdown(Duration remaining) {
   final minutes = remaining.inMinutes.remainder(60);
   final seconds = remaining.inSeconds.remainder(60);
 
-  if (hours > 0) return '${hours}h ${_two(minutes)}m';
-  if (minutes > 0) return '${minutes}m ${_two(seconds)}s';
+  if (hours > 0) return '${hours}h ${padTwo(minutes)}m';
+  if (minutes > 0) return '${minutes}m ${padTwo(seconds)}s';
   return '${seconds}s';
 }
 
@@ -160,6 +165,6 @@ String formatReminderDueLine(DateTime due, DateTime today) {
 String formatReminderDueLabel(DateTime due, DateTime today) {
   final dueDay = DateTime(due.year, due.month, due.day);
   final relative = relativeDayName(dueDay, DateTime(today.year, today.month, today.day));
-  final day = relative ?? '${_two(due.day)}/${_two(due.month)}/${due.year}';
+  final day = relative ?? '${padTwo(due.day)}/${padTwo(due.month)}/${due.year}';
   return '$day, ${formatClock(due)}';
 }

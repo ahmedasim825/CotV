@@ -151,6 +151,34 @@ class AppPalette {
 
   Color get accentSoft => accent.withValues(alpha: 0.16);
 
+  /// The near-full-screen task sheet's plate: #222226 at half strength over a
+  /// blur. Its own colour rather than [surface] at an alpha, because the sheet
+  /// is the one surface in the app that covers the ground rather than floating
+  /// a card above it, and it is tuned against the blur it sits on.
+  Color get sheetGlass => const Color(0x80222226);
+
+  /// A form field's box on that sheet: 6% white under a 3% rim.
+  ///
+  /// The inverse of the bento ladder — [bentoFill] is 3% under a 6% rim — and
+  /// deliberately so. A bento card groups rows *under* one plate, where the rim
+  /// does the work of saying where the group ends. A field is a target you type
+  /// into, so the plate is what has to read and the rim only has to catch the
+  /// edge.
+  Color get fieldFill => textPrimary.withValues(alpha: 0.06);
+
+  Color get fieldBorder => textPrimary.withValues(alpha: 0.03);
+
+  /// The rule between two fields sharing one box. Opaque rather than a white
+  /// alpha like [bentoBorder]: the sheet is itself translucent, and a rule
+  /// defined as a fraction of white would change strength with whatever
+  /// happened to be behind the sheet at the time.
+  Color get fieldDivider => const Color(0xFF2C2C2E);
+
+  /// A small control riding on top of a field box — the Subject dropdown. One
+  /// step lighter than [fieldFill], because it has to read as a thing you press
+  /// while sitting on a plate that is already a lifted surface.
+  Color get pillFill => const Color(0x993A3A3C);
+
   Color get meterTrack => textPrimary.withValues(alpha: 0.08);
 
   Color get heroTint =>

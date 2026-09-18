@@ -8,7 +8,7 @@ import '../../widgets/ph_light_icons.dart';
 
 /// The three-way priority picker shared by the task and reminder sheets.
 ///
-/// Lifted out of `task_form_sheet.dart`, where it was private, when reminders
+/// Lifted out of the task form sheet, where it was private, when reminders
 /// grew a priority of their own: the two sheets sit behind the same screen and
 /// set the same [TaskPriority], so a second copy would be two controls the
 /// user has to learn as one.

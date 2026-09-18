@@ -37,6 +37,7 @@ import 'package:cotv/src/storage/local_storage.dart';
 import 'package:cotv/src/ui/home/home_screen.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/milo/milo_assistant_screen.dart';
+import 'package:cotv/src/ui/tasks/new_task_sheet.dart';
 import 'package:cotv/src/ui/tasks/task_list_view.dart';
 
 /// Avoids touching the real `flutter_secure_storage` platform channel
@@ -359,13 +360,20 @@ void main() {
     );
 
     await tester.tap(find.text('Read tafsir'));
-    await pumpUntil(tester, () => find.text('Edit task').evaluate().isNotEmpty);
+    await pumpUntil(
+      tester,
+      () => find.byType(NewTaskSheet).evaluate().isNotEmpty,
+    );
 
-    // 'Edit task', not 'New task': the latter is also the inline control's
-    // hint text, so it is on screen either way and would not prove the sheet
-    // opened.
-    expect(find.text('Edit task'), findsOneWidget);
-    expect(find.text('What needs doing?'), findsOneWidget);
+    // Asserted on the sheet type rather than any of its text: 'New Task' is a
+    // near-match for the inline control's own 'New task' hint, which is on
+    // screen either way and would not prove the sheet opened.
+    expect(find.byType(NewTaskSheet), findsOneWidget);
+    // Opened on the row it was tapped from, not empty.
+    expect(
+      tester.widget<NewTaskSheet>(find.byType(NewTaskSheet)).existing?.title,
+      'Read tafsir',
+    );
   });
 
   testWidgets('task writes flow back into the list reactively',

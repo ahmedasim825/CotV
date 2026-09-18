@@ -9,12 +9,14 @@ import '../../models/task_list_filter.dart';
 import '../../providers/clock_providers.dart';
 import '../../providers/reminder_providers.dart';
 import '../../providers/task_providers.dart';
+import '../components/components.dart';
 import '../format/time_format.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ph_light_icons.dart';
 import '../widgets/status_card.dart';
+import 'new_task_sheet.dart';
 import 'reminder_form_sheet.dart';
-import 'task_form_sheet.dart';
 import 'widgets/bento_section.dart';
 import 'widgets/checkable_row.dart';
 import 'widgets/inline_add_row.dart';
@@ -91,18 +93,22 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
             .where((entry) => kind == null || entry.kind == kind)
             .toList(growable: false);
 
-        final sections = groupByDay<TaskListEntry>(
-          entries,
-          dateOf: (entry) => entry.bucketDate,
-          now: now,
-          range: _filter.range,
-        ).where((section) {
-          // `groupByDay` always emits Today so the add row has a home. Under
-          // the Past filter that is wrong — a list called Past that opens on
-          // today is not past — so it is dropped here rather than teaching the
-          // grouping about filters it should not know about.
-          return !(_filter.hidesToday && section.bucket == DayBucket.today);
-        }).toList(growable: false);
+        final sections =
+            groupByDay<TaskListEntry>(
+                  entries,
+                  dateOf: (entry) => entry.bucketDate,
+                  now: now,
+                  range: _filter.range,
+                )
+                .where((section) {
+                  // `groupByDay` always emits Today so the add row has a home. Under
+                  // the Past filter that is wrong — a list called Past that opens on
+                  // today is not past — so it is dropped here rather than teaching the
+                  // grouping about filters it should not know about.
+                  return !(_filter.hidesToday &&
+                      section.bucket == DayBucket.today);
+                })
+                .toList(growable: false);
 
         return _Sections(
           sections: sections,
@@ -168,9 +174,7 @@ class _Sections extends ConsumerWidget {
           trailing: index == 0
               ? TaskFilterMenu(active: filter, onSelected: onFilterChanged)
               : null,
-          rows: [
-            for (final entry in section.items) _row(context, ref, entry),
-          ],
+          rows: [for (final entry in section.items) _row(context, ref, entry)],
           // Only Today takes new items. Adding to a past day would mean
           // back-dating, and to a future one would mean asking for a date this
           // control has no room to ask for.
@@ -186,6 +190,12 @@ class _Sections extends ConsumerWidget {
                       // has nowhere to ask for one. Undated, so `groupByDay`
                       // files it under Today through `createdAt`.
                       .addTask(Task(id: _uuid.v4(), title: title)),
+                  // The ⓘ: the same capture, continued somewhere with room
+                  // for the fields the row cannot ask for.
+                  onOpenDetails: (title) => showNewTaskSheet(
+                    context,
+                    initialTitle: title.isEmpty ? null : title,
+                  ),
                 )
               : null,
         );
@@ -197,8 +207,59 @@ class _Sections extends ConsumerWidget {
     final isReminder = entry.kind == TaskListKind.reminder;
     final due = entry.dueAt;
 
-    return CheckableRow(
+    return Dismissible(
       key: ValueKey(entry.id),
+      // Leading-to-trailing only, the way a list row is deleted everywhere
+      // else on the platform. The other direction is left free: it is where a
+      // complete-on-swipe would go if this list ever wants one.
+      direction: DismissDirection.endToStart,
+      background: _DeletePanel(),
+      confirmDismiss: (_) => _confirmDelete(context, ref, entry),
+      child: _checkable(context, ref, entry, isReminder: isReminder, due: due),
+    );
+  }
+
+  /// Confirms and performs the delete, then reports **not** dismissed.
+  ///
+  /// Always false, even having deleted. Letting [Dismissible] retire the row
+  /// itself races the stream rebuild that removes it, and losing that race is
+  /// the "a dismissed Dismissible widget is still part of the tree" assertion.
+  /// Returning false springs the row back instead, and the repository's own
+  /// update takes it away a frame later — which is the write actually
+  /// landing, rather than an animation promising it will.
+  Future<bool> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    TaskListEntry entry,
+  ) async {
+    final noun = entry.kind == TaskListKind.reminder ? 'reminder' : 'task';
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete $noun?',
+      message: 'Removing "${entry.title}" cannot be undone.',
+      confirmIcon: PhLight.trash,
+    );
+    if (!confirmed) return false;
+
+    switch (entry.kind) {
+      case TaskListKind.task:
+        await ref.read(taskListProvider.notifier).deleteTask(entry.sourceId);
+      case TaskListKind.reminder:
+        await ref
+            .read(reminderListProvider.notifier)
+            .deleteReminder(entry.sourceId);
+    }
+    return false;
+  }
+
+  Widget _checkable(
+    BuildContext context,
+    WidgetRef ref,
+    TaskListEntry entry, {
+    required bool isReminder,
+    required DateTime? due,
+  }) {
+    return CheckableRow(
       title: entry.title,
       isCompleted: entry.isCompleted,
       priority: entry.priority,
@@ -211,8 +272,8 @@ class _Sections extends ConsumerWidget {
       dueOverdue: entry.isOverdue(now),
       onToggle: () => isReminder
           ? ref
-              .read(reminderListProvider.notifier)
-              .toggleCompleted(entry.sourceId)
+                .read(reminderListProvider.notifier)
+                .toggleCompleted(entry.sourceId)
           : ref.read(taskListProvider.notifier).toggleCompleted(entry.sourceId),
       onTap: () => _openSheet(context, ref, entry),
     );
@@ -222,14 +283,40 @@ class _Sections extends ConsumerWidget {
     switch (entry.kind) {
       case TaskListKind.task:
         final task = ref.read(taskRepositoryProvider).getById(entry.sourceId);
-        if (task != null) showTaskFormSheet(context, existing: task);
+        if (task != null) showNewTaskSheet(context, existing: task);
       case TaskListKind.reminder:
-        final reminder =
-            ref.read(reminderRepositoryProvider).getById(entry.sourceId);
+        final reminder = ref
+            .read(reminderRepositoryProvider)
+            .getById(entry.sourceId);
         if (reminder != null) {
           showReminderFormSheet(context, existing: reminder);
         }
     }
+  }
+}
+
+/// What a row slides off to reveal.
+///
+/// Full-bleed inside the card, which is why the card clips itself and the rows
+/// carry their own horizontal inset — see [BentoSection]. The glyph sits at the
+/// trailing end, so it stays under the thumb that is dragging the row away.
+class _DeletePanel extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.palette.danger,
+      child: Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 20),
+          child: Icon(
+            PhLight.trash,
+            size: 18,
+            color: context.palette.textPrimary,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -272,7 +359,7 @@ class _EmptyRange extends StatelessWidget {
           Text(
             'Nothing here yet.',
             style: context.typography.ui(
-              size: 13.5,
+              size: 15,
               color: context.palette.textMuted,
             ),
           ),

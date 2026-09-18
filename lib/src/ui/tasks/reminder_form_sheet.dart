@@ -17,11 +17,8 @@ const _uuid = Uuid();
 /// Add a reminder, or edit [existing].
 ///
 /// Ids come from `uuid`, which the app already depends on and which
-/// `task_form_sheet.dart` uses for the same purpose.
-Future<void> showReminderFormSheet(
-  BuildContext context, {
-  Reminder? existing,
-}) {
+/// `new_task_sheet.dart` uses for the same purpose.
+Future<void> showReminderFormSheet(BuildContext context, {Reminder? existing}) {
   return showStandardBottomSheet<void>(
     context,
     builder: (_) => ReminderFormSheet(existing: existing),
@@ -65,9 +62,12 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
   /// Rounds [now] down to the hour, then advances one — so a fresh reminder
   /// always defaults to a moment still ahead of it, never the hour that just
   /// started.
-  static DateTime _nextHour(DateTime now) =>
-      DateTime(now.year, now.month, now.day, now.hour)
-          .add(const Duration(hours: 1));
+  static DateTime _nextHour(DateTime now) => DateTime(
+    now.year,
+    now.month,
+    now.day,
+    now.hour,
+  ).add(const Duration(hours: 1));
 
   Future<void> _pickDueAt() async {
     final date = await showDatePicker(
@@ -108,18 +108,18 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
     // `_isSaving` has always existed for this moment; until reminders were
     // persisted there was nothing for it to cover.
     if (existing == null) {
-      await notifier.addReminder(Reminder(
-        id: _uuid.v4(),
-        title: title,
-        dueAt: _dueAt,
-        priority: _priority,
-      ));
+      await notifier.addReminder(
+        Reminder(
+          id: _uuid.v4(),
+          title: title,
+          dueAt: _dueAt,
+          priority: _priority,
+        ),
+      );
     } else {
-      await notifier.updateReminder(existing.copyWith(
-        title: title,
-        dueAt: _dueAt,
-        priority: _priority,
-      ));
+      await notifier.updateReminder(
+        existing.copyWith(title: title, dueAt: _dueAt, priority: _priority),
+      );
     }
 
     if (mounted) Navigator.of(context).pop();
@@ -165,8 +165,7 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
                 icon: PhLight.x,
                 variant: ButtonVariant.outline,
                 expand: true,
-                onPressed:
-                    _isSaving ? null : () => Navigator.of(context).pop(),
+                onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
               ),
             ),
             const SizedBox(width: 12),
@@ -192,8 +191,10 @@ class _ReminderFormSheetState extends ConsumerState<ReminderFormSheet> {
               textInputAction: TextInputAction.done,
               textCapitalization: TextCapitalization.sentences,
               style: context.typography.ui(size: 15),
-              decoration:
-                  appInputDecoration(context, hint: 'What should I remind you of?'),
+              decoration: appInputDecoration(
+                context,
+                hint: 'What should I remind you of?',
+              ),
               validator: (value) => (value == null || value.trim().isEmpty)
                   ? 'Give the reminder a title.'
                   : null,
@@ -242,7 +243,11 @@ class _DueAtField extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(PhLight.calendarBlank, size: 15, color: context.palette.accent),
+            Icon(
+              PhLight.calendarBlank,
+              size: 15,
+              color: context.palette.accent,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

@@ -20,6 +20,7 @@ class InlineAddRow extends StatefulWidget {
     required this.hint,
     required this.semanticLabel,
     required this.onSubmit,
+    required this.onOpenDetails,
   });
 
   final String hint;
@@ -27,6 +28,12 @@ class InlineAddRow extends StatefulWidget {
 
   /// Called with the trimmed, non-empty title.
   final ValueChanged<String> onSubmit;
+
+  /// Called from the ⓘ with whatever is in the field, trimmed, to carry it
+  /// into the sheet. The row is left open and untouched: the sheet may be
+  /// dismissed, and a control that emptied the field on the way out would
+  /// lose what was typed.
+  final ValueChanged<String> onOpenDetails;
 
   @override
   State<InlineAddRow> createState() => _InlineAddRowState();
@@ -119,9 +126,9 @@ class _InlineAddRowState extends State<InlineAddRow> {
                         textCapitalization: TextCapitalization.sentences,
                         onSubmitted: _submit,
                         style: context.typography.ui(
-                          size: 13.5,
+                          size: 16,
                           weight: FontWeight.w500,
-                          height: 1.35,
+                          height: 1.3,
                         ),
                         cursorColor: palette.accent,
                         decoration: InputDecoration(
@@ -132,7 +139,7 @@ class _InlineAddRowState extends State<InlineAddRow> {
                           contentPadding: EdgeInsets.zero,
                           hintText: widget.hint,
                           hintStyle: context.typography.ui(
-                            size: 13.5,
+                            size: 16,
                             weight: FontWeight.w500,
                             color: palette.textMuted,
                           ),
@@ -142,7 +149,10 @@ class _InlineAddRowState extends State<InlineAddRow> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _InfoButton(palette: palette),
+                _InfoButton(
+                  palette: palette,
+                  onTap: () => widget.onOpenDetails(_controller.text.trim()),
+                ),
               ],
             )
           : Semantics(
@@ -173,27 +183,22 @@ class _InlineAddRowState extends State<InlineAddRow> {
 
 /// The ⓘ at the end of the open add row.
 ///
-/// Deliberately inert. The sheet it will open — the one that turns a typed
-/// line into a task with a date, a priority and the rest — is still being
-/// designed, and the control is here first so the row's layout is settled
-/// before that lands. It is a button in the semantics tree for the same
-/// reason: a screen reader should find the same affordance a sighted user
-/// does, including its not doing anything yet.
+/// Opens the task sheet on whatever is typed so far: this row is the fast
+/// path, and the ⓘ is the way out of it when a line needs a date, a note or a
+/// link that the row has no space to ask for.
 class _InfoButton extends StatelessWidget {
-  const _InfoButton({required this.palette});
+  const _InfoButton({required this.palette, required this.onTap});
 
   final AppPalette palette;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'About this task',
+      label: 'Task details',
       child: GestureDetector(
-        // A no-op rather than a null handler: `HitTestBehavior.opaque` with no
-        // callback would swallow the tap and let it fall through to the row
-        // behind, which would close the field the user is typing in.
-        onTap: () {},
+        onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 28,
@@ -221,7 +226,10 @@ class _Glyph extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: palette.checkboxFill,
-        borderRadius: BorderRadius.circular(8),
+        // A circle, matching the completion boxes it sits under: the add
+        // control is another mark in the same column, not a different kind
+        // of thing.
+        shape: BoxShape.circle,
         border: Border.all(color: palette.bentoBorder),
       ),
       child: Icon(icon, size: 14, color: palette.textSecondary),

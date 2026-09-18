@@ -1,6 +1,8 @@
 
+import 'dart:io' show Platform;
+
+import 'package:cupertino_native_better/cupertino_native_better.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/chat_session_providers.dart';
@@ -13,7 +15,6 @@ import 'milo/milo_assistant_screen.dart';
 import 'prayers/prayers_screen.dart';
 import 'responsive/breakpoints.dart';
 import 'settings/settings_screen.dart';
-import 'shell/liquid_glass_nav_bar.dart';
 import 'shell/milo_dock.dart';
 import 'shell/sidebar.dart';
 import 'shell/window_chrome.dart';
@@ -71,6 +72,55 @@ extension AppDestinationX on AppDestination {
     }
   }
 
+  /// The SF Symbol the native tab bar draws this destination with.
+  ///
+  /// Names, not glyphs: the bar is a `UITabBar` on the other side of a
+  /// platform channel, and it resolves these itself against whatever SF
+  /// Symbols the running iOS ships. That is the point of using it — the icon
+  /// set matches the rest of the system rather than approximating it, and it
+  /// picks up the platform's own weight, scaling and selected-state fill for
+  /// free.
+  ///
+  /// Only the compact iOS bar reads these. The sidebar and the Material bar
+  /// keep [icon], because Phosphor is what the rest of the app draws with.
+  String get sfSymbol {
+    switch (this) {
+      case AppDestination.home:
+        return 'house';
+      case AppDestination.tasks:
+        return 'checklist';
+      case AppDestination.study:
+        return 'books.vertical';
+      case AppDestination.food:
+        return 'fork.knife';
+      case AppDestination.prayers:
+        return 'moon.stars';
+      case AppDestination.settings:
+        return 'gearshape';
+    }
+  }
+
+  /// The filled counterpart, for the selected tab.
+  ///
+  /// `fork.knife` has no filled variant in SF Symbols, so it stands as it is
+  /// — the tint change carries the state there.
+  String get sfSymbolFilled {
+    switch (this) {
+      case AppDestination.home:
+        return 'house.fill';
+      case AppDestination.tasks:
+        return 'checklist';
+      case AppDestination.study:
+        return 'books.vertical.fill';
+      case AppDestination.food:
+        return 'fork.knife';
+      case AppDestination.prayers:
+        return 'moon.stars.fill';
+      case AppDestination.settings:
+        return 'gearshape.fill';
+    }
+  }
+
   /// The same glyph, heavier.
   ///
   /// The floating nav bar swaps to this on the selected destination. Weight
@@ -95,6 +145,23 @@ extension AppDestinationX on AppDestination {
     }
   }
 }
+
+/// Whether SF Symbol names will resolve to glyphs rather than to nothing.
+///
+/// Off Apple platforms the tab bar falls back to a Flutter `CupertinoTabBar`,
+/// and a `CNSymbol` handed to it has no font to come from — every tab renders
+/// an empty placeholder circle. So the Phosphor glyph is supplied instead, and
+/// the bar has icons everywhere.
+///
+/// Gated on `dart:io` rather than [ThemeData.platform], which is the rule
+/// everywhere else in this file and is documented at [useLiquidGlass]. It has
+/// to be, and the exception is the whole point: the package decides which of
+/// its two paths to take from `Platform.isIOS` itself, so a gate reading the
+/// theme would disagree with it exactly where the theme is faked — under
+/// `flutter_test`, and in `tool/tasks_preview.dart`, which forces the iOS look
+/// onto a Windows window. That disagreement is what puts the placeholders on
+/// screen.
+final bool _hasSFSymbols = Platform.isIOS || Platform.isMacOS;
 
 /// A way for anything under the shell to move to another destination.
 ///
@@ -177,13 +244,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   AppDestination _destination = AppDestination.home;
   SidebarMode _sidebarMode = SidebarMode.expanded;
 
-  /// Whether the pane under the capsule is being scrolled away from.
-  ///
-  /// A notifier rather than `setState`: this state's build creates the pane,
-  /// so rebuilding on every direction flip would rebuild the whole screen to
-  /// move one capsule. Only the capsule listens.
-  final ValueNotifier<bool> _navCollapsed = ValueNotifier<bool>(false);
-
   /// Handed to the compact pane as its [PrimaryScrollController], so tapping
   /// the tab you are already on can send it back to the top the way every
   /// iOS tab bar does.
@@ -193,6 +253,18 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// checks rather than assumes. A controller with two attached positions
   /// throws the moment anything reads `.position`.
   final ScrollController _paneScroll = ScrollController();
+
+  /// Which tab the bar should show as current.
+  ///
+  /// `settings` is a destination but not a tab — it opens from the header
+  /// gear — so `indexOf` returns -1 for it. The native bar takes an index and
+  /// has no "nothing selected" state, so that is clamped to Home rather than
+  /// passed on: a `UITabBar` handed -1 selects nothing and draws no
+  /// indicator at all.
+  int get _navIndex {
+    final int index = AppDestinationX.navItems.indexOf(_destination);
+    return index < 0 ? 0 : index;
+  }
 
   void _scrollToTop() {
     if (_paneScroll.positions.length != 1) return;
@@ -205,29 +277,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
-  /// Collapses the capsule on a downward drag and restores it on an upward
-  /// one, the way Apple's own floating bars behave.
-  ///
-  /// `depth == 0` keeps a horizontal chip row or a nested list inside a pane
-  /// from driving the bar — only the pane's outermost scrollable counts. The
-  /// notification is not consumed: anything else listening still sees it.
-  bool _onUserScroll(UserScrollNotification notification) {
-    if (notification.depth != 0) return false;
-    if (notification.metrics.axis != Axis.vertical) return false;
-    switch (notification.direction) {
-      case ScrollDirection.reverse:
-        _navCollapsed.value = true;
-      case ScrollDirection.forward:
-        _navCollapsed.value = false;
-      case ScrollDirection.idle:
-        break;
-    }
-    return false;
-  }
-
   @override
   void dispose() {
-    _navCollapsed.dispose();
     _paneScroll.dispose();
     super.dispose();
   }
@@ -239,7 +290,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       _scrollToTop();
       return;
     }
-    _navCollapsed.value = false;
     setState(() => _destination = destination);
   }
 
@@ -345,34 +395,52 @@ class _AppShellState extends ConsumerState<AppShell> {
                         ),
                       ],
                     )
-                  : NotificationListener<UserScrollNotification>(
-                      onNotification: _onUserScroll,
-                      // Only the compact pane. The rail layout has no tab to
-                      // re-tap, and giving an iPad's two-column body a shared
-                      // primary controller is how you end up with two
-                      // positions attached to one controller.
-                      child: PrimaryScrollController(
-                        controller: _paneScroll,
-                        child: AppNavigation(
-                          select: _select,
-                          child: revealedPaneFor(_destination),
-                        ),
+                  // Only the compact pane. The rail layout has no tab to
+                  // re-tap, and giving an iPad's two-column body a shared
+                  // primary controller is how you end up with two
+                  // positions attached to one controller.
+                  : PrimaryScrollController(
+                      controller: _paneScroll,
+                      child: AppNavigation(
+                        select: _select,
+                        child: revealedPaneFor(_destination),
                       ),
                     ),
             ),
           ),
-          // Lets the pill float over the panes rather than sitting in a strip
-          // below them. Scaffold then reports the pill's own footprint as the
+          // Lets the bar float over the panes rather than sitting in a strip
+          // below them. Scaffold then reports the bar's own footprint as the
           // body's bottom padding, which is what every pane reads to know how
-          // far to pad its scroll — no pane needs to know the pill's height.
+          // far to pad its scroll — no pane needs to know the bar's height.
           extendBody: context.useLiquidGlass,
           bottomNavigationBar: windowSize.usesNavigationRail
               ? null
               : context.useLiquidGlass
-              ? LiquidGlassNavBar(
-                  destination: _destination,
-                  onSelect: _select,
-                  collapsed: _navCollapsed,
+              ? CNTabBar(
+                  items: [
+                    for (final item in AppDestinationX.navItems)
+                      CNTabBarItem(
+                        label: item.label,
+                        icon: _hasSFSymbols ? CNSymbol(item.sfSymbol) : null,
+                        activeIcon: _hasSFSymbols
+                            ? CNSymbol(item.sfSymbolFilled)
+                            : null,
+                        // Phosphor stands in where SF Symbols do not exist.
+                        // The package renders `customIcon` itself, so this
+                        // path works on every platform; it just gives up the
+                        // system icon set where there is one to give up.
+                        customIcon: _hasSFSymbols ? null : item.icon,
+                        activeCustomIcon:
+                            _hasSFSymbols ? null : item.selectedIcon,
+                      ),
+                  ],
+                  // Clamped, because `settings` is reachable but is not a tab:
+                  // it opens from the header gear, and `indexOf` would hand
+                  // the bar a -1 and put it in no state at all.
+                  currentIndex: _navIndex,
+                  onTap: (index) =>
+                      _select(AppDestinationX.navItems[index]),
+                  tint: kPalette.accentBright,
                 )
               : _BottomNavBar(destination: _destination, onSelect: _select),
         );

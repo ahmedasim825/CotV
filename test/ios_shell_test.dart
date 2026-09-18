@@ -22,7 +22,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show BackdropFilterLayer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -51,13 +50,11 @@ import 'package:cotv/src/ui/home/widgets/focus_tasks_card.dart';
 import 'package:cotv/src/ui/home/widgets/milo_orb.dart';
 import 'package:cotv/src/ui/home/widgets/music_widget.dart';
 import 'package:cotv/src/ui/home/widgets/reminders_card.dart';
-import 'package:cotv/src/ui/components/liquid_glass.dart';
-import 'package:cotv/src/ui/shell/liquid_glass_nav_bar.dart';
+import 'package:cupertino_native_better/cupertino_native_better.dart';
 import 'package:cotv/src/ui/shell/milo_dock.dart';
 import 'package:cotv/src/ui/settings/settings_screen.dart';
 import 'package:cotv/src/ui/shell/sidebar.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
-import 'package:cotv/src/ui/widgets/ph_light_icons.dart';
 
 class _FakeSecurityService extends SecurityService {
   @override
@@ -250,71 +247,31 @@ void main() {
     });
   });
 
-  group('the nav pill', () {
+  group('the nav bar', () {
+    // `CNTabBar` is a platform view on a real iOS 26 device and a
+    // `CupertinoTabBar` everywhere else — including here, because the package
+    // gates on `Platform.isIOS`, which is false under `flutter_test` on this
+    // machine whatever `ThemeData.platform` says. So these exercise the
+    // fallback, and the native path can only be checked on a device.
+    //
+    // That is also why every finder below goes through `find.descendant` of
+    // the bar: labels like 'Tasks' appear inside panes too, and an unscoped
+    // `find.text` would match either.
+    Finder tab(String label) => find.descendant(
+          of: find.byType(CNTabBar),
+          matching: find.text(label),
+        );
+
     testWidgets('carries the five destinations and nothing else',
         (tester) async {
       await pumpApp(tester);
 
       for (final label in ['Home', 'Tasks', 'Study', 'Food', 'Prayers']) {
-        expect(find.byTooltip(label), findsOneWidget, reason: label);
+        expect(tab(label), findsOneWidget, reason: label);
       }
       // Settings moved to the header gear; Milo moved into the Home pane.
-      expect(find.byTooltip('Milo'), findsNothing);
-      expect(find.byIcon(PhLight.sparkle), findsNothing);
-    });
-
-    testWidgets('is glass, and keeps its own backdrop', (tester) async {
-      await pumpApp(tester);
-
-      // Non-vacuity first. This assertion is the whole reason the test is
-      // written this way round: the pill used to be a bare `BackdropFilter`,
-      // and a finder looking for one now matches nothing at all — so the
-      // ancestor check below would pass on an empty set and keep passing if
-      // the glass were deleted outright.
-      // Scoped to the capsule: the search field is control-layer glass too,
-      // so an unscoped finder would match two and this would fail for a
-      // reason that has nothing to do with the bar.
-      final glass = find.descendant(
-        of: find.byType(LiquidGlassNavBar),
-        matching: find.byType(LiquidGlass),
-      );
-      expect(glass, findsOneWidget);
-
-      // The pill's filter must not sit under HomeScreen's BackdropGroup:
-      // overlapping filters sharing a backdrop key render as though only one
-      // applied, and `extendBody` makes them overlap by definition.
-      expect(find.ancestor(of: glass, matching: find.byType(HomeScreen)),
-          findsNothing);
-
-      // And the property that actually enforces it. Every card on Home goes
-      // through `BackdropFilter.grouped`, so each of their layers carries the
-      // group's key; a backdrop layer with no key at all can only be the
-      // pill's.
-      final ungrouped = tester.layers
-          .whereType<BackdropFilterLayer>()
-          .where((layer) => layer.backdropKey == null);
-      expect(ungrouped, isNotEmpty);
-    });
-
-    testWidgets('floats inside the home-indicator strip rather than above it',
-        (tester) async {
-      await pumpApp(
-        tester,
-        viewPadding: const EdgeInsets.only(bottom: 34),
-      );
-
-      // The nav item fills the capsule's height, so its rect is the capsule's
-      // — and unlike a ClipRRect finder it cannot accidentally match a glass
-      // card's clip somewhere else in the tree.
-      final pill = tester.getRect(find.byTooltip('Home'));
-      final screenBottom = tester.getRect(find.byType(AppShell)).bottom;
-
-      // The design's 71pt capsule, less the 1pt the row is inset by at the
-      // top and bottom. Comfortably past the 44pt minimum, which is the part
-      // that actually matters.
-      expect(pill.height, 69);
-      // max(10, 34 - 12) = 22, plus that 1pt rim below the item.
-      expect(screenBottom - pill.bottom, closeTo(23, 0.5));
+      expect(tab('Settings'), findsNothing);
+      expect(tab('Milo'), findsNothing);
     });
 
     testWidgets('switching destinations still works', (tester) async {
@@ -322,7 +279,7 @@ void main() {
 
       expect(find.byType(HomeScreen), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Tasks'));
+      await tester.tap(tab('Tasks'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -330,82 +287,6 @@ void main() {
       // The Tasks pane's own day heading — always rendered, because the Today
       // section carries the inline add control even when it is empty.
       expect(find.text('Today'), findsWidgets);
-    });
-
-    testWidgets('leaves no Opacity between itself and its glass',
-        (tester) async {
-      await pumpApp(tester);
-
-      // The sibling of the HomeScreen guard above, for the other filter. A
-      // save layer anywhere over a backdrop filter leaves it sampling that
-      // buffer instead of the page, and the capsule is about to grow fades —
-      // which is why its glyphs tween colour rather than cross-fading.
-      expect(
-        find.descendant(
-          of: find.byType(LiquidGlassNavBar),
-          matching: find.byType(Opacity),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.descendant(
-          of: find.byType(LiquidGlassNavBar),
-          matching: find.byType(FadeTransition),
-        ),
-        findsNothing,
-      );
-    });
-
-    testWidgets('collapses on a downward scroll and comes back on an upward '
-        'one', (tester) async {
-      await pumpApp(tester, viewPadding: const EdgeInsets.only(bottom: 34));
-
-      double capsuleHeight() =>
-          tester.getRect(find.byTooltip('Home')).height;
-
-      final double resting = capsuleHeight();
-      expect(resting, 69);
-
-      await tester.fling(find.byType(HomeScreen), const Offset(0, -220), 900);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(capsuleHeight(), lessThan(resting));
-
-      await tester.fling(find.byType(HomeScreen), const Offset(0, 220), 900);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(capsuleHeight(), resting);
-    });
-
-    testWidgets('collapsing does not move the padding every pane reads',
-        (tester) async {
-      await pumpApp(tester, viewPadding: const EdgeInsets.only(bottom: 34));
-
-      double bodyPadding() => MediaQuery.paddingOf(
-            tester.element(
-              find
-                  .descendant(
-                    of: find.byType(AppShell),
-                    matching: find.byType(SafeArea),
-                  )
-                  .first,
-            ),
-          ).bottom;
-
-      // The whole reason the capsule shrinks inside a fixed box. Scaffold
-      // republishes the bar's measured height as body padding through a
-      // LayoutBuilder, so a footprint that moved mid-animation would rebuild
-      // every pane's subtree during layout, once a frame, and jerk anything
-      // pinned at its maximum scroll extent.
-      final double before = bodyPadding();
-
-      await tester.fling(find.byType(HomeScreen), const Offset(0, -220), 900);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 160));
-      expect(bodyPadding(), before, reason: 'mid-collapse');
-
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(bodyPadding(), before, reason: 'fully collapsed');
     });
 
     testWidgets('re-tapping the active tab sends the pane back to the top',
@@ -426,7 +307,7 @@ void main() {
 
       // The tab it is already on. Apple sends the list home rather than
       // rebuilding the pane you are already looking at.
-      await tester.tap(find.byTooltip('Home'));
+      await tester.tap(tab('Home'));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -443,17 +324,17 @@ void main() {
       // every destination and re-tap it, which is the sequence that would trip
       // it if two panes were ever mounted at once.
       for (final label in ['Home', 'Tasks', 'Study', 'Food', 'Prayers']) {
-        await tester.tap(find.byTooltip(label));
+        await tester.tap(tab(label));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 600));
-        await tester.tap(find.byTooltip(label));
+        await tester.tap(tab(label));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 600));
         expect(tester.takeException(), isNull, reason: label);
       }
     });
 
-    testWidgets('every pane clears the pill rather than scrolling under it',
+    testWidgets('every pane clears the bar rather than scrolling under it',
         (tester) async {
       await pumpApp(
         tester,
@@ -463,8 +344,7 @@ void main() {
       // Every pane reserves its bottom room out of `MediaQuery.paddingOf` —
       // three read it directly, and Prayers takes it through its own SafeArea.
       // All five therefore depend on one thing: that Scaffold reports the
-      // capsule's whole footprint there, which is what `extendBody` buys.
-      // Assert that number, not each pane's geometry.
+      // bar's whole footprint there, which is what `extendBody` buys.
       //
       // Read at the shell's own SafeArea, which sits directly under Scaffold's
       // body builder. Reading lower — at a Scrollable, say — gives zero:
@@ -481,11 +361,14 @@ void main() {
         ),
       ).bottom;
 
-      // The capsule's 71pt plus the 22pt it floats above the screen edge.
-      expect(bodyPadding, greaterThanOrEqualTo(93));
+      // No exact figure any more: the bar measures itself now, and on a real
+      // device it is a `UITabBar` whose height iOS decides. What has to hold
+      // is that the number is the bar's, not the home indicator's alone —
+      // anything at or under 34 would mean the footprint never reached here.
+      expect(bodyPadding, greaterThan(34));
 
       for (final label in ['Home', 'Tasks', 'Study', 'Food', 'Prayers']) {
-        await tester.tap(find.byTooltip(label));
+        await tester.tap(tab(label));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 600));
 

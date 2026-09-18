@@ -84,8 +84,6 @@ class LiquidGlass extends StatelessWidget {
     this.clipBorderRadius,
     this.fill,
     this.gradient,
-    this.rimGradient,
-    this.innerBottomGlow,
     this.blurSigma = 30,
     this.debugCalibrate = false,
   });
@@ -122,22 +120,6 @@ class LiquidGlass extends StatelessWidget {
   /// [fill] when both are given.
   final Gradient? gradient;
 
-  /// Overrides the rim stroke's own gradient.
-  ///
-  /// The default runs [AppPalette.rimLit] to [AppPalette.rimShade] top-leading
-  /// to bottom-trailing, which is the app's standing description of where the
-  /// light is. A surface passes its own only when it wants a different falloff
-  /// — a hotter catch on the lit corner, or a rim that fades out entirely
-  /// before the far one rather than settling on a dim floor.
-  final Gradient? rimGradient;
-
-  /// A highlight laid inside the bottom edge, under everything else.
-  ///
-  /// Light entering the top of a curved glass body leaves through the bottom
-  /// of it, so a real edge carries a second, softer catch down there that the
-  /// rim stroke alone cannot describe — the rim is a hairline on the boundary,
-  /// and this is a wash inside it. Null on every surface that does not ask.
-  final Gradient? innerBottomGlow;
 
   /// How far the backdrop is blurred before it is refracted.
   final double blurSigma;
@@ -169,12 +151,11 @@ class LiquidGlass extends StatelessWidget {
     final Widget surface = CustomPaint(
       foregroundPainter: _GradientRim(
         radius: clip,
-        gradient: rimGradient ??
-            LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [palette.rimLit, palette.rimShade],
-            ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [palette.rimLit, palette.rimShade],
+        ),
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -183,17 +164,7 @@ class LiquidGlass extends StatelessWidget {
           color: gradient == null ? effectiveFill : null,
           gradient: gradient,
         ),
-        // Between the body fill and the content: the glow is part of the
-        // material, so the glyphs sit over it rather than under it.
-        child: innerBottomGlow == null
-            ? child
-            : DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: clip,
-                  gradient: innerBottomGlow,
-                ),
-                child: child,
-              ),
+        child: child,
       ),
     );
 

@@ -70,6 +70,7 @@ dependencies:
   # the page rather than on it. Flutter-team package, no native side.
   palette_generator: ^0.3.3+7
   sqlite3: ^3.5.2
+  cupertino_native_better: ^1.6.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

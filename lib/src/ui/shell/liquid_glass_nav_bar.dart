@@ -342,10 +342,10 @@ class _Items extends StatelessWidget {
                   // at a glance, which is why this is a shape again.
                   //
                   // 22% and a 38% rim, up from `glassFill`/`glassBorder`'s
-                  // 8% and 25%. Both halves of that raise matter, and the
-                  // larger half is the bar going dark underneath: measured off
-                  // a screenshot, chip against bar went from 145 vs 41 to 158
-                  // vs 28. Most of the gain is the 28.
+                  // 8% and 25%. Measured off a screenshot, chip against bar
+                  // goes from 56 vs 43 to 80 vs 25 — a separation of 13
+                  // becoming one of 55. Both halves carry it: the chip comes
+                  // up and the bar goes down by roughly as much.
                   color: palette.textPrimary.withValues(alpha: 0.22),
                   border: Border.all(
                     color: palette.textPrimary.withValues(alpha: 0.38),

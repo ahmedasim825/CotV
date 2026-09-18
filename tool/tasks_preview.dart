@@ -220,10 +220,21 @@ class _PhoneFrame extends StatelessWidget {
           width: size.width,
           height: size.height,
           child: MediaQuery(
-            data: MediaQueryData(
+            // Copied from the ambient data rather than built fresh, so only
+            // the two fields this frame actually changes are changed.
+            //
+            // Building a `MediaQueryData()` here instead defaults
+            // `devicePixelRatio` to 1, and that is not cosmetic: `LiquidGlass`
+            // reads it to convert its own size into device pixels for the
+            // refraction shader, while the engine keeps handing that shader a
+            // texture measured in real ones. On a 150%-scaled display the two
+            // disagree by half the widget's width, the SDF rect lands that far
+            // to the right, and the nav pill renders with a hard vertical seam
+            // down the middle — a bug entirely of this harness's making, which
+            // cost an hour of hunting it in the shader.
+            data: MediaQuery.of(context).copyWith(
               size: size,
               padding: const EdgeInsets.only(top: 59, bottom: 34),
-              devicePixelRatio: 1,
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(44),

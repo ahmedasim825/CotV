@@ -441,18 +441,23 @@ class _AppShellState extends ConsumerState<AppShell> {
                   onTap: (index) =>
                       _select(AppDestinationX.navItems[index]),
                   tint: kPalette.accentBright,
-                  // 20, against the 24 a bare `CNSymbol` defaults to and the
+                  // 16, against the 24 a bare `CNSymbol` defaults to and the
                   // 25 the custom-icon path uses. Apple's 25pt figure is for
                   // the classic edge-to-edge tab bar; the iOS 26 floating one
-                  // is a shorter pill carrying the same glyph and label, and
-                  // at 24 the icons crowd the labels and leave the bar
-                  // looking packed.
+                  // is a shorter pill carrying the same glyph *and* a label in
+                  // the same height, so the glyph has to give up the room.
+                  //
+                  // Arrived at on device rather than by reasoning: 24 read as
+                  // packed, and so did 20 — measured off two screenshots, that
+                  // step only moved the glyph 2.3pt because the label below it
+                  // does not move. 16 is the first value where the glyph stops
+                  // dominating the label.
                   //
                   // Set here rather than per symbol on purpose: the bar-level
                   // value takes precedence over `CNSymbol.size`, so this is
                   // the one number that moves both the SF Symbol path and the
                   // Phosphor fallback together.
-                  iconSize: 20,
+                  iconSize: 16,
                 )
               : _BottomNavBar(destination: _destination, onSelect: _select),
         );

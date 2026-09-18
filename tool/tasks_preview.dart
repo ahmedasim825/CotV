@@ -7,9 +7,10 @@
 // this screen, because the Tasks pane is reached by tapping a nav item and its
 // interesting states — a populated Yesterday, a past section at 60%, an
 // overdue reminder — only exist once there is data behind them. So this
-// entrypoint skips the shell, seeds both lists in memory, and paints the pane
-// inside a fixed 393x852 frame so a screenshot lines up against the design
-// regardless of how large the desktop window is.
+// entrypoint seeds both lists in memory and paints the real shell — nav pill
+// included — inside a fixed 393x852 frame, so a screenshot lines up against
+// the design regardless of how large the desktop window is. Open it and tap
+// Tasks.
 //
 // **What this does and does not tell you.** The widgets, the palette, the
 // grouping and the layout are the real ones. The *typeface* is not: the SF Pro
@@ -18,10 +19,15 @@
 // whatever this machine's UI font is. Type has to be judged on a device or in
 // the simulator.
 //
-// Nothing here is reachable from the app. Seeding is in-memory, so it touches
-// no Hive box and cannot disturb the installed build's data.
+// Nothing here is reachable from the app. Tasks and reminders are seeded in
+// memory, over repository overrides, so neither list touches a box. The rest
+// of the shell does still need its boxes open — the study session it
+// reconciles on launch, the chat transcript Milo reads — so storage is
+// initialised under a preview subdirectory of its own, the way
+// `ios_preview.dart` does it, and cannot disturb the installed build's data.
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -31,10 +37,14 @@ import 'package:cotv/src/models/reminder.dart';
 import 'package:cotv/src/models/task.dart';
 import 'package:cotv/src/providers/clock_providers.dart';
 import 'package:cotv/src/providers/reminder_providers.dart';
+import 'package:cotv/src/providers/chat_session_providers.dart';
 import 'package:cotv/src/providers/task_providers.dart';
 import 'package:cotv/src/repositories/reminder_repository.dart';
 import 'package:cotv/src/repositories/task_repository.dart';
-import 'package:cotv/src/ui/tasks/task_list_view.dart';
+import 'package:cotv/src/storage/local_storage.dart';
+import 'package:cotv/src/providers/ambient_providers.dart';
+import 'package:cotv/src/ui/app_shell.dart';
+import 'package:cotv/src/ui/components/liquid_glass.dart';
 import 'package:cotv/src/ui/theme/app_theme.dart';
 import 'package:cotv/src/ui/widgets/orb_field_background.dart';
 
@@ -135,31 +145,52 @@ final _reminders = <Reminder>[
   ),
 ];
 
-void main() {
+Future<void> main() async {
   debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+  WidgetsFlutterBinding.ensureInitialized();
+  // Its own directory, so this can run while the installed build is open.
+  // Hive takes a file lock per box, and the second process to start dies on a
+  // locked box before it ever paints.
+  await initializeLocalStorage(subdirectory: 'tasks-preview');
+  final database = await bootstrapAppDatabase();
+  // Same compile-once-up-front as `main.dart`: the nav pill's refraction is
+  // half of what this screenshot is for, and a null program silently drops it
+  // back to a plain blur.
+  final program = await loadLiquidGlassProgram();
+
   runApp(
     ProviderScope(
       overrides: [
+        appDatabaseProvider.overrideWithValue(database),
         currentMinuteProvider.overrideWithValue(_now),
         taskRepositoryProvider
             .overrideWithValue(_MemoryTaskRepository(_tasks)),
         reminderRepositoryProvider
             .overrideWithValue(_MemoryReminderRepository(_reminders)),
       ],
-      child: const _PreviewApp(),
+      child: _PreviewApp(glassProgram: program),
     ),
   );
 }
 
-class _PreviewApp extends StatelessWidget {
-  const _PreviewApp();
+class _PreviewApp extends ConsumerWidget {
+  const _PreviewApp({this.glassProgram});
+
+  final ui.FragmentProgram? glassProgram;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final refract = ref.watch(liquidGlassRefractionProvider);
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const _PhoneFrame(child: TaskListView()),
+      // Mirrors `PrayerLockoutApp`'s builder, minus the `SecurityGate`: an
+      // app-lock prompt in front of a screenshot helps nobody.
+      home: LiquidGlassScope(
+        program: refract ? glassProgram : null,
+        child: const _PhoneFrame(child: AppShell()),
+      ),
     );
   }
 }
@@ -196,11 +227,12 @@ class _PhoneFrame extends StatelessWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(44),
-              child: Scaffold(
-                backgroundColor: palette.background,
-                body: OrbFieldBackground(
-                  child: SafeArea(bottom: false, child: child),
-                ),
+              // `AppShell` brings its own Scaffold and reads the bottom
+              // inset the nav pill republishes, so this only supplies the
+              // ground the pill floats over.
+              child: ColoredBox(
+                color: palette.background,
+                child: OrbFieldBackground(child: child),
               ),
             ),
           ),

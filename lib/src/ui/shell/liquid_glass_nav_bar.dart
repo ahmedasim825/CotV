@@ -186,78 +186,78 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
             constraints: const BoxConstraints(
               maxWidth: LiquidGlassNavBar.maxWidth,
             ),
-            child: DecoratedBox(
-              // Outside the glass, so the shadow falls on the page rather
-              // than being clipped away with the refraction.
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius),
-                // Two shadows, which is what actually reads as floating. A
-                // single soft one only ever looks like a smudge under the
-                // capsule: the wide ambient pass says the bar is well clear of
-                // the page, and the tight contact pass under it is what the
-                // eye uses to judge *how far*. One without the other reads as
-                // either pasted on or hovering in nowhere.
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.shadow,
-                    blurRadius: 32,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 12),
-                  ),
-                  BoxShadow(
-                    color: palette.shadowContact,
-                    blurRadius: 6,
-                    spreadRadius: -2,
-                    offset: const Offset(0, 2),
-                  ),
+            child: LiquidGlass(
+              radius: radius,
+              blurSigma: 15,
+              // The body is a lit top-leading corner falling to a shaded
+              // bottom-trailing one, and the far end is *darker than the
+              // page*, not lighter. That sign change is what separates glass
+              // from frost: a uniformly light fill is a sheet of plastic laid
+              // over the page, while a body that darkens as it turns away
+              // from the light is something the page is being seen through.
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  palette.textPrimary.withValues(alpha: 0.12),
+                  const Color(0xFF000000).withValues(alpha: 0.35),
                 ],
               ),
-              child: LiquidGlass(
-                radius: radius,
-                // Not the design file's Frost 4, deliberately. At Frost 4
-                // over a 2% fill the page stayed *legible* through the bar —
-                // you could read body text behind the glyphs — and the one
-                // thing Apple's material is built to guarantee is that a
-                // control stays readable over whatever scrolls beneath it.
-                // Enough blur that content behind reads as colour and
-                // movement, never as words.
-                blurSigma: 26,
-                // A vertical wash, 11% down to 3%, rather than the flat 12%
-                // this carried. Flat-and-light was the single thing that made
-                // the bar read as frosted plastic instead of glass: at a
-                // uniform 12% the page behind it dies, the gradient rim has
-                // only 23 points of white to separate itself from its own
-                // fill, and the selection chip — brighter again by 8 — has
-                // nowhere left to go.
-                //
-                // Averaged it is far more transparent than what it replaces,
-                // so the blur goes up to 26 to keep the guarantee the old
-                // comment was defending: content behind reads as colour and
-                // movement, never as words. Brightest along the top edge
-                // because that is where the rim is lit from, so the two agree
-                // about where the light is.
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    palette.textPrimary.withValues(alpha: 0.11),
-                    palette.textPrimary.withValues(alpha: 0.03),
-                  ],
-                ),
-                child: SizedBox(
-                  height: height,
-                  child: Padding(
-                    padding: const EdgeInsets.all(LiquidGlassNavBar.rim),
-                    child: _Items(
-                      destination: widget.destination,
-                      onSelect: widget.onSelect,
-                      chipIndex: lerpDouble(_fromIndex, _toIndex, _curvedSlide)!,
-                      // Uncurved on purpose: the squash should peak halfway
-                      // through the *journey*, not halfway through the eased
-                      // value, which arrives early and reads as a flinch.
-                      travel: _slide.value,
-                      collapse: _collapse.value,
-                    ),
+              // A specular catch rather than a fade. The default rim runs
+              // `rimLit` to `rimShade` across the whole diagonal, which
+              // describes a surface lit evenly from one side; a curved glass
+              // edge does not do that. It catches hard where the light
+              // strikes and is over almost at once — hence a bright 45% at
+              // the lit corner, down to 8% by 30% of the run, and nothing at
+              // all by the far one. The last stop is transparent, not a dim
+              // grey: a rim that never quite goes out is what reads as a
+              // drawn outline instead of a lit edge.
+              rimGradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: const [0.0, 0.3, 1.0],
+                colors: [
+                  palette.textPrimary.withValues(alpha: 0.45),
+                  palette.textPrimary.withValues(alpha: 0.08),
+                  palette.textPrimary.withValues(alpha: 0.0),
+                ],
+              ),
+              // Light that enters the top of a curved body leaves through the
+              // bottom of it. The rim stroke cannot say this — it is a
+              // hairline sitting on the boundary, and this is a wash rising
+              // off it into the glass. Weak on purpose: at the strength where
+              // you notice it as a highlight it has stopped being refraction
+              // and become a second border.
+              innerBottomGlow: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                stops: const [0.0, 0.18, 1.0],
+                colors: [
+                  palette.textPrimary.withValues(alpha: 0.10),
+                  palette.textPrimary.withValues(alpha: 0.02),
+                  palette.textPrimary.withValues(alpha: 0.0),
+                ],
+              ),
+              // The bar's own spec, not the shared `control` preset: that one
+              // carries `edgeDarken`, which lays a dark line just inside the
+              // top edge. Under the old light fill it read as depth; against
+              // a body that is already dark it reads as a bruise along the
+              // rim, directly under the specular that is supposed to be the
+              // brightest thing here.
+              spec: _navGlass,
+              child: SizedBox(
+                height: height,
+                child: Padding(
+                  padding: const EdgeInsets.all(LiquidGlassNavBar.rim),
+                  child: _Items(
+                    destination: widget.destination,
+                    onSelect: widget.onSelect,
+                    chipIndex: lerpDouble(_fromIndex, _toIndex, _curvedSlide)!,
+                    // Uncurved on purpose: the squash should peak halfway
+                    // through the *journey*, not halfway through the eased
+                    // value, which arrives early and reads as a flinch.
+                    travel: _slide.value,
+                    collapse: _collapse.value,
                   ),
                 ),
               ),
@@ -268,6 +268,23 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
     );
   }
 }
+
+/// [LiquidGlassSpec.control] with the edge shading taken out.
+///
+/// Everything else is the shared preset. Only `edgeDarken` changes, and only
+/// because this surface's body is dark to begin with — see the note at the
+/// call site.
+const LiquidGlassSpec _navGlass = LiquidGlassSpec(
+  edge: 0.20,
+  refraction: 0.20,
+  aberration: 0.015,
+  lightDirection: Offset(-1, -1),
+  specular: 0.45,
+  rimWidth: 0.30,
+  rimGain: 0.12,
+  specularPower: 6,
+  edgeDarken: 0,
+);
 
 /// The selection capsule and the row of glyphs that sits over it.
 class _Items extends StatelessWidget {
@@ -341,16 +358,23 @@ class _Items extends StatelessWidget {
                   // about avoiding. Colour alone did not carry the selection
                   // at a glance, which is why this is a shape again.
                   //
-                  // 22% and a 38% rim, up from `glassFill`/`glassBorder`'s
-                  // 8% and 25%. Measured off a screenshot, chip against bar
-                  // goes from 56 vs 43 to 80 vs 25 — a separation of 13
-                  // becoming one of 55. Both halves carry it: the chip comes
-                  // up and the bar goes down by roughly as much.
-                  color: palette.textPrimary.withValues(alpha: 0.22),
+                  // 18% over a 30% rim. Measured off a screenshot, chip
+                  // against bar goes from 56 vs 43 to 80 vs 25 — a separation
+                  // of 13 becoming one of 55. Both halves carry it: the chip
+                  // comes up and the bar goes down by roughly as much.
+                  color: palette.textPrimary.withValues(alpha: 0.18),
                   border: Border.all(
-                    color: palette.textPrimary.withValues(alpha: 0.38),
+                    color: palette.textPrimary.withValues(alpha: 0.30),
                   ),
-                  borderRadius: BorderRadius.circular(capsuleHeight / 2),
+                  // A squircle, not a stadium. At the full height/2 the chip
+                  // is a lozenge and reads as a pill inside a pill; 24 keeps
+                  // the corners obviously round while letting the sides run
+                  // straight, which is what the reference draws. Clamped so
+                  // the collapsed chip — 40 tall, so half is 20 — cannot ask
+                  // for a corner larger than it is.
+                  borderRadius: BorderRadius.circular(
+                    math.min(24, capsuleHeight / 2),
+                  ),
                 ),
               ),
             ),
@@ -417,11 +441,17 @@ class _NavItem extends StatelessWidget {
             // of the page — see LiquidGlass's doc.
             child: TweenAnimationBuilder<Color?>(
               tween: ColorTween(
-                // White at 72% unselected, not `textMuted`. #A4A4A4 was chosen
-                // against the ground; over glass it is grey on grey, and the
-                // reference keeps its unselected glyphs close to white.
+                // Both ends white now. Unselected sits at 72% — #A4A4A4 was
+                // chosen against the ground and over glass it is grey on
+                // grey — and selected goes to full.
+                //
+                // Selected was `accentBright`, and dropping the hue is the
+                // point: in the reference nothing about the selected item is
+                // a different colour. The chip says where you are and the
+                // weight says it again, which leaves the accent free to mean
+                // something everywhere else in the app.
                 end: isSelected
-                    ? palette.accentBright
+                    ? palette.textPrimary
                     : palette.textPrimary.withValues(alpha: 0.72),
               ),
               duration: context.motion.fast,

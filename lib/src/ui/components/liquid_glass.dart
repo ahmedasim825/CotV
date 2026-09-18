@@ -84,6 +84,8 @@ class LiquidGlass extends StatelessWidget {
     this.clipBorderRadius,
     this.fill,
     this.gradient,
+    this.rimGradient,
+    this.innerBottomGlow,
     this.blurSigma = 30,
     this.debugCalibrate = false,
   });
@@ -120,6 +122,23 @@ class LiquidGlass extends StatelessWidget {
   /// [fill] when both are given.
   final Gradient? gradient;
 
+  /// Overrides the rim stroke's own gradient.
+  ///
+  /// The default runs [AppPalette.rimLit] to [AppPalette.rimShade] top-leading
+  /// to bottom-trailing, which is the app's standing description of where the
+  /// light is. A surface passes its own only when it wants a different falloff
+  /// — a hotter catch on the lit corner, or a rim that fades out entirely
+  /// before the far one rather than settling on a dim floor.
+  final Gradient? rimGradient;
+
+  /// A highlight laid inside the bottom edge, under everything else.
+  ///
+  /// Light entering the top of a curved glass body leaves through the bottom
+  /// of it, so a real edge carries a second, softer catch down there that the
+  /// rim stroke alone cannot describe — the rim is a hairline on the boundary,
+  /// and this is a wash inside it. Null on every surface that does not ask.
+  final Gradient? innerBottomGlow;
+
   /// How far the backdrop is blurred before it is refracted.
   final double blurSigma;
 
@@ -150,8 +169,12 @@ class LiquidGlass extends StatelessWidget {
     final Widget surface = CustomPaint(
       foregroundPainter: _GradientRim(
         radius: clip,
-        from: palette.rimLit,
-        to: palette.rimShade,
+        gradient: rimGradient ??
+            LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [palette.rimLit, palette.rimShade],
+            ),
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -160,7 +183,17 @@ class LiquidGlass extends StatelessWidget {
           color: gradient == null ? effectiveFill : null,
           gradient: gradient,
         ),
-        child: child,
+        // Between the body fill and the content: the glow is part of the
+        // material, so the glyphs sit over it rather than under it.
+        child: innerBottomGlow == null
+            ? child
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: clip,
+                  gradient: innerBottomGlow,
+                ),
+                child: child,
+              ),
       ),
     );
 
@@ -621,15 +654,15 @@ class _RenderLiquidGlassBackdrop extends RenderProxyBox {
 /// un-inset stroke loses its outer half and reads as a half-width, half-bright
 /// line.
 class _GradientRim extends CustomPainter {
-  const _GradientRim({
-    required this.radius,
-    required this.from,
-    required this.to,
-  });
+  const _GradientRim({required this.radius, required this.gradient});
 
   final BorderRadius radius;
-  final Color from;
-  final Color to;
+
+  /// Whatever the surface wants laid along its edge. A full [Gradient] rather
+  /// than two colours, so a caller can place its own stops — a specular catch
+  /// that is over by 30% of the run does not survive being expressed as a
+  /// straight two-colour fade.
+  final Gradient gradient;
 
   /// Apple's rim is a hairline at any size — it does not thicken with the
   /// surface, which is part of why the glass reads as thin.
@@ -647,15 +680,11 @@ class _GradientRim extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = width
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [from, to],
-        ).createShader(rect),
+        ..shader = gradient.createShader(rect),
     );
   }
 
   @override
   bool shouldRepaint(_GradientRim old) =>
-      old.radius != radius || old.from != from || old.to != to;
+      old.radius != radius || old.gradient != gradient;
 }

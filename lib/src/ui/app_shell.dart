@@ -70,6 +70,30 @@ extension AppDestinationX on AppDestination {
         return PhLight.gear;
     }
   }
+
+  /// The same glyph, heavier.
+  ///
+  /// The floating nav bar swaps to this on the selected destination. Weight
+  /// against outline is how the reference material marks selection, and it is
+  /// the half that survives when the chip behind it is competing with the
+  /// bar's own tint — a hue change alone reads as a recolour rather than as a
+  /// position. See [PhBold] for why this is Bold and not Fill.
+  IconData get selectedIcon {
+    switch (this) {
+      case AppDestination.home:
+        return PhBold.house;
+      case AppDestination.tasks:
+        return PhBold.listChecks;
+      case AppDestination.study:
+        return PhBold.books;
+      case AppDestination.food:
+        return PhBold.bowlFood;
+      case AppDestination.prayers:
+        return PhBold.starAndCrescent;
+      case AppDestination.settings:
+        return PhBold.gear;
+    }
+  }
 }
 
 /// A way for anything under the shell to move to another destination.

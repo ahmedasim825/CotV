@@ -221,11 +221,29 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
                 // control stays readable over whatever scrolls beneath it.
                 // Enough blur that content behind reads as colour and
                 // movement, never as words.
-                blurSigma: 20,
-                // 12%, against the design's 2%, for the same reason. Flat,
-                // not a gradient: the blur separates the bar from the page
-                // now, so the fill does not have to.
-                fill: palette.textPrimary.withValues(alpha: 0.12),
+                blurSigma: 26,
+                // A vertical wash, 11% down to 3%, rather than the flat 12%
+                // this carried. Flat-and-light was the single thing that made
+                // the bar read as frosted plastic instead of glass: at a
+                // uniform 12% the page behind it dies, the gradient rim has
+                // only 23 points of white to separate itself from its own
+                // fill, and the selection chip — brighter again by 8 — has
+                // nowhere left to go.
+                //
+                // Averaged it is far more transparent than what it replaces,
+                // so the blur goes up to 26 to keep the guarantee the old
+                // comment was defending: content behind reads as colour and
+                // movement, never as words. Brightest along the top edge
+                // because that is where the rim is lit from, so the two agree
+                // about where the light is.
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    palette.textPrimary.withValues(alpha: 0.11),
+                    palette.textPrimary.withValues(alpha: 0.03),
+                  ],
+                ),
                 child: SizedBox(
                   height: height,
                   child: Padding(
@@ -322,8 +340,16 @@ class _Items extends StatelessWidget {
                   // glass is the thing Apple's own guidance is most explicit
                   // about avoiding. Colour alone did not carry the selection
                   // at a glance, which is why this is a shape again.
-                  color: palette.glassFill,
-                  border: Border.all(color: palette.glassBorder),
+                  //
+                  // 22% and a 38% rim, up from `glassFill`/`glassBorder`'s
+                  // 8% and 25%. Both halves of that raise matter, and the
+                  // larger half is the bar going dark underneath: measured off
+                  // a screenshot, chip against bar went from 145 vs 41 to 158
+                  // vs 28. Most of the gain is the 28.
+                  color: palette.textPrimary.withValues(alpha: 0.22),
+                  border: Border.all(
+                    color: palette.textPrimary.withValues(alpha: 0.38),
+                  ),
                   borderRadius: BorderRadius.circular(capsuleHeight / 2),
                 ),
               ),
@@ -391,12 +417,21 @@ class _NavItem extends StatelessWidget {
             // of the page — see LiquidGlass's doc.
             child: TweenAnimationBuilder<Color?>(
               tween: ColorTween(
-                end: isSelected ? palette.accentBright : palette.textMuted,
+                // White at 72% unselected, not `textMuted`. #A4A4A4 was chosen
+                // against the ground; over glass it is grey on grey, and the
+                // reference keeps its unselected glyphs close to white.
+                end: isSelected
+                    ? palette.accentBright
+                    : palette.textPrimary.withValues(alpha: 0.72),
               ),
               duration: context.motion.fast,
               curve: AppMotion.spring,
               builder: (context, colour, _) => Icon(
-                destination.icon,
+                // Heavier when selected. Swapped rather than tweened: two
+                // families cannot interpolate, and a cross-fade between them
+                // would need an Opacity layer, which is exactly what must not
+                // appear above the glass.
+                isSelected ? destination.selectedIcon : destination.icon,
                 // Sized to the 71pt bar rather than the 56pt one it replaced.
                 size: 26,
                 color: colour,

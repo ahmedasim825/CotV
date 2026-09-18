@@ -624,6 +624,45 @@ class PhBold {
   static const String _family = 'PhosphorBold';
   static const String _package = 'phosphor_flutter';
 
+  // The five nav destinations plus settings. The floating bar swaps the
+  // selected glyph to these. Weight, not hue, is what marks selection in the
+  // reference material.
+  //
+  // Bold rather than Fill, which is the obvious choice and the wrong one:
+  // Fill solidifies the counters as well as the strokes. `house` survives
+  // that; `listChecks` becomes a filled rectangle with no checklist left in
+  // it, and `books` and `bowlFood` go the same way.
+  static const IconData house = IconData(
+    0xe2c2,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
+  static const IconData listChecks = IconData(
+    0xeadc,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
+  static const IconData books = IconData(
+    0xe758,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
+  static const IconData bowlFood = IconData(
+    0xeaa4,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
+  static const IconData starAndCrescent = IconData(
+    0xecf4,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
+  static const IconData gear = IconData(
+    0xe270,
+    fontFamily: _family,
+    fontPackage: _package,
+  );
+
   static const IconData clockCounterClockwise = IconData(
     0xe1a0,
     fontFamily: _family,

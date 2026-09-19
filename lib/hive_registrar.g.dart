@@ -19,7 +19,9 @@ extension HiveRegistrar on HiveInterface {
     registerAdapter(StudyLogAdapter());
     registerAdapter(SubjectAdapter());
     registerAdapter(TaskAdapter());
+    registerAdapter(TaskEarlyReminderAdapter());
     registerAdapter(TaskPriorityAdapter());
+    registerAdapter(TaskRepeatAdapter());
     registerAdapter(UserSettingsAdapter());
   }
 }
@@ -32,7 +34,9 @@ extension IsolatedHiveRegistrar on IsolatedHiveInterface {
     registerAdapter(StudyLogAdapter());
     registerAdapter(SubjectAdapter());
     registerAdapter(TaskAdapter());
+    registerAdapter(TaskEarlyReminderAdapter());
     registerAdapter(TaskPriorityAdapter());
+    registerAdapter(TaskRepeatAdapter());
     registerAdapter(UserSettingsAdapter());
   }
 }

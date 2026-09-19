@@ -20,8 +20,50 @@ void main() {
     // repoint existing rows. If one of these lists changes, the Postgres
     // column's contents change meaning and the migration needs a data fix.
     test('task priority', () {
+      // `none` is declared first because the picker lists it first; its
+      // @HiveField is 3, so no stored byte changed meaning when it landed.
       expect(TaskPriority.values.map((p) => p.name).toList(),
-          ['low', 'medium', 'high']);
+          ['none', 'low', 'medium', 'high']);
+    });
+
+    test('repeat rule', () {
+      expect(TaskRepeat.values.map((r) => r.name).toList(), [
+        'never',
+        'hourly',
+        'daily',
+        'weekdays',
+        'weekends',
+        'weekly',
+        'biweekly',
+        'monthly',
+        'everyThreeMonths',
+        'everySixMonths',
+        'yearly',
+      ]);
+    });
+
+    test('early reminder', () {
+      expect(TaskEarlyReminder.values.map((e) => e.name).toList(), [
+        'never',
+        'oneDay',
+        'twoDays',
+        'oneWeek',
+        'twoWeeks',
+        'oneMonth',
+        'threeMonths',
+        'sixMonths',
+      ]);
+    });
+
+    test('an unrecognised schedule falls back to doing nothing', () {
+      // Repeating on a rule this build cannot honour would be worse than not
+      // repeating, so both fall to `never` rather than to a guess.
+      final row = _taskRow({
+        'repeat_rule': 'every_third_tuesday',
+        'early_reminder': 'a_fortnight_and_a_bit',
+      });
+      expect(taskFromRow(row).repeat, TaskRepeat.never);
+      expect(taskFromRow(row).earlyReminder, TaskEarlyReminder.never);
     });
 
 
@@ -44,6 +86,10 @@ void main() {
         priority: TaskPriority.high,
         createdAt: DateTime(2026, 9, 1, 8),
         hasReminder: true,
+        isStudy: true,
+        subjectId: 's1',
+        repeat: TaskRepeat.weekly,
+        earlyReminder: TaskEarlyReminder.twoDays,
       ).stampUpdated(1700);
 
       final back = taskFromRow(_asServerRow(taskToRow(task)));
@@ -57,6 +103,10 @@ void main() {
       expect(back.priority, TaskPriority.high);
       expect(back.createdAt, DateTime(2026, 9, 1, 8));
       expect(back.hasReminder, isTrue);
+      expect(back.isStudy, isTrue);
+      expect(back.subjectId, 's1');
+      expect(back.repeat, TaskRepeat.weekly);
+      expect(back.earlyReminder, TaskEarlyReminder.twoDays);
       expect(back.updatedAtMillis, 1700);
     });
 

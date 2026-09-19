@@ -303,6 +303,13 @@ Map<String, Object?> taskToRow(Task task) => {
       'priority': task.priority.name,
       'created_at': _instant(task.createdAt),
       'has_reminder': task.hasReminder,
+      'is_study': task.isStudy,
+      'subject_id': task.subjectId,
+      // Names rather than indices, for the reason the priority column above
+      // documents: reordering an enum must not re-point rows the server
+      // already holds.
+      'repeat_rule': task.repeat.name,
+      'early_reminder': task.earlyReminder.name,
       ..._syncColumns(task.updatedAtMillis, task.isDeleted),
     };
 
@@ -318,6 +325,10 @@ Task taskFromRow(Map<String, dynamic> row) {
     priority: _priority(row['priority'] as String?),
     createdAt: _dateTime(row['created_at']),
     hasReminder: (row['has_reminder'] as bool?) ?? false,
+    isStudy: (row['is_study'] as bool?) ?? false,
+    subjectId: row['subject_id'] as String?,
+    repeat: _repeat(row['repeat_rule'] as String?),
+    earlyReminder: _earlyReminder(row['early_reminder'] as String?),
     updatedAtMillis: millis,
     isDeleted: (row['deleted'] as bool?) ?? false,
     syncedAtMillis: millis,
@@ -474,4 +485,20 @@ TaskPriority _priority(String? name) {
     if (value.name == name) return value;
   }
   return TaskPriority.medium;
+}
+
+TaskRepeat _repeat(String? name) {
+  for (final value in TaskRepeat.values) {
+    if (value.name == name) return value;
+  }
+  // A rule this build does not know is a rule it cannot honour, and silently
+  // repeating on a schedule nobody chose is worse than not repeating.
+  return TaskRepeat.never;
+}
+
+TaskEarlyReminder _earlyReminder(String? name) {
+  for (final value in TaskEarlyReminder.values) {
+    if (value.name == name) return value;
+  }
+  return TaskEarlyReminder.never;
 }

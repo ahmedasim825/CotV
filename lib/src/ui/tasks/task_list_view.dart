@@ -3,13 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/day_groups.dart';
+import '../../models/subject.dart';
 import '../../models/task.dart';
 import '../../models/task_list_entry.dart';
 import '../../models/task_list_filter.dart';
 import '../../providers/clock_providers.dart';
 import '../../providers/reminder_providers.dart';
+import '../../providers/study_providers.dart';
 import '../../providers/task_providers.dart';
 import '../components/components.dart';
+import '../study/subject_colors.dart';
 import '../format/time_format.dart';
 import '../responsive/breakpoints.dart';
 import '../theme/app_theme.dart';
@@ -153,7 +156,7 @@ class _Sections extends ConsumerWidget {
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
         padding,
-        0,
+        16,
         padding,
         // Clears the nav bar, the home indicator, and the keyboard when the
         // inline add has focus — without the inset the field would open
@@ -259,10 +262,21 @@ class _Sections extends ConsumerWidget {
     required bool isReminder,
     required DateTime? due,
   }) {
+    // Resolved here rather than carried on the entry: a subject purged while
+    // the list is on screen should stop tinting its tasks on the next frame,
+    // and the merge that built the entry has no view of the subject box.
+    final subjectId = entry.subjectId;
+    final subject = subjectId == null
+        ? null
+        : (ref.watch(subjectListProvider).value ?? const <Subject>[])
+              .where((s) => s.id == subjectId)
+              .firstOrNull;
+
     return CheckableRow(
       title: entry.title,
       isCompleted: entry.isCompleted,
       priority: entry.priority,
+      subjectColor: subject == null ? null : subjectColor(subject.colorValue),
       // The one thing separating the two kinds on screen. A task's due date is
       // carried by the section it sits in; a reminder's exact moment is the
       // point of it, so it gets a line of its own.

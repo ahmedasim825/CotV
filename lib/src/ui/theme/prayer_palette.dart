@@ -48,6 +48,12 @@ extension PrayerPaletteX on AppPalette {
   /// restyling every failure state and every secondary accent with it.
   Color priorityColor(TaskPriority priority) {
     switch (priority) {
+      case TaskPriority.none:
+        // No token of its own, because none has no colour identity: every
+        // surface that draws a priority draws nothing at all for this one.
+        // The muted grey is what a caller gets if it ignores that and paints
+        // anyway.
+        return textMuted;
       case TaskPriority.high:
         return priorityHigh;
       case TaskPriority.medium:

@@ -74,11 +74,10 @@ Future<Task?> showNewTaskSheet(
 /// longer does: its design arrived, so it is set and stored like any other
 /// field.
 ///
-/// Url, Study and the subject under it are the other way round: they are on
-/// screen and they are **not stored**, because [Task] has a field for none of
-/// them. Toggling Study, picking a subject, saving and reopening shows it off
-/// and empty again. That is a lie the sheet tells on purpose, for one design
-/// pass, and it ends when the fields land.
+/// Url, and the Lists / Subtasks / Image rows at the foot of the sheet, are the
+/// other way round: they are on screen and they are **not stored**, because
+/// [Task] has a field for none of them. Study, its subject, repeat and the
+/// early reminder used to sit here with them and no longer do.
 class NewTaskSheet extends ConsumerStatefulWidget {
   const NewTaskSheet({
     super.key,
@@ -109,13 +108,15 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
 
   /// Not persisted — see the class doc.
   final TextEditingController _url = TextEditingController();
-  bool _isStudy = false;
-  Subject? _subject;
+  late bool _isStudy;
+  late String? _subjectId;
 
   /// Back in the sheet now that its design has landed, and stored --
   /// unlike Study, Subject and Url, [Task] has carried a priority all
   /// along.
   late TaskPriority _priority;
+  late TaskRepeat _repeat;
+  late TaskEarlyReminder _earlyReminder;
 
   final _studySwitch = CNSwitchController();
   final _dateSwitch = CNSwitchController();
@@ -158,7 +159,11 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
     );
     _notes = TextEditingController(text: existing?.description ?? '');
 
-    _priority = existing?.priority ?? TaskPriority.medium;
+    _isStudy = existing?.isStudy ?? false;
+    _subjectId = existing?.subjectId;
+    _priority = existing?.priority ?? TaskPriority.none;
+    _repeat = existing?.repeat ?? TaskRepeat.never;
+    _earlyReminder = existing?.earlyReminder ?? TaskEarlyReminder.never;
     _dateEnabled = due != null;
     // Midnight is how a date with no time of day is stored — the model carries
     // one nullable due date, not a date and a time — and `formatDueLabel` has
@@ -248,6 +253,10 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
         description: notes,
         dueDate: due,
         priority: _priority,
+        isStudy: _isStudy,
+        subjectId: _isStudy ? _subjectId : null,
+        repeat: _repeat,
+        earlyReminder: _earlyReminder,
         // A task with a moment on it is one worth being told about; a task
         // with only a day is not, and firing at midnight for it would be
         // worse than not firing at all.
@@ -261,6 +270,11 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
         dueDate: due,
         clearDueDate: due == null,
         priority: _priority,
+        isStudy: _isStudy,
+        subjectId: _isStudy ? _subjectId : null,
+        clearSubject: !_isStudy || _subjectId == null,
+        repeat: _repeat,
+        earlyReminder: _earlyReminder,
         hasReminder: _timeEnabled,
       );
       await notifier.updateTask(saved);
@@ -413,7 +427,7 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
                     _isStudy = value;
                     // A subject with the study flag off would be invisible
                     // state the sheet could still hand to a save.
-                    if (!value) _subject = null;
+                    if (!value) _subjectId = null;
                   }),
                 ),
                 if (_isStudy) _subjectRow(),
@@ -481,8 +495,30 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
                       : null,
                 ),
                 if (_timeEnabled && _wheelOpen) _timeWheel(),
+                _repeatRow(),
+                _earlyReminderRow(),
               ],
             ),
+          ),
+          const SizedBox(height: 14),
+          _FieldBox(
+            children: [
+              _LinkRow(
+                icon: PhLight.listChecks,
+                symbol: 'checklist',
+                label: 'Lists',
+              ),
+              _LinkRow(
+                icon: PhLight.listBullets,
+                symbol: 'list.bullet.indent',
+                label: 'Subtasks',
+              ),
+              _LinkRow(
+                icon: PhLight.imageSquare,
+                symbol: 'photo',
+                label: 'Image',
+              ),
+            ],
           ),
         ],
       ),
@@ -490,15 +526,36 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
   }
 
   /// A label at the leading edge with a [PillDropdown] at the trailing one.
-  Widget _pickerRow({required String label, required Widget control}) {
+  ///
+  /// [subordinate] draws the label smaller and muted, for the two rows that
+  /// hang off the Study toggle rather than standing beside it.
+  Widget _pickerRow({
+    required String label,
+    required Widget control,
+    IconData? icon,
+    String? symbol,
+    bool subordinate = false,
+  }) {
+    final palette = context.palette;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 9, 12, 9),
       child: Row(
         children: [
+          if (icon != null && symbol != null) ...[
+            _rowIcon(icon, symbol, palette),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Text(
               label,
-              style: context.typography.ui(size: 16, weight: FontWeight.w500),
+              style: subordinate
+                  ? context.typography.ui(
+                      size: 13,
+                      weight: FontWeight.w400,
+                      color: palette.textMuted,
+                    )
+                  : context.typography.ui(size: 16, weight: FontWeight.w500),
             ),
           ),
           control,
@@ -507,18 +564,113 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
     );
   }
 
-  /// The Study box's subject row. Chosen and shown, then dropped on save --
-  /// see the class doc.
+  /// The SF Symbol where one resolves, the Phosphor stand-in where it does
+  /// not. Same gate and same reasoning as [_ToggleRow]'s own icon.
+  Widget _rowIcon(IconData glyph, String symbol, AppPalette palette) {
+    if (hasSFSymbols) {
+      return CNIcon(
+        symbol: CNSymbol(symbol, size: 17, color: palette.textMuted),
+      );
+    }
+    return Icon(glyph, size: 17, color: palette.textMuted);
+  }
+
+  /// One exclamation per step of priority, in its own hue — the same mark the
+  /// list row draws ahead of a title.
+  Widget? _priorityMarks(TaskPriority priority) {
+    final count = switch (priority) {
+      TaskPriority.none => 0,
+      TaskPriority.low => 1,
+      TaskPriority.medium => 2,
+      TaskPriority.high => 3,
+    };
+    if (count == 0) return null;
+
+    return Text(
+      '!' * count,
+      style: context.typography.ui(
+        size: 15,
+        weight: FontWeight.w700,
+        color: context.palette.priorityColor(priority),
+      ),
+    );
+  }
+
+  /// What the native menu marks a priority with, since it takes a symbol name
+  /// and not a widget.
+  String? _prioritySymbol(TaskPriority priority) => switch (priority) {
+    TaskPriority.none => null,
+    TaskPriority.low => 'exclamationmark',
+    TaskPriority.medium => 'exclamationmark.2',
+    TaskPriority.high => 'exclamationmark.3',
+  };
+
+  Widget _repeatRow() {
+    return _pickerRow(
+      label: 'Repeat',
+      icon: PhLight.repeat,
+      symbol: 'repeat',
+      control: PillDropdown<TaskRepeat>(
+        semanticLabel: 'Repeat',
+        selected: _repeat,
+        options: [
+          for (final repeat in TaskRepeat.values)
+            PillOption(
+              value: repeat,
+              label: repeat.label,
+              dividerAfter: repeat == TaskRepeat.never,
+            ),
+          _customEntry(_repeat),
+        ],
+        onSelected: (repeat) => setState(() => _repeat = repeat),
+      ),
+    );
+  }
+
+  Widget _earlyReminderRow() {
+    return _pickerRow(
+      label: 'Early Reminder',
+      icon: PhLight.bellSimple,
+      symbol: 'bell',
+      control: PillDropdown<TaskEarlyReminder>(
+        semanticLabel: 'Early Reminder',
+        selected: _earlyReminder,
+        options: [
+          for (final early in TaskEarlyReminder.values)
+            PillOption(
+              value: early,
+              label: early.label,
+              dividerAfter: early == TaskEarlyReminder.never,
+            ),
+          _customEntry(_earlyReminder),
+        ],
+        onSelected: (early) => setState(() => _earlyReminder = early),
+      ),
+    );
+  }
+
+  /// The `Custom` entry both schedule menus end with.
+  ///
+  /// Inert, and on screen anyway: the picker behind it has not been designed,
+  /// and the control is here first so the menu's shape is settled before that
+  /// lands — the same reason the info button sat inert before this sheet did.
+  /// Its value is never read; [PillDropdown] skips inert entries when it
+  /// resolves what the pill should say.
+  PillOption<T> _customEntry<T>(T current) =>
+      PillOption(value: current, label: 'Custom', inert: true);
+
+  /// The Study box's subject row.
   Widget _subjectRow() {
     final subjects = ref.watch(subjectListProvider).value ?? const <Subject>[];
-    // A subject deleted while the sheet is open stops matching, and the
-    // control falls back to None rather than naming a row that is gone.
+    // A subject purged while the sheet is open stops matching, and the control
+    // falls back to None rather than naming a row that is gone.
     final current = subjects
-        .where((subject) => subject.id == _subject?.id)
+        .where((subject) => subject.id == _subjectId)
         .firstOrNull;
 
     return _pickerRow(
       label: 'Subject',
+      subordinate: true,
       control: PillDropdown<String?>(
         semanticLabel: 'Subject',
         selected: current?.id,
@@ -533,9 +685,7 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
               color: subjectColor(subject.colorValue),
             ),
         ],
-        onSelected: (id) => setState(() {
-          _subject = subjects.where((s) => s.id == id).firstOrNull;
-        }),
+        onSelected: (id) => setState(() => _subjectId = id),
       ),
     );
   }
@@ -543,6 +693,7 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
   Widget _priorityRow() {
     return _pickerRow(
       label: 'Priority',
+      subordinate: true,
       control: PillDropdown<TaskPriority>(
         semanticLabel: 'Priority',
         selected: _priority,
@@ -554,7 +705,14 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
             PillOption(
               value: priority,
               label: priority.label,
-              color: context.palette.priorityColor(priority),
+              color: priority == TaskPriority.none
+                  ? null
+                  : context.palette.priorityColor(priority),
+              leading: _priorityMarks(priority),
+              symbol: _prioritySymbol(priority),
+              // None is its own group: it is the absence of a priority, not
+              // the quietest one.
+              dividerAfter: priority == TaskPriority.none,
             ),
         ],
         onSelected: (priority) => setState(() => _priority = priority),
@@ -600,6 +758,59 @@ class _NewTaskSheetState extends ConsumerState<NewTaskSheet> {
   String _dateLabel() =>
       relativeDayName(startOfDay(_date), startOfDay(DateTime.now())) ??
       formatShortDate(_date);
+}
+
+/// A row that only leads somewhere: an icon, a label and a chevron.
+///
+/// All three are **inert**. Lists, Subtasks and Image have no screens behind
+/// them yet and no field on [Task] to write to; they are drawn now so the
+/// sheet's shape is settled before those land, which is the same reason the
+/// info button on the tasks list sat inert before this sheet existed.
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({
+    required this.icon,
+    required this.symbol,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String symbol;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          children: [
+            if (hasSFSymbols)
+              CNIcon(
+                symbol: CNSymbol(symbol, size: 17, color: palette.textMuted),
+              )
+            else
+              Icon(icon, size: 17, color: palette.textMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: context.typography.ui(size: 16, weight: FontWeight.w500),
+              ),
+            ),
+            Icon(
+              PhLight.caretRight,
+              size: 14,
+              color: palette.textPrimary.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// One of the two circles in the header.

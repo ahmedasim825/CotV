@@ -24,6 +24,7 @@ class TaskListEntry {
     required this.priority,
     required this.dueAt,
     required this.bucketDate,
+    this.subjectId,
   });
 
   /// Unique across both kinds, so a widget key built from it cannot collide.
@@ -38,6 +39,13 @@ class TaskListEntry {
   final TaskListKind kind;
   final bool isCompleted;
   final TaskPriority priority;
+
+  /// The subject a study task is filed under, or null.
+  ///
+  /// Carried on the entry rather than looked up per row, so building the list
+  /// stays a pure function of the two boxes. Always null for a reminder: a
+  /// reminder is a moment, and a moment has no subject.
+  final String? subjectId;
 
   /// When this is due, or null for a task that carries no due date.
   ///
@@ -83,10 +91,7 @@ class TaskListEntry {
 /// The ordering is total — bucket date, then kind, then id — for the reason
 /// [sortTasks] takes the same care: two rows that swapped places between
 /// rebuilds would look like the list had reordered itself for no reason.
-List<TaskListEntry> mergeTaskList(
-  List<Task> tasks,
-  List<Reminder> reminders,
-) {
+List<TaskListEntry> mergeTaskList(List<Task> tasks, List<Reminder> reminders) {
   final entries = <TaskListEntry>[
     for (final task in tasks)
       TaskListEntry(
@@ -96,6 +101,7 @@ List<TaskListEntry> mergeTaskList(
         kind: TaskListKind.task,
         isCompleted: task.isCompleted,
         priority: task.priority,
+        subjectId: task.isStudy ? task.subjectId : null,
         dueAt: task.dueDate,
         bucketDate: task.dueDate ?? task.createdAt,
       ),

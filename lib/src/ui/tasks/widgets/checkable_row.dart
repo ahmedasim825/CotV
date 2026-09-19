@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/task.dart';
+import '../../../models/task_view.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/prayer_palette.dart';
 import '../../widgets/ph_light_icons.dart';
@@ -28,6 +29,7 @@ class CheckableRow extends StatefulWidget {
     required this.priority,
     required this.onToggle,
     required this.onTap,
+    this.subjectColor,
     this.dueLine,
     this.dueOverdue = false,
   });
@@ -37,6 +39,10 @@ class CheckableRow extends StatefulWidget {
   final TaskPriority priority;
   final VoidCallback onToggle;
   final VoidCallback onTap;
+
+  /// The swatch of the subject this task is filed under, or null for a task
+  /// that is not study work and for every reminder.
+  final Color? subjectColor;
 
   /// The line under the title. Reminders always have one; tasks never do.
   final String? dueLine;
@@ -77,7 +83,11 @@ class _CheckableRowState extends State<CheckableRow> {
         // See the note on [BentoSection].
         padding: const EdgeInsets.fromLTRB(12, 6, 14, 6),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Centred, not top-aligned. A one-line title in a row whose tallest
+          // child is the 30pt completion box sat visibly above that box's
+          // middle; a two-line one still centres against it, which is what the
+          // design draws.
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _CompletionBox(
               isCompleted: _isCompleted,
@@ -94,8 +104,9 @@ class _CheckableRowState extends State<CheckableRow> {
                   // length. Right-aligning it to the card would read as a
                   // column of its own, which is not what the design draws.
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      _PriorityMarks(priority: widget.priority),
                       Flexible(
                         child: AnimatedDefaultTextStyle(
                           duration: context.motion.fast,
@@ -124,11 +135,10 @@ class _CheckableRowState extends State<CheckableRow> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 7),
-                        child: _PriorityDot(priority: widget.priority),
-                      ),
+                      if (widget.subjectColor != null) ...[
+                        const SizedBox(width: 8),
+                        _SubjectDot(color: widget.subjectColor!),
+                      ],
                     ],
                   ),
                   if (dueLine != null) ...[
@@ -213,27 +223,66 @@ class _CompletionBox extends StatelessWidget {
   }
 }
 
-/// The priority marker: a filled dot, always at 60%.
+/// The priority marker: one exclamation per step, in the priority's own hue.
 ///
-/// The alpha is applied here rather than in the palette because the same
-/// three hues are drawn at full strength by the priority badge and the
-/// timeline blocks — this row is the surface that wants them quiet.
-class _PriorityDot extends StatelessWidget {
-  const _PriorityDot({required this.priority});
+/// Leading the title rather than trailing it, and marks rather than a dot: the
+/// trailing slot now belongs to the subject swatch, and three priorities read
+/// faster as a count than as three shades of the same circle. [TaskPriority.none]
+/// draws nothing at all — an unprioritised task is unmarked, not marked quietly.
+class _PriorityMarks extends StatelessWidget {
+  const _PriorityMarks({required this.priority});
 
   final TaskPriority priority;
+
+  int get _count {
+    switch (priority) {
+      case TaskPriority.none:
+        return 0;
+      case TaskPriority.low:
+        return 1;
+      case TaskPriority.medium:
+        return 2;
+      case TaskPriority.high:
+        return 3;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _count;
+    if (count == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Semantics(
+        label: '${priority.label} priority',
+        child: Text(
+          '!' * count,
+          style: context.typography.ui(
+            size: 15,
+            weight: FontWeight.w700,
+            color: context.palette.priorityColor(priority),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The subject swatch at the end of a study task's title.
+class _SubjectDot extends StatelessWidget {
+  const _SubjectDot({required this.color});
+
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: '${priority.name} priority',
+      label: 'Study task',
       child: Container(
         width: 8,
         height: 8,
-        decoration: BoxDecoration(
-          color: context.palette.priorityColor(priority).withValues(alpha: 0.6),
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
     );
   }

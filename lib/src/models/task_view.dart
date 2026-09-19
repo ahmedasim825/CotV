@@ -17,6 +17,8 @@ extension TaskSortX on TaskSort {
 extension TaskPriorityX on TaskPriority {
   String get label {
     switch (this) {
+      case TaskPriority.none:
+        return 'None';
       case TaskPriority.low:
         return 'Low';
       case TaskPriority.medium:
@@ -30,6 +32,10 @@ extension TaskPriorityX on TaskPriority {
   /// enum's own `index`.
   int get rank {
     switch (this) {
+      case TaskPriority.none:
+        // Last. An unprioritised task is not urgent, it is unjudged, and the
+        // list sorts it below everything that has been judged.
+        return 3;
       case TaskPriority.high:
         return 0;
       case TaskPriority.medium:
@@ -90,4 +96,56 @@ List<Task> sortTasks(List<Task> tasks, TaskSort sort) {
     return a.createdAt.compareTo(b.createdAt);
   });
   return List.unmodifiable(ordered);
+}
+
+extension TaskRepeatX on TaskRepeat {
+  String get label {
+    switch (this) {
+      case TaskRepeat.never:
+        return 'Never';
+      case TaskRepeat.hourly:
+        return 'Hourly';
+      case TaskRepeat.daily:
+        return 'Daily';
+      case TaskRepeat.weekdays:
+        return 'Weekdays';
+      case TaskRepeat.weekends:
+        return 'Weekends';
+      case TaskRepeat.weekly:
+        return 'Weekly';
+      case TaskRepeat.biweekly:
+        return 'Biweekly';
+      case TaskRepeat.monthly:
+        return 'Monthly';
+      case TaskRepeat.everyThreeMonths:
+        return 'Every 3 Months';
+      case TaskRepeat.everySixMonths:
+        return 'Every 6 Months';
+      case TaskRepeat.yearly:
+        return 'Yearly';
+    }
+  }
+}
+
+extension TaskEarlyReminderLabelX on TaskEarlyReminder {
+  String get label {
+    switch (this) {
+      case TaskEarlyReminder.never:
+        return 'Never';
+      case TaskEarlyReminder.oneDay:
+        return '1 day before';
+      case TaskEarlyReminder.twoDays:
+        return '2 days before';
+      case TaskEarlyReminder.oneWeek:
+        return '1 week before';
+      case TaskEarlyReminder.twoWeeks:
+        return '2 weeks before';
+      case TaskEarlyReminder.oneMonth:
+        return '1 month before';
+      case TaskEarlyReminder.threeMonths:
+        return '3 months before';
+      case TaskEarlyReminder.sixMonths:
+        return '6 months before';
+    }
+  }
 }
